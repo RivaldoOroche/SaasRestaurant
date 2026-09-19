@@ -8,7 +8,10 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { formatMoney, DEFAULT_TAX_RATE, round2 } from "@/lib/money";
 import type { Order } from "@/data/model";
 
+// Prefer the amount actually collected (net of discount, incl. tip) so reports
+// match Caja; fall back to a gross line estimate only if paidTotal is missing.
 function total(o: Order): number {
+  if (o.paidTotal != null) return o.paidTotal;
   return round2(o.lines.reduce((s, l) => s + (l.unitPrice + l.extraPrice) * l.qty, 0) * (1 + DEFAULT_TAX_RATE));
 }
 

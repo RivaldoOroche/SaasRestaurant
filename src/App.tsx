@@ -91,7 +91,8 @@ function screenRoute(e: NavEntry) {
 }
 
 function HomeRedirect() {
-  const { session } = useAuth();
+  const { session, ready } = useAuth();
+  if (!ready) return null;
   return <Navigate to={session ? homePathForRole(session.role) : "/login"} replace />;
 }
 

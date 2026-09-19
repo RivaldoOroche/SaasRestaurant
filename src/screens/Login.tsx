@@ -39,7 +39,11 @@ export function Login() {
     e.preventDefault();
     setError(null);
     const err = await loginWithPassword(email, password);
-    if (err) setError(err);
+    if (err) {
+      setError(err);
+      return;
+    }
+    navigate("/"); // HomeRedirect routes to the role's home once the session is set
   }
 
   return (

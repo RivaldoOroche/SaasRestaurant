@@ -80,11 +80,6 @@ function loadState(): MockState {
   };
 }
 
-let folioSeq = 1;
-function nextFolio(tipo: "Boleta" | "Factura"): string {
-  const serie = tipo === "Factura" ? "F001" : "B001";
-  return `${serie}-${String(1000 + folioSeq++).padStart(4, "0")}`;
-}
 
 /** In-browser repo used for demo / offline UI work. */
 export class MockRepo implements Repo {
@@ -397,6 +392,17 @@ export class MockRepo implements Repo {
   }
 
   // ---- Fiscal (SUNAT) ----
+  /** Next sequential folio per serie, derived from stored comprobantes so it survives reloads. */
+  private nextFolio(tipo: "Boleta" | "Factura"): string {
+    const serie = tipo === "Factura" ? "F001" : "B001";
+    const used = this.state.comprobantes
+      .filter((c) => c.folio.startsWith(serie))
+      .map((c) => parseInt(c.folio.split("-")[1] ?? "0", 10))
+      .filter((n) => !Number.isNaN(n));
+    const next = (used.length ? Math.max(...used) : 1000) + 1;
+    return `${serie}-${String(next).padStart(4, "0")}`;
+  }
+
   async getComprobantes() {
     return [...this.state.comprobantes].sort((a, b) => (a.issuedAt < b.issuedAt ? 1 : -1));
   }
@@ -404,7 +410,7 @@ export class MockRepo implements Repo {
   async emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante> {
     const cpe: Comprobante = {
       id: uid("cpe"),
-      folio: nextFolio(input.tipo),
+      folio: this.nextFolio(input.tipo),
       tipo: input.tipo,
       buyerRuc: input.buyerRuc ?? null,
       buyerName: input.buyerName ?? null,

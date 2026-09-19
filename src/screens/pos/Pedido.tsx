@@ -9,10 +9,11 @@ import {
   useOpenOrder,
   useOrderActions,
   useFloorActions,
+  useSettings,
 } from "@/data/hooks";
 import { useAuth } from "@/auth/AuthContext";
 import { usePos } from "@/store/pos";
-import { formatMoney, DEFAULT_TAX_RATE, round2 } from "@/lib/money";
+import { formatMoney, round2 } from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
@@ -65,6 +66,8 @@ function PedidoActive({
   const { data: prefs = [] } = usePrefs();
   const actions = useOrderActions(tableId);
   const floor = useFloorActions();
+  const { data: settings } = useSettings();
+  const taxRate = (settings?.taxRate ?? 18) / 100;
   const { session } = useAuth();
   const actorName = session?.staff?.name ?? "POS";
 
@@ -118,7 +121,7 @@ function PedidoActive({
 
   const lines = order?.lines ?? [];
   const subtotal = round2(lines.reduce((s, l) => s + (l.unitPrice + l.extraPrice) * l.qty, 0));
-  const igv = round2(subtotal * DEFAULT_TAX_RATE);
+  const igv = round2(subtotal * taxRate);
   const total = round2(subtotal + igv);
   const canSend = lines.length > 0;
 
@@ -263,7 +266,7 @@ function PedidoActive({
 
         <div className="p-4 border-t border-border space-y-1.5">
           <Row label="Subtotal" value={formatMoney(subtotal)} />
-          <Row label="IGV (18%)" value={formatMoney(igv)} />
+          <Row label={`IGV (${Math.round(taxRate * 100)}%)`} value={formatMoney(igv)} />
           <div className="flex justify-between items-center pt-1">
             <span className="font-bold">Total</span>
             <span className="font-mono font-bold text-lg">{formatMoney(total)}</span>
@@ -301,7 +304,7 @@ function PedidoActive({
           onClose={() => setCobro(null)}
           order={cobro.order}
           amount={cobro.amount}
-          taxRate={DEFAULT_TAX_RATE}
+          taxRate={taxRate}
           onPaid={() => setCobro(null)}
         />
       )}

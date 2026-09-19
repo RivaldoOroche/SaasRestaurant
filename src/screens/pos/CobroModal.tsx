@@ -83,7 +83,9 @@ export function CobroModal({
         buyerName: docTipo === "Factura" ? razon : null,
         subtotal: result.subtotal,
         igv: result.igv,
-        total: result.grand,
+        // El comprobante SUNAT grava subtotal + IGV; la propina no forma parte
+        // del comprobante en Perú, así que el total es netAmt, no grand.
+        total: result.netAmt,
         reference: `Mesa ${order.tableLabel}`,
       },
       online,

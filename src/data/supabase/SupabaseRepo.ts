@@ -425,7 +425,11 @@ export class SupabaseRepo implements Repo {
   }
 
   async emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante> {
-    const folio = `${input.tipo === "Factura" ? "F001" : "B001"}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+    const { data: folio, error: folioErr } = await this.sb.rpc("next_folio", {
+      tid: this.tenantId,
+      p_serie: input.tipo === "Factura" ? "F001" : "B001",
+    });
+    if (folioErr) throw folioErr;
     const { data, error } = await this.sb
       .from("comprobantes")
       .insert({
