@@ -6,8 +6,20 @@ import { RequireAuth } from "@/auth/RequireAuth";
 import { AppShell } from "@/components/shell/AppShell";
 import { Login } from "@/screens/Login";
 import { Placeholder } from "@/screens/Placeholder";
+import { Pedido } from "@/screens/pos/Pedido";
+import { Mesas } from "@/screens/pos/Mesas";
+import { Cocina } from "@/screens/pos/Cocina";
 import { TENANT_NAV, SAAS_NAV, homePathForRole, type NavEntry } from "@/lib/roles";
 import { useTheme } from "@/store/theme";
+
+import type { ComponentType } from "react";
+
+/** Screens implemented so far; the rest fall back to a gated placeholder. */
+const SCREENS: Record<string, ComponentType> = {
+  pedido: Pedido,
+  mesas: Mesas,
+  cocina: Cocina,
+};
 
 /** Which build phase each screen is delivered in (shown on placeholders). */
 const PHASE: Record<string, string> = {
@@ -22,13 +34,14 @@ const PHASE: Record<string, string> = {
 };
 
 function screenRoute(e: NavEntry) {
+  const Screen = SCREENS[e.key];
   return (
     <Route
       key={e.key}
       path={e.path}
       element={
         <RequireAuth path={e.path}>
-          <Placeholder title={e.label} phase={PHASE[e.key] ?? "próximamente"} />
+          {Screen ? <Screen /> : <Placeholder title={e.label} phase={PHASE[e.key] ?? "próximamente"} />}
         </RequireAuth>
       }
     />

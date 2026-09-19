@@ -2,9 +2,11 @@ import { Outlet } from "react-router-dom";
 import { Rail } from "./Rail";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
+import { useRepoSubscription } from "@/data/hooks";
 
 export function AppShell() {
   const { session, exitTenant } = useAuth();
+  useRepoSubscription();
 
   return (
     <div className="flex h-full w-full bg-bg text-ink mob:flex-col">
