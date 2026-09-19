@@ -452,7 +452,7 @@ export class SupabaseRepo implements Repo {
     if (online) {
       const res = await stubSunatGateway.submit(cpe);
       cpe = { ...cpe, status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null };
-      await this.sb.from("comprobantes").update({ status: cpe.status, error: cpe.error }).eq("id", cpe.id);
+      await this.sb.rpc("set_comprobante_status", { cid: cpe.id, new_status: cpe.status, new_error: cpe.error });
     } else {
       await this.sb.from("sunat_outbox").insert({ tenant_id: this.tenantId, comprobante_id: cpe.id });
     }
@@ -467,10 +467,11 @@ export class SupabaseRepo implements Repo {
     for (const row of queued ?? []) {
       const cpe = mapComprobante(row);
       const res = await stubSunatGateway.submit(cpe);
-      await this.sb
-        .from("comprobantes")
-        .update({ status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null })
-        .eq("id", cpe.id);
+      await this.sb.rpc("set_comprobante_status", {
+        cid: cpe.id,
+        new_status: res.accepted ? "aceptada" : "rechazada",
+        new_error: res.error ?? null,
+      });
       if (res.accepted) {
         sent++;
         await this.sb.from("sunat_outbox").delete().eq("comprobante_id", cpe.id);
@@ -486,10 +487,11 @@ export class SupabaseRepo implements Repo {
     if (!data) return;
     const cpe = mapComprobante(data);
     const res = await stubSunatGateway.submit(cpe);
-    await this.sb
-      .from("comprobantes")
-      .update({ status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null })
-      .eq("id", id);
+    await this.sb.rpc("set_comprobante_status", {
+      cid: id,
+      new_status: res.accepted ? "aceptada" : "rechazada",
+      new_error: res.error ?? null,
+    });
   }
 
   async getSettings(): Promise<BusinessSettings> {

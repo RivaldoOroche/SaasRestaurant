@@ -28,6 +28,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithPin = useCallback<AuthValue["loginWithPin"]>(
     async (pin) => {
+      // The PIN keypad is a demo/offline affordance only. With a real backend,
+      // matching a hard-coded mock PIN would mint a fake privileged client
+      // session, so it's disabled — staff PIN auth on an already-authenticated
+      // tenant device (verified against staff_members.pin_hash server-side) is a
+      // backend task. Owners sign in with email + password.
+      if (!mockMode) {
+        return "Ingreso por PIN no disponible con backend real. Usa correo y contraseña.";
+      }
       const user = MOCK_USERS.find((u) => u.pin === pin);
       if (!user) return "PIN incorrecto";
       update(sessionFromMockUser(user));

@@ -6,6 +6,14 @@ import { MockPlatformRepo } from "./MockPlatformRepo";
 
 const PLAN_PRICE: Record<PlanTier, number> = { Básico: 699, Pro: 1499, Enterprise: 4800 };
 
+async function sha256Hex(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 function slugify(name: string): string {
   return (
     name
@@ -130,9 +138,12 @@ export class SupabasePlatformRepo implements PlatformRepo {
       .select("*")
       .single();
     if (error) throw error;
+    // Store only a hash of the onboarding token; the raw token appears once, in
+    // the link. Validation hashes the presented token and compares.
     const token = crypto.randomUUID();
+    const tokenHash = await sha256Hex(token);
     const expires = new Date(Date.now() + 14 * 864e5).toISOString();
-    await this.sb.from("onboarding_links").insert({ tenant_id: data.id, token_hash: token, expires_at: expires });
+    await this.sb.from("onboarding_links").insert({ tenant_id: data.id, token_hash: tokenHash, expires_at: expires });
     const link = `https://app.nubepos.pe/${slug}?onboard=${token}`;
     return { tenant: { ...mapTenant(data), link }, link };
   }

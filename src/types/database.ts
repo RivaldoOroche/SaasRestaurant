@@ -118,6 +118,10 @@ export type Database = {
     Views: Record<string, never>;
     Functions: {
       next_folio: { Args: { tid: string; p_serie: string }; Returns: string };
+      set_comprobante_status: {
+        Args: { cid: string; new_status: SunatStatus; new_error: string | null };
+        Returns: undefined;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
