@@ -21,6 +21,12 @@ import { Caja } from "@/screens/pos/Caja";
 import { Panel } from "@/screens/pos/Panel";
 import { Sucursales } from "@/screens/pos/Sucursales";
 import { Sunat } from "@/screens/pos/Sunat";
+import { Resumen } from "@/screens/saas/Resumen";
+import { Tenants } from "@/screens/saas/Tenants";
+import { Retencion } from "@/screens/saas/Retencion";
+import { Ingresos } from "@/screens/saas/Ingresos";
+import { Planes } from "@/screens/saas/Planes";
+import { Soporte } from "@/screens/saas/Soporte";
 import { TENANT_NAV, SAAS_NAV, homePathForRole, type NavEntry } from "@/lib/roles";
 import { useTheme } from "@/store/theme";
 
@@ -43,6 +49,12 @@ const SCREENS: Record<string, ComponentType> = {
   panel: Panel,
   sucursales: Sucursales,
   comprobantes: Sunat,
+  saashome: Resumen,
+  tenants: Tenants,
+  retencion: Retencion,
+  ingresos: Ingresos,
+  planes: Planes,
+  soporte: Soporte,
 };
 
 /** Which build phase each screen is delivered in (shown on placeholders). */

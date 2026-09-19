@@ -4,11 +4,13 @@ import { Rail } from "./Rail";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { useRepoSubscription, useSunatActions } from "@/data/hooks";
+import { usePlatformSubscription } from "@/data/platform/hooks";
 import { useConnection } from "@/store/connection";
 
 export function AppShell() {
   const { session, exitTenant } = useAuth();
   useRepoSubscription();
+  usePlatformSubscription();
 
   // Auto-sync queued comprobantes to SUNAT when connectivity is restored.
   const online = useConnection((s) => s.online);
