@@ -1,0 +1,38 @@
+/*
+ * Nocturne tokens. Dark is the default (data-theme="dark" on <html>).
+ * Values taken verbatim from the prototype's themes.dark / themes.light.
+ */
+:root,
+:root[data-theme="dark"] {
+  --bg: #161826;
+  --panel: #1b1d2e;
+  --surface: #1f2136;
+  --surface-alt: #1b1d2e;
+  --border: #2c2e44;
+  --border-soft: #24263a;
+  --ink: #e9e9ed;
+  --muted: #9a9ab0;
+  --chip-bg: #262842;
+  --shell: #101120;
+  --qty-btn: #262842;
+  --qty-border: #3a3c54;
+  --thumb: linear-gradient(135deg, #24263a, #2c2e44);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #e9e9ed;
+  --panel: #eaedf2;
+  --surface: #ffffff;
+  --surface-alt: #fafbfd;
+  --border: #e7eaf0;
+  --border-soft: #dde1e9;
+  --ink: #171a21;
+  --muted: #9a9ab0;
+  --chip-bg: #eef1f6;
+  --shell: #101120;
+  --qty-btn: #f4f6f9;
+  --qty-border: #dde1e9;
+  --thumb: linear-gradient(135deg, #eef1f6, #dfe4ee);
+  color-scheme: light;
+}
