@@ -9,6 +9,17 @@ import { Placeholder } from "@/screens/Placeholder";
 import { Pedido } from "@/screens/pos/Pedido";
 import { Mesas } from "@/screens/pos/Mesas";
 import { Cocina } from "@/screens/pos/Cocina";
+import { Cuentas } from "@/screens/pos/Cuentas";
+import { Inventario } from "@/screens/pos/Inventario";
+import { Clientes } from "@/screens/pos/Clientes";
+import { Carta } from "@/screens/pos/Carta";
+import { Editor } from "@/screens/pos/Editor";
+import { OnlineOrders } from "@/screens/pos/OnlineOrders";
+import { Ajustes } from "@/screens/pos/Ajustes";
+import { Reportes } from "@/screens/pos/Reportes";
+import { Caja } from "@/screens/pos/Caja";
+import { Panel } from "@/screens/pos/Panel";
+import { Sucursales } from "@/screens/pos/Sucursales";
 import { TENANT_NAV, SAAS_NAV, homePathForRole, type NavEntry } from "@/lib/roles";
 import { useTheme } from "@/store/theme";
 
@@ -19,6 +30,17 @@ const SCREENS: Record<string, ComponentType> = {
   pedido: Pedido,
   mesas: Mesas,
   cocina: Cocina,
+  cuentas: Cuentas,
+  inventario: Inventario,
+  clientes: Clientes,
+  carta: Carta,
+  editor: Editor,
+  online: OnlineOrders,
+  ajustes: Ajustes,
+  reportes: Reportes,
+  caja: Caja,
+  panel: Panel,
+  sucursales: Sucursales,
 };
 
 /** Which build phase each screen is delivered in (shown on placeholders). */

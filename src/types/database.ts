@@ -60,7 +60,7 @@ export interface Tables {
     Row: { id: string; tenant_id: string; name: string; phone: string; visits: number; spent: number; points: number; tier: string } & Timestamps;
   };
   orders: {
-    Row: { id: string; tenant_id: string; branch_id: string | null; table_id: string | null; waiter_id: string | null; customer_id: string | null; status: OrderStatus; opened_at: string; closed_at: string | null };
+    Row: { id: string; tenant_id: string; branch_id: string | null; table_id: string | null; waiter_id: string | null; customer_id: string | null; status: OrderStatus; opened_at: string; closed_at: string | null; paid_method: PayMethod | null; paid_total: number | null };
   };
   order_lines: {
     Row: { id: string; tenant_id: string; order_id: string; menu_item_id: string | null; name: string; qty: number; unit_price: number; extra_price: number; modifiers: string; split_payer: number | null } & Timestamps;
@@ -73,6 +73,21 @@ export interface Tables {
   };
   inventory_items: {
     Row: { id: string; tenant_id: string; name: string; unit: string; stock: number; par: number };
+  };
+  recipes: {
+    Row: { id: string; tenant_id: string; menu_item_id: string; inventory_id: string; qty_per_unit: number };
+  };
+  loyalty_transactions: {
+    Row: { id: string; tenant_id: string; customer_id: string; order_id: string | null; points_delta: number } & Timestamps;
+  };
+  menu_change_requests: {
+    Row: { id: string; tenant_id: string; kind: string; item_name: string; detail: string; status: string; requested_by: string | null } & Timestamps;
+  };
+  void_events: {
+    Row: { id: string; tenant_id: string; order_id: string | null; line_name: string; reason: string; actor_id: string | null } & Timestamps;
+  };
+  online_orders: {
+    Row: { id: string; tenant_id: string; channel: string; customer_name: string; items: string; total: number; eta: string; status: string } & Timestamps;
   };
   comprobantes: {
     Row: { id: string; tenant_id: string; order_id: string | null; folio: string; tipo: ComprobanteTipo; buyer_ruc: string | null; buyer_name: string | null; subtotal: number; igv: number; total: number; reference: string; status: SunatStatus; error: string | null; issued_at: string };

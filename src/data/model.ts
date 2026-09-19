@@ -70,6 +70,8 @@ export interface Order {
   status: OrderStatus;
   openedAt: string;
   lines: OrderLine[];
+  paidMethod?: string | null;
+  paidTotal?: number | null;
 }
 
 export interface TicketLine {
@@ -97,4 +99,74 @@ export interface DraftLine {
   unitPrice: number;
   extraPrice: number;
   modifiers: string;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  phone: string;
+  visits: number;
+  spent: number;
+  points: number;
+  tier: string;
+}
+
+export type InventoryStatus = "ok" | "bajo" | "agotado";
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  unit: string;
+  stock: number;
+  par: number;
+}
+
+/** Recipe: for a menu item, how much of each inventory item it consumes per unit. */
+export interface RecipeLine {
+  inventoryId: string;
+  qtyPerUnit: number;
+}
+
+export interface LogEntry {
+  id: string;
+  actor: string;
+  message: string;
+  at: string;
+}
+
+export interface BusinessSettings {
+  name: string;
+  currency: import("@/lib/money").Currency;
+  taxRate: number; // percent, e.g. 18
+  tipPresets: number[];
+  onlineOrders: boolean;
+  autoTip: boolean;
+}
+
+export type MenuChangeStatus = "pendiente" | "aprobado" | "rechazado";
+
+export interface MenuChange {
+  id: string;
+  kind: string;
+  itemName: string;
+  detail: string;
+  status: MenuChangeStatus;
+}
+
+export interface OnlineOrder {
+  id: string;
+  channel: string;
+  name: string;
+  items: string;
+  total: number;
+  eta: string;
+  status: string;
+}
+
+/** Payment options passed into payOrder (loyalty, discount, tip). */
+export interface PayExtras {
+  customerId?: string | null;
+  redeem?: number;
+  discountPct?: number;
+  tipPct?: number;
 }

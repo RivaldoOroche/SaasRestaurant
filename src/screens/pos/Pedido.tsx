@@ -8,7 +8,9 @@ import {
   useTables,
   useOpenOrder,
   useOrderActions,
+  useFloorActions,
 } from "@/data/hooks";
+import { useAuth } from "@/auth/AuthContext";
 import { usePos } from "@/store/pos";
 import { formatMoney, DEFAULT_TAX_RATE, round2 } from "@/lib/money";
 import { Button } from "@/components/ui/Button";
@@ -17,6 +19,9 @@ import { cn } from "@/lib/cn";
 import type { MenuItem, DraftLine, Order } from "@/data/model";
 import { ModifierModal } from "./ModifierModal";
 import { CobroModal } from "./CobroModal";
+import { TransferModal } from "./TransferModal";
+import { VoidModal } from "./VoidModal";
+import type { OrderLine } from "@/data/model";
 
 type Filter = "veg" | "spicy" | "gf";
 
@@ -59,11 +64,16 @@ function PedidoActive({
   const { data: extras = [] } = useExtras();
   const { data: prefs = [] } = usePrefs();
   const actions = useOrderActions(tableId);
+  const floor = useFloorActions();
+  const { session } = useAuth();
+  const actorName = session?.staff?.name ?? "POS";
 
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState<Set<Filter>>(new Set());
   const [modItem, setModItem] = useState<MenuItem | null>(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [voiding, setVoiding] = useState<OrderLine | null>(null);
   // Snapshot the order + total when opening checkout, so the receipt still
   // renders after payment clears the live order.
   const [cobro, setCobro] = useState<{ order: Order; amount: number } | null>(null);
@@ -196,12 +206,21 @@ function PedidoActive({
             <div className="h-11 w-11 rounded-md bg-chip-bg grid place-items-center text-xs font-bold">
               M{tableLabel}
             </div>
-            <div>
+            <div className="flex-1">
               <p className="font-semibold leading-tight">Pedido · Mesa {tableLabel}</p>
               <p className="text-muted text-xs">
                 {seats} comensales · {zone}
               </p>
             </div>
+            {order && (
+              <button
+                onClick={() => setTransferOpen(true)}
+                title="Transferir / unir mesa"
+                className="h-9 w-9 rounded-md bg-chip-bg border border-border grid place-items-center hover:border-accent/50"
+              >
+                ⇄
+              </button>
+            )}
           </div>
         </div>
 
@@ -230,10 +249,10 @@ function PedidoActive({
                     <span className="w-6 text-center text-sm">{l.qty}</span>
                     <QtyBtn onClick={() => actions.setQty.mutate({ lineId: l.id, qty: l.qty + 1 })}>+</QtyBtn>
                     <button
-                      onClick={() => actions.removeLine.mutate(l.id)}
+                      onClick={() => setVoiding(l)}
                       className="ml-auto text-xs text-muted hover:text-warning"
                     >
-                      ✕ quitar
+                      ✕ anular
                     </button>
                   </div>
                 </li>
@@ -286,6 +305,22 @@ function PedidoActive({
           onPaid={() => setCobro(null)}
         />
       )}
+      {order && (
+        <TransferModal
+          open={transferOpen}
+          onClose={() => setTransferOpen(false)}
+          orderId={order.id}
+          currentTableId={tableId}
+        />
+      )}
+      <VoidModal
+        open={!!voiding}
+        lineName={voiding?.name ?? ""}
+        onClose={() => setVoiding(null)}
+        onConfirm={(reason) =>
+          voiding && floor.voidLine.mutate({ lineId: voiding.id, reason, actor: actorName })
+        }
+      />
     </div>
   );
 }

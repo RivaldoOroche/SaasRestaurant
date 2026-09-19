@@ -3,7 +3,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { computeCheckout, equalSplit } from "@/lib/checkout";
-import { useOrderActions } from "@/data/hooks";
+import { useOrderActions, useCustomers } from "@/data/hooks";
 import { cn } from "@/lib/cn";
 import type { Order } from "@/data/model";
 
@@ -32,17 +32,26 @@ export function CobroModal({
   onPaid: () => void;
 }) {
   const actions = useOrderActions(order.tableId);
+  const { data: customers = [] } = useCustomers();
   const [stage, setStage] = useState<Stage>("cuenta");
   const [discountPct, setDiscountPct] = useState(0);
   const [tipPct, setTipPct] = useState(0);
   const [splitN, setSplitN] = useState(1);
   const [method, setMethod] = useState("efectivo");
+  const [custId, setCustId] = useState<string | null>(null);
+  const [redeem, setRedeem] = useState(0);
 
-  const result = useMemo(
+  const customer = customers.find((c) => c.id === custId) ?? null;
+  const preResult = useMemo(
     () => computeCheckout({ amount, taxRate, discountPct, tipPct }),
     [amount, taxRate, discountPct, tipPct],
   );
-  const perPerson = equalSplit(result.grand, splitN);
+  const redeemMax = Math.min(customer?.points ?? 0, Math.floor(preResult.grand));
+  const result = useMemo(
+    () => computeCheckout({ amount, taxRate, discountPct, tipPct, redeem }),
+    [amount, taxRate, discountPct, tipPct, redeem],
+  );
+  const perPerson = equalSplit(result.due, splitN);
 
   function reset() {
     setStage("cuenta");
@@ -50,6 +59,8 @@ export function CobroModal({
     setTipPct(0);
     setSplitN(1);
     setMethod("efectivo");
+    setCustId(null);
+    setRedeem(0);
   }
 
   function close() {
@@ -58,7 +69,13 @@ export function CobroModal({
   }
 
   async function pay() {
-    await actions.payOrder.mutateAsync({ orderId: order.id, method, total: result.grand });
+    await actions.payOrder.mutateAsync({
+      orderId: order.id,
+      method,
+      total: result.grand,
+      customerId: custId,
+      redeem: result.redeemApplied,
+    });
     setStage("doc");
   }
 
@@ -71,7 +88,7 @@ export function CobroModal({
           <h2 id="cobro-title" className="text-xl font-bold">
             {stage === "doc" ? "Comprobante" : "Cobrar · Mesa " + order.tableLabel}
           </h2>
-          <span className="font-mono text-lg font-bold text-accent">{formatMoney(result.grand)}</span>
+          <span className="font-mono text-lg font-bold text-accent">{formatMoney(result.due)}</span>
         </div>
 
         {stage === "cuenta" && (
@@ -81,9 +98,12 @@ export function CobroModal({
               <Row label={`IGV (${Math.round(taxRate * 100)}%)`} value={formatMoney(result.igv)} />
               {result.discAmt > 0 && <Row label="Descuento" value={"− " + formatMoney(result.discAmt)} />}
               {result.tipAmt > 0 && <Row label="Propina" value={formatMoney(result.tipAmt)} />}
+              {result.redeemApplied > 0 && (
+                <Row label="Puntos canjeados" value={"− " + formatMoney(result.redeemApplied)} />
+              )}
               <div className="flex justify-between pt-1 font-bold">
-                <span>Total</span>
-                <span className="font-mono">{formatMoney(result.grand)}</span>
+                <span>{result.redeemApplied > 0 ? "A cobrar" : "Total"}</span>
+                <span className="font-mono">{formatMoney(result.due)}</span>
               </div>
             </div>
 
@@ -118,6 +138,38 @@ export function CobroModal({
               </div>
             </Field>
 
+            <Field label="Lealtad">
+              <select
+                value={custId ?? ""}
+                onChange={(e) => {
+                  setCustId(e.target.value || null);
+                  setRedeem(0);
+                }}
+                className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm mb-2"
+              >
+                <option value="">Sin cliente</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} · {c.points} pts
+                  </option>
+                ))}
+              </select>
+              {customer && (
+                <div className="flex flex-wrap gap-2">
+                  {[0, 50, 100].filter((v) => v <= redeemMax).map((v) => (
+                    <Pill key={v} active={redeem === v} onClick={() => setRedeem(v)}>
+                      {v === 0 ? "No canjear" : `${v} pts`}
+                    </Pill>
+                  ))}
+                  {redeemMax > 0 && (
+                    <Pill active={redeem === redeemMax} onClick={() => setRedeem(redeemMax)}>
+                      Todo ({redeemMax})
+                    </Pill>
+                  )}
+                </div>
+              )}
+            </Field>
+
             <Field label="Método de pago">
               <div className="flex gap-2">
                 {METHODS.map((m) => (
@@ -141,8 +193,11 @@ export function CobroModal({
           <div className="space-y-4">
             <div className="text-center py-4">
               <div className="text-4xl mb-2">💳</div>
-              <p className="font-semibold">Cobrar {formatMoney(result.grand)}</p>
+              <p className="font-semibold">Cobrar {formatMoney(result.due)}</p>
               <p className="text-muted text-sm">Método: {methodLabel}</p>
+              {result.pointsEarned > 0 && (
+                <p className="text-muted text-xs mt-1">Acumulará {result.pointsEarned} pts</p>
+              )}
             </div>
             <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={() => setStage("cuenta")}>
@@ -181,6 +236,15 @@ export function CobroModal({
                 <span>TOTAL</span>
                 <span>{formatMoney(result.grand)}</span>
               </div>
+              {result.redeemApplied > 0 && (
+                <>
+                  <Row label="Puntos canjeados" value={"− " + formatMoney(result.redeemApplied)} />
+                  <div className="flex justify-between font-bold">
+                    <span>PAGADO</span>
+                    <span>{formatMoney(result.due)}</span>
+                  </div>
+                </>
+              )}
               <p className="text-xs text-muted mt-2">Pagado con {methodLabel}</p>
               <p className="text-[10px] text-muted mt-3 text-center">
                 Comprobante de consumo · el comprobante electrónico SUNAT se emite en la Fase 3.

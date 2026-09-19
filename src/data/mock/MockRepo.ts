@@ -1,18 +1,58 @@
 import type { Repo, PayInput } from "../Repo";
-import type { Order, OrderLine, KitchenTicket, RestaurantTable, DraftLine, KdsColumn } from "../model";
-import { CATEGORIES, MENU_ITEMS, EXTRAS, PREFS, seedTables } from "./seed";
+import type {
+  Order,
+  OrderLine,
+  KitchenTicket,
+  RestaurantTable,
+  DraftLine,
+  KdsColumn,
+  Customer,
+  InventoryItem,
+  LogEntry,
+  BusinessSettings,
+  MenuChange,
+  MenuItem,
+} from "../model";
+import {
+  CATEGORIES,
+  MENU_ITEMS,
+  EXTRAS,
+  PREFS,
+  RECIPES,
+  seedTables,
+  seedInventory,
+  seedMenuChanges,
+  seedOnlineOrders,
+  CUSTOMERS,
+  DEFAULT_SETTINGS,
+} from "./seed";
+
+interface MenuOverride {
+  price?: number;
+  available?: boolean;
+}
 
 interface MockState {
   tables: RestaurantTable[];
   orders: Order[];
   tickets: KitchenTicket[];
+  customers: Customer[];
+  inventory: InventoryItem[];
+  log: LogEntry[];
+  settings: BusinessSettings;
+  changes: MenuChange[];
+  menuOverrides: Record<string, MenuOverride>;
 }
 
-const KEY = "nubepos-mock-v1";
+const KEY = "nubepos-mock-v2";
 const COL_ORDER: KdsColumn[] = ["nuevos", "preparacion", "listos", "entregado"];
 
 function uid(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function nowTime(): string {
+  return new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
 }
 
 function loadState(): MockState {
@@ -22,7 +62,17 @@ function loadState(): MockState {
   } catch {
     /* ignore */
   }
-  return { tables: seedTables(), orders: [], tickets: [] };
+  return {
+    tables: seedTables(),
+    orders: [],
+    tickets: [],
+    customers: CUSTOMERS.map((c) => ({ ...c })),
+    inventory: seedInventory(),
+    log: [],
+    settings: { ...DEFAULT_SETTINGS },
+    changes: seedMenuChanges(),
+    menuOverrides: {},
+  };
 }
 
 /** In-browser repo used for demo / offline UI work. */
@@ -39,16 +89,25 @@ export class MockRepo implements Repo {
     this.listeners.forEach((l) => l());
   }
 
+  private pushLog(actor: string, message: string) {
+    this.state.log.unshift({ id: uid("lg"), actor, message, at: nowTime() });
+    this.state.log = this.state.log.slice(0, 60);
+  }
+
   subscribe(cb: () => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
   }
 
+  // ---- Menu ----
   async getCategories() {
     return [...CATEGORIES].sort((a, b) => a.sort - b.sort);
   }
-  async getMenuItems() {
-    return [...MENU_ITEMS];
+  async getMenuItems(): Promise<MenuItem[]> {
+    return MENU_ITEMS.map((it) => {
+      const ov = this.state.menuOverrides[it.id];
+      return ov ? { ...it, price: ov.price ?? it.price, available: ov.available ?? it.available } : { ...it };
+    });
   }
   async getExtras() {
     return [...EXTRAS];
@@ -56,14 +115,35 @@ export class MockRepo implements Repo {
   async getPrefs() {
     return [...PREFS];
   }
+  async setMenuPrice(itemId: string, price: number) {
+    this.state.menuOverrides[itemId] = { ...this.state.menuOverrides[itemId], price };
+    this.pushLog("Editor", `Cambió precio de ${itemId} a S/ ${price}`);
+    this.persist();
+  }
+  async setMenuAvailable(itemId: string, available: boolean) {
+    this.state.menuOverrides[itemId] = { ...this.state.menuOverrides[itemId], available };
+    const item = MENU_ITEMS.find((i) => i.id === itemId);
+    this.pushLog("Editor", `${available ? "Reactivó" : "Marcó 86"} ${item?.name ?? itemId}`);
+    this.persist();
+  }
+
   async getTables() {
     return [...this.state.tables];
   }
 
+  // ---- Orders ----
   private findOpenOrder(tableId: string): Order | undefined {
     return this.state.orders.find(
       (o) => o.tableId === tableId && o.status !== "cobrada" && o.status !== "anulada",
     );
+  }
+
+  async getOpenOrders() {
+    return this.state.orders.filter((o) => o.status !== "cobrada" && o.status !== "anulada" && o.lines.length > 0);
+  }
+
+  async getPaidOrders() {
+    return this.state.orders.filter((o) => o.status === "cobrada");
   }
 
   async getOpenOrderForTable(tableId: string) {
@@ -135,10 +215,55 @@ export class MockRepo implements Repo {
     }
   }
 
+  async voidLine(lineId: string, reason: string, actor: string) {
+    for (const o of this.state.orders) {
+      const l = o.lines.find((x) => x.id === lineId);
+      if (l) {
+        o.lines = o.lines.filter((x) => x.id !== lineId);
+        this.pushLog(actor, `Anuló ${l.name} · ${reason}`);
+        this.persist();
+        return;
+      }
+    }
+  }
+
   async clearOrder(orderId: string) {
     const order = this.order(orderId);
     if (!order) return;
     order.lines = [];
+    this.persist();
+  }
+
+  async transferOrder(orderId: string, toTableId: string) {
+    const order = this.order(orderId);
+    const target = this.state.tables.find((t) => t.id === toTableId);
+    if (!order || !target) return;
+    const from = order.tableId;
+    order.tableId = toTableId;
+    order.tableLabel = String(target.number);
+    order.zone = target.zone;
+    order.seats = target.seats;
+    target.status = "ocupada";
+    if (from) {
+      const src = this.state.tables.find((t) => t.id === from);
+      if (src) src.status = "libre";
+    }
+    this.pushLog("Mesero", `Transfirió pedido a Mesa ${target.number}`);
+    this.persist();
+  }
+
+  async mergeOrder(orderId: string, intoTableId: string) {
+    const order = this.order(orderId);
+    const targetOrder = this.findOpenOrder(intoTableId);
+    if (!order || !targetOrder || order.id === targetOrder.id) return;
+    targetOrder.lines.push(...order.lines.map((l) => ({ ...l, orderId: targetOrder.id })));
+    order.lines = [];
+    order.status = "anulada";
+    if (order.tableId) {
+      const src = this.state.tables.find((t) => t.id === order.tableId);
+      if (src) src.status = "libre";
+    }
+    this.pushLog("Mesero", `Unió Mesa ${order.tableLabel} con Mesa ${targetOrder.tableLabel}`);
     this.persist();
   }
 
@@ -157,6 +282,7 @@ export class MockRepo implements Repo {
     };
     this.state.tickets.push(ticket);
     order.status = "en_cocina";
+    this.pushLog("Mesero", `Envió comanda de Mesa ${order.tableLabel} a cocina`);
     this.persist();
   }
 
@@ -178,16 +304,97 @@ export class MockRepo implements Repo {
     this.persist();
   }
 
-  async payOrder({ orderId }: PayInput) {
+  /** Deducts recipe ingredients from inventory for an order's lines. */
+  private deductInventory(order: Order) {
+    const need = new Map<string, number>();
+    for (const line of order.lines) {
+      const recipe = line.itemId ? RECIPES[line.itemId] : undefined;
+      if (!recipe) continue;
+      for (const r of recipe) {
+        need.set(r.inventoryId, (need.get(r.inventoryId) ?? 0) + r.qtyPerUnit * line.qty);
+      }
+    }
+    for (const [invId, qty] of need) {
+      const inv = this.state.inventory.find((i) => i.id === invId);
+      if (inv) inv.stock = Math.max(0, Math.round((inv.stock - qty) * 1000) / 1000);
+    }
+    if (need.size > 0) this.pushLog("Sistema", `Descontó ${need.size} insumos del inventario`);
+  }
+
+  async payOrder({ orderId, method, total, customerId, redeem = 0 }: PayInput) {
     const order = this.order(orderId);
     if (!order) return;
+
+    this.deductInventory(order);
+
+    if (customerId) {
+      const cust = this.state.customers.find((c) => c.id === customerId);
+      if (cust) {
+        const due = Math.max(0, total - redeem);
+        const earned = Math.floor(due / 10);
+        cust.points = cust.points - redeem + earned;
+        cust.visits += 1;
+        cust.spent = Math.round((cust.spent + due) * 100) / 100;
+        if (redeem > 0) this.pushLog("Caja", `${cust.name} canjeó ${redeem} pts`);
+      }
+    }
+
     order.status = "cobrada";
+    order.paidMethod = method;
+    order.paidTotal = Math.max(0, total - redeem);
     if (order.tableId) {
       const table = this.state.tables.find((t) => t.id === order.tableId);
       if (table) table.status = "libre";
     }
-    // Remove any lingering kitchen tickets for this order.
     this.state.tickets = this.state.tickets.filter((t) => t.orderId !== orderId);
+    this.pushLog("Caja", `Cobró Mesa ${order.tableLabel} · ${method} · S/ ${total.toFixed(2)}`);
     this.persist();
+  }
+
+  // ---- CRM ----
+  async getCustomers() {
+    return [...this.state.customers];
+  }
+
+  // ---- Inventory ----
+  async getInventory() {
+    return [...this.state.inventory];
+  }
+  async adjustInventory(itemId: string, delta: number, actor: string) {
+    const inv = this.state.inventory.find((i) => i.id === itemId);
+    if (!inv) return;
+    inv.stock = Math.max(0, Math.round((inv.stock + delta) * 1000) / 1000);
+    this.pushLog(actor, `Ajustó ${inv.name} (${delta > 0 ? "+" : ""}${delta} ${inv.unit})`);
+    this.persist();
+  }
+
+  // ---- Menu changes ----
+  async getMenuChanges() {
+    return [...this.state.changes];
+  }
+  async reviewChange(id: string, approve: boolean, actor: string) {
+    const ch = this.state.changes.find((c) => c.id === id);
+    if (!ch) return;
+    ch.status = approve ? "aprobado" : "rechazado";
+    this.pushLog(actor, `${approve ? "Aprobó" : "Rechazó"} cambio: ${ch.itemName}`);
+    this.persist();
+  }
+
+  // ---- Online ----
+  async getOnlineOrders() {
+    return seedOnlineOrders();
+  }
+
+  // ---- Settings + audit ----
+  async getSettings() {
+    return { ...this.state.settings };
+  }
+  async updateSettings(patch: Partial<BusinessSettings>) {
+    this.state.settings = { ...this.state.settings, ...patch };
+    this.pushLog("Ajustes", `Actualizó configuración del negocio`);
+    this.persist();
+  }
+  async getActivityLog() {
+    return [...this.state.log];
   }
 }
