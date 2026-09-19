@@ -16,8 +16,11 @@ import type {
   BusinessSettings,
   MenuChange,
   OnlineOrder,
+  Comprobante,
+  EmitComprobanteInput,
 } from "../model";
 import type { Database, Row } from "@/types/database";
+import { stubSunatGateway } from "../sunat/gateway";
 
 /**
  * Real backend repo. Tenant scoping is enforced by RLS; we still set tenant_id
@@ -411,6 +414,80 @@ export class SupabaseRepo implements Repo {
     }));
   }
 
+  async getComprobantes(): Promise<Comprobante[]> {
+    const { data, error } = await this.sb
+      .from("comprobantes")
+      .select("*")
+      .order("issued_at", { ascending: false })
+      .limit(100);
+    if (error) throw error;
+    return (data ?? []).map(mapComprobante);
+  }
+
+  async emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante> {
+    const folio = `${input.tipo === "Factura" ? "F001" : "B001"}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+    const { data, error } = await this.sb
+      .from("comprobantes")
+      .insert({
+        tenant_id: this.tenantId,
+        order_id: input.orderId ?? null,
+        folio,
+        tipo: input.tipo,
+        buyer_ruc: input.buyerRuc ?? null,
+        buyer_name: input.buyerName ?? null,
+        subtotal: input.subtotal,
+        igv: input.igv,
+        total: input.total,
+        reference: input.reference,
+        status: online ? "enviando" : "encola",
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    let cpe = mapComprobante(data);
+    if (online) {
+      const res = await stubSunatGateway.submit(cpe);
+      cpe = { ...cpe, status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null };
+      await this.sb.from("comprobantes").update({ status: cpe.status, error: cpe.error }).eq("id", cpe.id);
+    } else {
+      await this.sb.from("sunat_outbox").insert({ tenant_id: this.tenantId, comprobante_id: cpe.id });
+    }
+    await this.log(`Emitió ${input.tipo} ${folio} · ${cpe.status}`);
+    return cpe;
+  }
+
+  async syncSunat(online: boolean): Promise<number> {
+    if (!online) return 0;
+    const { data: queued } = await this.sb.from("comprobantes").select("*").eq("status", "encola");
+    let sent = 0;
+    for (const row of queued ?? []) {
+      const cpe = mapComprobante(row);
+      const res = await stubSunatGateway.submit(cpe);
+      await this.sb
+        .from("comprobantes")
+        .update({ status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null })
+        .eq("id", cpe.id);
+      if (res.accepted) {
+        sent++;
+        await this.sb.from("sunat_outbox").delete().eq("comprobante_id", cpe.id);
+      }
+    }
+    if (sent > 0) await this.log(`Sincronizó ${sent} comprobante(s) con SUNAT`);
+    return sent;
+  }
+
+  async retryComprobante(id: string, online: boolean): Promise<void> {
+    if (!online) return;
+    const { data } = await this.sb.from("comprobantes").select("*").eq("id", id).maybeSingle();
+    if (!data) return;
+    const cpe = mapComprobante(data);
+    const res = await stubSunatGateway.submit(cpe);
+    await this.sb
+      .from("comprobantes")
+      .update({ status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null })
+      .eq("id", id);
+  }
+
   async getSettings(): Promise<BusinessSettings> {
     const { data } = await this.sb.from("business_settings").select("*").eq("tenant_id", this.tenantId).maybeSingle();
     return {
@@ -487,6 +564,22 @@ function mapItem(r: Row<"menu_items">): MenuItem {
 }
 function mapTable(r: Row<"restaurant_tables">): RestaurantTable {
   return { id: r.id, zone: r.zone, number: r.number, seats: r.seats, status: r.status, waiterId: r.waiter_id };
+}
+function mapComprobante(r: Row<"comprobantes">): Comprobante {
+  return {
+    id: r.id,
+    folio: r.folio,
+    tipo: r.tipo,
+    buyerRuc: r.buyer_ruc,
+    buyerName: r.buyer_name,
+    subtotal: Number(r.subtotal),
+    igv: Number(r.igv),
+    total: Number(r.total),
+    reference: r.reference,
+    status: r.status,
+    error: r.error,
+    issuedAt: r.issued_at,
+  };
 }
 function mapLine(r: Row<"order_lines">): OrderLine {
   return {

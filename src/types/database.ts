@@ -92,6 +92,9 @@ export interface Tables {
   comprobantes: {
     Row: { id: string; tenant_id: string; order_id: string | null; folio: string; tipo: ComprobanteTipo; buyer_ruc: string | null; buyer_name: string | null; subtotal: number; igv: number; total: number; reference: string; status: SunatStatus; error: string | null; issued_at: string };
   };
+  sunat_outbox: {
+    Row: { id: string; tenant_id: string; comprobante_id: string; attempts: number; next_attempt_at: string; last_error: string | null } & Timestamps;
+  };
   activity_log: {
     Row: { id: string; tenant_id: string; actor: string; message: string } & Timestamps;
   };

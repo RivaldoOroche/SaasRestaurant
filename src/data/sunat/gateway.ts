@@ -1,0 +1,28 @@
+import type { Comprobante } from "../model";
+
+export interface SunatResult {
+  accepted: boolean;
+  error?: string;
+}
+
+/**
+ * Seam for real SUNAT electronic-invoicing (PSE/OSE timbrado). Swap this stub
+ * for a real gateway (edge function calling the OSE) without touching the UI or
+ * the repos. The stub validates the RUC shape and "accepts" everything else.
+ */
+export interface SunatGateway {
+  submit(c: Comprobante): Promise<SunatResult>;
+}
+
+export const stubSunatGateway: SunatGateway = {
+  async submit(c) {
+    // A Peruvian RUC is 11 digits. Facturas require a valid buyer RUC.
+    if (c.tipo === "Factura") {
+      const ruc = (c.buyerRuc ?? "").replace(/\D/g, "");
+      if (ruc.length !== 11) {
+        return { accepted: false, error: "RUC inválido (debe tener 11 dígitos)" };
+      }
+    }
+    return { accepted: true };
+  },
+};

@@ -87,6 +87,10 @@ export function useActivityLog() {
   const repo = useRepo();
   return useQuery({ queryKey: ["activityLog"], queryFn: () => repo.getActivityLog(), refetchInterval: 4000 });
 }
+export function useComprobantes() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["comprobantes"], queryFn: () => repo.getComprobantes() });
+}
 
 /** Order mutations with cache invalidation. */
 export function useOrderActions(tableId: string | null) {
@@ -166,6 +170,30 @@ export function useFloorActions() {
     onSuccess: invalidate,
   });
   return { voidLine, transfer, merge };
+}
+
+/** SUNAT emission / sync / retry. */
+export function useSunatActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["comprobantes"] });
+    qc.invalidateQueries({ queryKey: ["activityLog"] });
+  };
+  const emit = useMutation({
+    mutationFn: ({ input, online }: { input: Parameters<typeof repo.emitComprobante>[0]; online: boolean }) =>
+      repo.emitComprobante(input, online),
+    onSuccess: invalidate,
+  });
+  const sync = useMutation({
+    mutationFn: (online: boolean) => repo.syncSunat(online),
+    onSuccess: invalidate,
+  });
+  const retry = useMutation({
+    mutationFn: ({ id, online }: { id: string; online: boolean }) => repo.retryComprobante(id, online),
+    onSuccess: invalidate,
+  });
+  return { emit, sync, retry };
 }
 
 /** Admin/tenant management actions. */

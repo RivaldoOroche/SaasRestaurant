@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { navForRole } from "@/lib/roles";
 import { useTheme } from "@/store/theme";
+import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
 
 /**
@@ -11,7 +12,9 @@ import { cn } from "@/lib/cn";
 export function Rail() {
   const { session, lock } = useAuth();
   const { theme, toggle } = useTheme();
+  const { online, toggle: toggleNet } = useConnection();
   if (!session) return null;
+  const isTenant = session.role !== "saas";
 
   const entries = navForRole(session.role);
   const top = entries.filter((e) => e.section === "top");
@@ -39,6 +42,15 @@ export function Rail() {
         {bottom.map((e) => (
           <RailButton key={e.key} to={e.path} icon={e.icon} label={e.label} />
         ))}
+        {isTenant && (
+          <button
+            onClick={toggleNet}
+            title={online ? "En línea (SUNAT)" : "Sin conexión"}
+            className="h-[38px] w-[38px] rounded-md grid place-items-center hover:bg-white/10"
+          >
+            {online ? "📶" : "📴"}
+          </button>
+        )}
         <button
           onClick={toggle}
           title="Cambiar tema"

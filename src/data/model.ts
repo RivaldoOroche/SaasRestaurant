@@ -170,3 +170,32 @@ export interface PayExtras {
   discountPct?: number;
   tipPct?: number;
 }
+
+export type ComprobanteTipo = "Boleta" | "Factura";
+export type SunatStatus = "encola" | "enviando" | "aceptada" | "rechazada";
+
+export interface Comprobante {
+  id: string;
+  folio: string;
+  tipo: ComprobanteTipo;
+  buyerRuc: string | null;
+  buyerName: string | null;
+  subtotal: number;
+  igv: number;
+  total: number;
+  reference: string;
+  status: SunatStatus;
+  error: string | null;
+  issuedAt: string;
+}
+
+export interface EmitComprobanteInput {
+  orderId?: string | null;
+  tipo: ComprobanteTipo;
+  buyerRuc?: string | null;
+  buyerName?: string | null;
+  subtotal: number;
+  igv: number;
+  total: number;
+  reference: string;
+}

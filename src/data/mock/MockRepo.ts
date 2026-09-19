@@ -12,7 +12,10 @@ import type {
   BusinessSettings,
   MenuChange,
   MenuItem,
+  Comprobante,
+  EmitComprobanteInput,
 } from "../model";
+import { stubSunatGateway } from "../sunat/gateway";
 import {
   CATEGORIES,
   MENU_ITEMS,
@@ -42,9 +45,10 @@ interface MockState {
   settings: BusinessSettings;
   changes: MenuChange[];
   menuOverrides: Record<string, MenuOverride>;
+  comprobantes: Comprobante[];
 }
 
-const KEY = "nubepos-mock-v2";
+const KEY = "nubepos-mock-v3";
 const COL_ORDER: KdsColumn[] = ["nuevos", "preparacion", "listos", "entregado"];
 
 function uid(prefix: string): string {
@@ -72,7 +76,14 @@ function loadState(): MockState {
     settings: { ...DEFAULT_SETTINGS },
     changes: seedMenuChanges(),
     menuOverrides: {},
+    comprobantes: [],
   };
+}
+
+let folioSeq = 1;
+function nextFolio(tipo: "Boleta" | "Factura"): string {
+  const serie = tipo === "Factura" ? "F001" : "B001";
+  return `${serie}-${String(1000 + folioSeq++).padStart(4, "0")}`;
 }
 
 /** In-browser repo used for demo / offline UI work. */
@@ -383,6 +394,64 @@ export class MockRepo implements Repo {
   // ---- Online ----
   async getOnlineOrders() {
     return seedOnlineOrders();
+  }
+
+  // ---- Fiscal (SUNAT) ----
+  async getComprobantes() {
+    return [...this.state.comprobantes].sort((a, b) => (a.issuedAt < b.issuedAt ? 1 : -1));
+  }
+
+  async emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante> {
+    const cpe: Comprobante = {
+      id: uid("cpe"),
+      folio: nextFolio(input.tipo),
+      tipo: input.tipo,
+      buyerRuc: input.buyerRuc ?? null,
+      buyerName: input.buyerName ?? null,
+      subtotal: input.subtotal,
+      igv: input.igv,
+      total: input.total,
+      reference: input.reference,
+      status: online ? "enviando" : "encola",
+      error: null,
+      issuedAt: new Date().toISOString(),
+    };
+    this.state.comprobantes.unshift(cpe);
+    if (online) {
+      const res = await stubSunatGateway.submit(cpe);
+      cpe.status = res.accepted ? "aceptada" : "rechazada";
+      cpe.error = res.error ?? null;
+    }
+    this.pushLog("SUNAT", `${input.tipo} ${cpe.folio} · ${cpe.status}`);
+    this.persist();
+    return cpe;
+  }
+
+  async syncSunat(online: boolean): Promise<number> {
+    if (!online) return 0;
+    let sent = 0;
+    for (const cpe of this.state.comprobantes) {
+      if (cpe.status === "encola") {
+        const res = await stubSunatGateway.submit(cpe);
+        cpe.status = res.accepted ? "aceptada" : "rechazada";
+        cpe.error = res.error ?? null;
+        if (res.accepted) sent++;
+      }
+    }
+    if (sent > 0) this.pushLog("SUNAT", `Sincronizó ${sent} comprobante(s)`);
+    this.persist();
+    return sent;
+  }
+
+  async retryComprobante(id: string, online: boolean): Promise<void> {
+    if (!online) return;
+    const cpe = this.state.comprobantes.find((c) => c.id === id);
+    if (!cpe) return;
+    const res = await stubSunatGateway.submit(cpe);
+    cpe.status = res.accepted ? "aceptada" : "rechazada";
+    cpe.error = res.error ?? null;
+    this.pushLog("SUNAT", `Reintentó ${cpe.folio} · ${cpe.status}`);
+    this.persist();
   }
 
   // ---- Settings + audit ----

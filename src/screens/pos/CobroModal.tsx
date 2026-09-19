@@ -3,9 +3,10 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { computeCheckout, equalSplit } from "@/lib/checkout";
-import { useOrderActions, useCustomers } from "@/data/hooks";
+import { useOrderActions, useCustomers, useSunatActions } from "@/data/hooks";
+import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
-import type { Order } from "@/data/model";
+import type { Order, Comprobante, ComprobanteTipo } from "@/data/model";
 
 type Stage = "cuenta" | "pago" | "doc";
 const DISCOUNTS = [0, 0.1, 0.15, 1];
@@ -33,6 +34,12 @@ export function CobroModal({
 }) {
   const actions = useOrderActions(order.tableId);
   const { data: customers = [] } = useCustomers();
+  const sunat = useSunatActions();
+  const online = useConnection((s) => s.online);
+  const [docTipo, setDocTipo] = useState<ComprobanteTipo>("Boleta");
+  const [ruc, setRuc] = useState("");
+  const [razon, setRazon] = useState("");
+  const [emitted, setEmitted] = useState<Comprobante | null>(null);
   const [stage, setStage] = useState<Stage>("cuenta");
   const [discountPct, setDiscountPct] = useState(0);
   const [tipPct, setTipPct] = useState(0);
@@ -61,6 +68,27 @@ export function CobroModal({
     setMethod("efectivo");
     setCustId(null);
     setRedeem(0);
+    setDocTipo("Boleta");
+    setRuc("");
+    setRazon("");
+    setEmitted(null);
+  }
+
+  async function emitComprobante() {
+    const cpe = await sunat.emit.mutateAsync({
+      input: {
+        orderId: order.id,
+        tipo: docTipo,
+        buyerRuc: docTipo === "Factura" ? ruc : null,
+        buyerName: docTipo === "Factura" ? razon : null,
+        subtotal: result.subtotal,
+        igv: result.igv,
+        total: result.grand,
+        reference: `Mesa ${order.tableLabel}`,
+      },
+      online,
+    });
+    setEmitted(cpe);
   }
 
   function close() {
@@ -246,10 +274,59 @@ export function CobroModal({
                 </>
               )}
               <p className="text-xs text-muted mt-2">Pagado con {methodLabel}</p>
-              <p className="text-[10px] text-muted mt-3 text-center">
-                Comprobante de consumo · el comprobante electrónico SUNAT se emite en la Fase 3.
-              </p>
+              {emitted && (
+                <p className="text-[11px] text-muted mt-3 text-center">
+                  {emitted.tipo} electrónica {emitted.folio} ·{" "}
+                  {emitted.status === "aceptada"
+                    ? "Aceptada por SUNAT"
+                    : emitted.status === "encola"
+                      ? "En cola (sin conexión)"
+                      : emitted.status === "rechazada"
+                        ? `Rechazada: ${emitted.error ?? ""}`
+                        : "Enviando…"}
+                </p>
+              )}
             </div>
+
+            {!emitted ? (
+              <div className="mt-4 no-print space-y-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted mb-1.5">Tipo de comprobante</p>
+                  <div className="flex gap-2">
+                    {(["Boleta", "Factura"] as const).map((t) => (
+                      <Pill key={t} active={docTipo === t} onClick={() => setDocTipo(t)}>
+                        {t}
+                      </Pill>
+                    ))}
+                  </div>
+                </div>
+                {docTipo === "Factura" && (
+                  <div className="grid grid-cols-1 gap-2">
+                    <input
+                      value={ruc}
+                      onChange={(e) => setRuc(e.target.value)}
+                      placeholder="RUC (11 dígitos)"
+                      className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+                    />
+                    <input
+                      value={razon}
+                      onChange={(e) => setRazon(e.target.value)}
+                      placeholder="Razón social"
+                      className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+                    />
+                  </div>
+                )}
+                {!online && (
+                  <p className="text-warning text-xs">
+                    Sin conexión — el comprobante quedará en cola y se enviará a SUNAT al reconectar.
+                  </p>
+                )}
+                <Button className="w-full" onClick={emitComprobante} disabled={sunat.emit.isPending}>
+                  Emitir {docTipo}
+                </Button>
+              </div>
+            ) : null}
+
             <div className="flex justify-end gap-2 mt-4 no-print">
               <Button variant="secondary" onClick={() => window.print()}>
                 🖨 Imprimir

@@ -20,6 +20,7 @@ import { Reportes } from "@/screens/pos/Reportes";
 import { Caja } from "@/screens/pos/Caja";
 import { Panel } from "@/screens/pos/Panel";
 import { Sucursales } from "@/screens/pos/Sucursales";
+import { Sunat } from "@/screens/pos/Sunat";
 import { TENANT_NAV, SAAS_NAV, homePathForRole, type NavEntry } from "@/lib/roles";
 import { useTheme } from "@/store/theme";
 
@@ -41,6 +42,7 @@ const SCREENS: Record<string, ComponentType> = {
   caja: Caja,
   panel: Panel,
   sucursales: Sucursales,
+  comprobantes: Sunat,
 };
 
 /** Which build phase each screen is delivered in (shown on placeholders). */

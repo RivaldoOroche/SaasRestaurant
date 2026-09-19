@@ -1,17 +1,33 @@
+import { useEffect, useRef } from "react";
 import { Outlet } from "react-router-dom";
 import { Rail } from "./Rail";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
-import { useRepoSubscription } from "@/data/hooks";
+import { useRepoSubscription, useSunatActions } from "@/data/hooks";
+import { useConnection } from "@/store/connection";
 
 export function AppShell() {
   const { session, exitTenant } = useAuth();
   useRepoSubscription();
 
+  // Auto-sync queued comprobantes to SUNAT when connectivity is restored.
+  const online = useConnection((s) => s.online);
+  const { sync } = useSunatActions();
+  const wasOnline = useRef(online);
+  useEffect(() => {
+    if (online && !wasOnline.current) sync.mutate(true);
+    wasOnline.current = online;
+  }, [online, sync]);
+
   return (
     <div className="flex h-full w-full bg-bg text-ink mob:flex-col">
       <Rail />
       <main className="flex-1 min-h-0 min-w-0 flex flex-col mob:order-1">
+        {session && session.role !== "saas" && !online && (
+          <div className="bg-warning/15 text-warning px-4 py-1.5 text-sm text-center no-print">
+            📴 Sin conexión — ventas y comprobantes se registran localmente y se enviarán a SUNAT al reconectar.
+          </div>
+        )}
         {session?.impersonating && (
           <div className="flex items-center justify-between gap-3 bg-accent/15 text-accent px-4 py-1.5 text-sm no-print">
             <span>

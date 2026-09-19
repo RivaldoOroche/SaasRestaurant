@@ -14,6 +14,8 @@ import type {
   MenuChange,
   OnlineOrder,
   PayExtras,
+  Comprobante,
+  EmitComprobanteInput,
 } from "./model";
 
 export interface PayInput extends PayExtras {
@@ -71,6 +73,12 @@ export interface Repo {
 
   // Online orders
   getOnlineOrders(): Promise<OnlineOrder[]>;
+
+  // Fiscal (SUNAT)
+  getComprobantes(): Promise<Comprobante[]>;
+  emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante>;
+  syncSunat(online: boolean): Promise<number>;
+  retryComprobante(id: string, online: boolean): Promise<void>;
 
   // Settings + audit
   getSettings(): Promise<BusinessSettings>;
