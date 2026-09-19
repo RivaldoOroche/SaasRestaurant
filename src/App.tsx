@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { useAuth } from "@/auth/AuthContext";
 import { RequireAuth } from "@/auth/RequireAuth";
@@ -16,17 +16,20 @@ import { Carta } from "@/screens/pos/Carta";
 import { Editor } from "@/screens/pos/Editor";
 import { OnlineOrders } from "@/screens/pos/OnlineOrders";
 import { Ajustes } from "@/screens/pos/Ajustes";
-import { Reportes } from "@/screens/pos/Reportes";
 import { Caja } from "@/screens/pos/Caja";
 import { Panel } from "@/screens/pos/Panel";
 import { Sucursales } from "@/screens/pos/Sucursales";
+import { Suscripcion } from "@/screens/pos/Suscripcion";
 import { Sunat } from "@/screens/pos/Sunat";
-import { Resumen } from "@/screens/saas/Resumen";
 import { Tenants } from "@/screens/saas/Tenants";
-import { Retencion } from "@/screens/saas/Retencion";
 import { Ingresos } from "@/screens/saas/Ingresos";
 import { Planes } from "@/screens/saas/Planes";
 import { Soporte } from "@/screens/saas/Soporte";
+
+// Chart-heavy screens are code-split so Recharts loads on demand.
+const Reportes = lazy(() => import("@/screens/pos/Reportes").then((m) => ({ default: m.Reportes })));
+const Resumen = lazy(() => import("@/screens/saas/Resumen").then((m) => ({ default: m.Resumen })));
+const Retencion = lazy(() => import("@/screens/saas/Retencion").then((m) => ({ default: m.Retencion })));
 import { TENANT_NAV, SAAS_NAV, homePathForRole, type NavEntry } from "@/lib/roles";
 import { useTheme } from "@/store/theme";
 
@@ -48,6 +51,7 @@ const SCREENS: Record<string, ComponentType> = {
   caja: Caja,
   panel: Panel,
   sucursales: Sucursales,
+  suscripcion: Suscripcion,
   comprobantes: Sunat,
   saashome: Resumen,
   tenants: Tenants,
@@ -77,7 +81,9 @@ function screenRoute(e: NavEntry) {
       path={e.path}
       element={
         <RequireAuth path={e.path}>
-          {Screen ? <Screen /> : <Placeholder title={e.label} phase={PHASE[e.key] ?? "próximamente"} />}
+          <Suspense fallback={<div className="p-6 text-muted">Cargando…</div>}>
+            {Screen ? <Screen /> : <Placeholder title={e.label} phase={PHASE[e.key] ?? "próximamente"} />}
+          </Suspense>
         </RequireAuth>
       }
     />

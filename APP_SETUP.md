@@ -59,6 +59,25 @@ with a PIN on an already-authenticated device (staff PIN verification against
 
 ## Status
 
-**Phase 0 complete:** scaffold, Nocturne design system (light/dark, responsive,
-print), Supabase schema + RLS, auth + role gating, app shell with all screens
-stubbed and correctly gated per role. Next phases are described in the plan.
+All phases implemented and verified in-browser (mock backend):
+
+- **Phase 0** — scaffold, Nocturne design system (light/dark, responsive, print),
+  Supabase schema + RLS, auth + role gating, app shell.
+- **Phase 1** — Pedido, Mesas, Cocina (KDS with SLA timers), Cobro (checkout math
+  + receipt). Order → kitchen → payment end-to-end.
+- **Phase 2** — Cuentas, transfer/merge, void-with-reason, Inventario + recipe
+  deduction, Clientes + loyalty, Carta/Editor, En línea, Ajustes, Reportes, Caja,
+  Panel, Dueño (branches + bitácora).
+- **Phase 3** — SUNAT comprobantes (boleta/factura), offline queue with auto-sync
+  and retry, Monitor SUNAT. Real timbrado stubbed behind `data/sunat/gateway.ts`.
+- **Phase 4** — SaaS console: Resumen, Tenants (detail, impersonation, onboarding
+  links, charge→factura), Retención, Ingresos, Planes, Soporte.
+- **Phase 5** — tenant Plan/Suscripción screen, chart code-splitting, this doc.
+
+**Stubbed integrations** (swap for real providers, no UI changes):
+`data/sunat/gateway.ts` (SUNAT PSE/OSE timbrado) and SaaS payment charging.
+Retention/dunning analytics in the SaaS console are representative — real cohort
+computation belongs in a backend analytics job.
+
+The app runs fully in demo mode without a backend; connect Supabase (steps above)
+for real multi-tenant persistence.
