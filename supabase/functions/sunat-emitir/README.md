@@ -6,9 +6,18 @@ a SUNAT: arma el **UBL 2.1** (`Invoice` o `CreditNote`), lo **firma**
 al **ambiente beta / homologación** de SUNAT.
 
 Para una nota de crédito el DTO incluye `tipo: "07"`, `refFolio` (documento
-afectado), `refTipo` (`01`/`03`), `motivo` y `motivoCodigo` (catálogo 09). El
-resumen diario de boletas se registra en el POS; su envío real (RC) queda como
-siguiente seam a implementar sobre esta misma función.
+afectado), `refTipo` (`01`/`03`), `motivo` y `motivoCodigo` (catálogo 09).
+
+La función devuelve, además del resultado, el **XML firmado** (`xml`) y el
+**CDR** (`cdr`, base64 del ZIP de la constancia), que el POS guarda en
+`comprobantes.signed_xml` / `comprobantes.cdr` y ofrece descargar desde el
+Monitor SUNAT.
+
+**Resumen diario (RC) y comunicación de baja (RA)** se envían con la función
+`sunat-lotes` (mismo esquema de credenciales por tenant). Usan `sendSummary`,
+que es asíncrono: `action:"send"` devuelve un `ticket` y `action:"status"`
+consulta el CDR cuando SUNAT termina de procesarlo. Los UBL (SummaryDocuments /
+VoidedDocuments) están en `_shared/sunat/lotes.ts` con tests.
 
 - Lógica portable y con tests: `supabase/functions/_shared/sunat/` (UBL, importe
   en letras, ZIP, firma). Corre con `npm test`.

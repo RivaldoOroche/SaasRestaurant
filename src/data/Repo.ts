@@ -17,6 +17,7 @@ import type {
   Comprobante,
   EmitComprobanteInput,
   ResumenDiario,
+  BajaResult,
   FiscalCredentialsInput,
 } from "./model";
 
@@ -87,6 +88,8 @@ export interface Repo {
   retryComprobante(id: string, online: boolean): Promise<void>;
   /** Envía a SUNAT el resumen diario de las boletas del día. */
   sendResumenDiario(online: boolean): Promise<ResumenDiario>;
+  /** Comunica a SUNAT la baja de un comprobante (factura) ya emitido. */
+  comunicarBaja(comprobanteId: string, motivo: string, online: boolean): Promise<BajaResult>;
 
   // Settings + audit
   getSettings(): Promise<BusinessSettings>;

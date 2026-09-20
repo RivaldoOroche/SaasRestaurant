@@ -50,3 +50,40 @@ export interface NotaCreditoRef {
   motivoCodigo?: string; // catálogo 09; "01" = anulación de la operación (por defecto)
   motivo: string; // descripción del motivo
 }
+
+// --- Resumen diario de boletas (RC) — SummaryDocuments ---
+export interface ResumenLinea {
+  tipoDoc: TipoComprobante; // 03 boleta, 07 NC de boleta
+  serie: string; // B001
+  correlativo: string; // 1001
+  clienteTipoDoc: TipoDocIdentidad;
+  clienteNumDoc: string;
+  gravado: number; // op. gravada (sin IGV)
+  igv: number;
+  total: number; // con IGV
+  estado?: "1" | "2" | "3"; // 1 adicionar (def), 2 modificar, 3 anular
+}
+export interface ResumenDoc {
+  id: string; // RC-YYYYMMDD-#
+  fechaReferencia: string; // día de emisión de las boletas (YYYY-MM-DD)
+  fechaGeneracion: string; // día de envío del resumen (YYYY-MM-DD)
+  emisor: Emisor;
+  moneda?: string;
+  igvTasa?: number;
+  lineas: ResumenLinea[];
+}
+
+// --- Comunicación de baja (RA) — VoidedDocuments ---
+export interface BajaLinea {
+  tipoDoc: TipoComprobante; // 01 factura, 03 boleta
+  serie: string;
+  correlativo: string;
+  motivo: string;
+}
+export interface BajaDoc {
+  id: string; // RA-YYYYMMDD-#
+  fechaReferencia: string; // día de emisión del documento a dar de baja
+  fechaGeneracion: string; // día de la comunicación
+  emisor: Emisor;
+  lineas: BajaLinea[];
+}

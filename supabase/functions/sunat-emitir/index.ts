@@ -212,8 +212,8 @@ export default async function handler(req: Request): Promise<Response> {
     }
     const appResp = text.match(/<applicationResponse>([\s\S]*?)<\/applicationResponse>/);
     if (appResp) {
-      // CDR recibido = SUNAT aceptó el comprobante.
-      return json({ accepted: true, code: "0", description: "Aceptado por SUNAT", folio: base, cdr: appResp[1] });
+      // CDR recibido = SUNAT aceptó el comprobante. Devolvemos también el XML firmado.
+      return json({ accepted: true, code: "0", description: "Aceptado por SUNAT", folio: base, cdr: appResp[1], xml: signed });
     }
     return json({ accepted: false, code: "unknown", description: "Respuesta no reconocida", raw: text.slice(0, 500) }, 502);
   } catch (e) {

@@ -3,6 +3,8 @@ import type { Comprobante } from "../model";
 export interface SunatResult {
   accepted: boolean;
   error?: string;
+  signedXml?: string; // XML UBL firmado (si el gateway lo devuelve)
+  cdr?: string; // CDR de SUNAT (base64 del ZIP)
 }
 
 /**

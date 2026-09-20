@@ -219,6 +219,8 @@ export interface Comprobante {
   issuedAt: string;
   refFolio?: string | null; // folio del comprobante que modifica (para NC)
   motivo?: string | null; // motivo de la nota de crédito
+  signedXml?: string | null; // XML UBL firmado
+  cdr?: string | null; // CDR de SUNAT (base64 del ZIP)
 }
 
 /** Resultado del envío de un resumen diario de boletas a SUNAT. */
@@ -228,6 +230,15 @@ export interface ResumenDiario {
   count: number; // boletas incluidas
   total: number; // importe total resumido
   status: SunatStatus;
+  ticket?: string | null; // ticket de SUNAT (envío asíncrono)
+}
+
+/** Resultado de una comunicación de baja (RA) a SUNAT. */
+export interface BajaResult {
+  folio: string; // p.ej. RA-20260920-1
+  refFolio: string; // comprobante dado de baja
+  status: SunatStatus;
+  ticket?: string | null;
 }
 
 export interface EmitComprobanteInput {

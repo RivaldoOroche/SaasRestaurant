@@ -19,6 +19,7 @@ import type {
   Comprobante,
   EmitComprobanteInput,
   ResumenDiario,
+  BajaResult,
   FiscalCredentialsInput,
 } from "../model";
 import type { Database, Row } from "@/types/database";
@@ -31,14 +32,15 @@ import { makeFunctionGateway } from "../sunat/functionGateway";
  */
 export class SupabaseRepo implements Repo {
   private sunat: SunatGateway;
+  private betaMode: boolean;
 
   constructor(
     private sb: SupabaseClient<Database>,
     private tenantId: string,
   ) {
     // VITE_SUNAT_MODE=beta usa la Edge Function real; en otro caso, el stub.
-    this.sunat =
-      import.meta.env.VITE_SUNAT_MODE === "beta" ? makeFunctionGateway(sb, tenantId) : stubSunatGateway;
+    this.betaMode = import.meta.env.VITE_SUNAT_MODE === "beta";
+    this.sunat = this.betaMode ? makeFunctionGateway(sb, tenantId) : stubSunatGateway;
   }
 
   async getCategories(): Promise<Category[]> {
@@ -471,8 +473,20 @@ export class SupabaseRepo implements Repo {
     let cpe = mapComprobante(data);
     if (online) {
       const res = await this.sunat.submit(cpe);
-      cpe = { ...cpe, status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null };
-      await this.sb.rpc("set_comprobante_status", { cid: cpe.id, new_status: cpe.status, new_error: cpe.error });
+      cpe = {
+        ...cpe,
+        status: res.accepted ? "aceptada" : "rechazada",
+        error: res.error ?? null,
+        signedXml: res.signedXml ?? null,
+        cdr: res.cdr ?? null,
+      };
+      await this.sb.rpc("set_comprobante_result", {
+        cid: cpe.id,
+        new_status: cpe.status,
+        new_error: cpe.error,
+        new_xml: res.signedXml ?? null,
+        new_cdr: res.cdr ?? null,
+      });
     } else {
       await this.sb.from("sunat_outbox").insert({ tenant_id: this.tenantId, comprobante_id: cpe.id });
     }
@@ -518,8 +532,20 @@ export class SupabaseRepo implements Repo {
     let cpe = mapComprobante(data);
     if (online) {
       const res = await this.sunat.submit(cpe);
-      cpe = { ...cpe, status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null };
-      await this.sb.rpc("set_comprobante_status", { cid: cpe.id, new_status: cpe.status, new_error: cpe.error });
+      cpe = {
+        ...cpe,
+        status: res.accepted ? "aceptada" : "rechazada",
+        error: res.error ?? null,
+        signedXml: res.signedXml ?? null,
+        cdr: res.cdr ?? null,
+      };
+      await this.sb.rpc("set_comprobante_result", {
+        cid: cpe.id,
+        new_status: cpe.status,
+        new_error: cpe.error,
+        new_xml: res.signedXml ?? null,
+        new_cdr: res.cdr ?? null,
+      });
     } else {
       await this.sb.from("sunat_outbox").insert({ tenant_id: this.tenantId, comprobante_id: cpe.id });
     }
@@ -531,23 +557,86 @@ export class SupabaseRepo implements Repo {
     const today = new Date().toISOString().slice(0, 10);
     const { data } = await this.sb
       .from("comprobantes")
-      .select("total")
+      .select("folio, buyer_ruc, subtotal, igv, total, status")
       .eq("tipo", "Boleta")
-      .eq("status", "aceptada")
       .gte("issued_at", `${today}T00:00:00`)
       .lte("issued_at", `${today}T23:59:59.999`);
-    const rows = data ?? [];
+    const rows = (data ?? []).filter((r) => r.status === "aceptada");
     const total = Math.round(rows.reduce((s, r) => s + Number(r.total), 0) * 100) / 100;
     const folio = `RC-${today.replace(/-/g, "")}-1`;
-    const resumen: ResumenDiario = {
-      folio,
-      fecha: today,
-      count: rows.length,
-      total,
-      status: online ? "aceptada" : "encola",
-    };
+    const resumen: ResumenDiario = { folio, fecha: today, count: rows.length, total, status: online ? "aceptada" : "encola" };
+
+    // En modo beta enviamos el resumen real (RC) a SUNAT vía Edge Function.
+    if (online && this.betaMode && rows.length > 0) {
+      const lineas = rows.map((r) => {
+        const [serie, correlativo] = r.folio.split("-");
+        return {
+          tipoDoc: "03",
+          serie,
+          correlativo,
+          clienteTipoDoc: r.buyer_ruc ? "6" : "1",
+          clienteNumDoc: r.buyer_ruc || "-",
+          gravado: Number(r.subtotal),
+          igv: Number(r.igv),
+          total: Number(r.total),
+        };
+      });
+      const { data: res, error } = await this.sb.functions.invoke("sunat-lotes", {
+        body: { action: "send", kind: "RC", id: folio, fechaReferencia: today, tenantId: this.tenantId, lineas },
+      });
+      if (error) {
+        resumen.status = "rechazada";
+      } else {
+        const r = res as { accepted?: boolean; ticket?: string; description?: string };
+        resumen.status = r.accepted ? "enviando" : "rechazada";
+        resumen.ticket = r.ticket ?? null;
+      }
+    }
+
     await this.log(`Resumen diario ${folio} · ${rows.length} boleta(s) · ${resumen.status}`);
     return resumen;
+  }
+
+  async comunicarBaja(comprobanteId: string, motivo: string, online: boolean): Promise<BajaResult> {
+    const { data: cpe, error } = await this.sb.from("comprobantes").select("*").eq("id", comprobanteId).single();
+    if (error) throw error;
+    const c = mapComprobante(cpe);
+    if (c.tipo !== "Factura") throw new Error("La comunicación de baja aplica a facturas");
+    const today = new Date().toISOString().slice(0, 10);
+    const folio = `RA-${today.replace(/-/g, "")}-1`;
+    const [serie, correlativo] = c.folio.split("-");
+
+    const result: BajaResult = { folio, refFolio: c.folio, status: online ? "aceptada" : "encola" };
+
+    if (online && this.betaMode) {
+      const { data: res, error: fnErr } = await this.sb.functions.invoke("sunat-lotes", {
+        body: {
+          action: "send",
+          kind: "RA",
+          id: folio,
+          fechaReferencia: c.issuedAt.slice(0, 10),
+          tenantId: this.tenantId,
+          lineas: [{ tipoDoc: "01", serie, correlativo, motivo }],
+        },
+      });
+      if (fnErr) result.status = "rechazada";
+      else {
+        const r = res as { accepted?: boolean; ticket?: string };
+        result.status = r.accepted ? "enviando" : "rechazada";
+        result.ticket = r.ticket ?? null;
+      }
+    }
+
+    // Refleja la baja en el comprobante (marca de anulado).
+    await this.sb.rpc("set_comprobante_result", {
+      cid: comprobanteId,
+      new_status: "rechazada",
+      new_error: `Dada de baja: ${motivo}`,
+      new_xml: null,
+      new_cdr: null,
+    });
+    await this.log(`Comunicación de baja ${folio} · ${c.folio} · ${motivo}`);
+    return result;
   }
 
   async syncSunat(online: boolean): Promise<number> {
@@ -557,10 +646,12 @@ export class SupabaseRepo implements Repo {
     for (const row of queued ?? []) {
       const cpe = mapComprobante(row);
       const res = await this.sunat.submit(cpe);
-      await this.sb.rpc("set_comprobante_status", {
+      await this.sb.rpc("set_comprobante_result", {
         cid: cpe.id,
         new_status: res.accepted ? "aceptada" : "rechazada",
         new_error: res.error ?? null,
+        new_xml: res.signedXml ?? null,
+        new_cdr: res.cdr ?? null,
       });
       if (res.accepted) {
         sent++;
@@ -577,10 +668,12 @@ export class SupabaseRepo implements Repo {
     if (!data) return;
     const cpe = mapComprobante(data);
     const res = await this.sunat.submit(cpe);
-    await this.sb.rpc("set_comprobante_status", {
+    await this.sb.rpc("set_comprobante_result", {
       cid: id,
       new_status: res.accepted ? "aceptada" : "rechazada",
       new_error: res.error ?? null,
+      new_xml: res.signedXml ?? null,
+      new_cdr: res.cdr ?? null,
     });
   }
 
@@ -723,6 +816,8 @@ function mapComprobante(r: Row<"comprobantes">): Comprobante {
     issuedAt: r.issued_at,
     refFolio: r.ref_folio,
     motivo: r.motivo,
+    signedXml: r.signed_xml,
+    cdr: r.cdr,
   };
 }
 function mapLine(r: Row<"order_lines">): OrderLine {

@@ -99,7 +99,7 @@ export interface Tables {
     Row: { id: string; tenant_id: string; channel: string; customer_name: string; items: string; total: number; eta: string; status: string } & Timestamps;
   };
   comprobantes: {
-    Row: { id: string; tenant_id: string; order_id: string | null; folio: string; tipo: ComprobanteTipo; buyer_ruc: string | null; buyer_name: string | null; subtotal: number; igv: number; total: number; reference: string; status: SunatStatus; error: string | null; issued_at: string; ref_folio: string | null; motivo: string | null };
+    Row: { id: string; tenant_id: string; order_id: string | null; folio: string; tipo: ComprobanteTipo; buyer_ruc: string | null; buyer_name: string | null; subtotal: number; igv: number; total: number; reference: string; status: SunatStatus; error: string | null; issued_at: string; ref_folio: string | null; motivo: string | null; signed_xml: string | null; cdr: string | null; sunat_ticket: string | null };
   };
   sunat_outbox: {
     Row: { id: string; tenant_id: string; comprobante_id: string; attempts: number; next_attempt_at: string; last_error: string | null } & Timestamps;
@@ -126,6 +126,10 @@ export type Database = {
       next_folio: { Args: { tid: string; p_serie: string }; Returns: string };
       set_comprobante_status: {
         Args: { cid: string; new_status: SunatStatus; new_error: string | null };
+        Returns: undefined;
+      };
+      set_comprobante_result: {
+        Args: { cid: string; new_status: SunatStatus; new_error: string | null; new_xml: string | null; new_cdr: string | null };
         Returns: undefined;
       };
       public_menu: { Args: { p_slug: string }; Returns: unknown };

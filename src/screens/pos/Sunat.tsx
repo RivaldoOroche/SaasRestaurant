@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { formatMoney } from "@/lib/money";
 import { ComprobanteDoc } from "./ComprobanteDoc";
-import type { Comprobante, ComprobanteTipo, ResumenDiario, SunatStatus } from "@/data/model";
+import type { Comprobante, ComprobanteTipo, ResumenDiario, BajaResult, SunatStatus } from "@/data/model";
 
 const STATUS: Record<SunatStatus, { label: string; tone: "success" | "warning" | "neutral" | "accent" }> = {
   aceptada: { label: "Aceptada", tone: "success" },
@@ -35,12 +35,15 @@ const MOTIVOS = [
 
 export function Sunat() {
   const { data: comprobantes = [] } = useComprobantes();
-  const { sync, retry, notaCredito, resumen } = useSunatActions();
+  const { sync, retry, notaCredito, resumen, baja } = useSunatActions();
   const online = useConnection((s) => s.online);
   const [ver, setVer] = useState<Comprobante | null>(null);
   const [ncFor, setNcFor] = useState<Comprobante | null>(null);
   const [motivo, setMotivo] = useState(MOTIVOS[0]);
   const [resumenRes, setResumenRes] = useState<ResumenDiario | null>(null);
+  const [bajaFor, setBajaFor] = useState<Comprobante | null>(null);
+  const [bajaMotivo, setBajaMotivo] = useState(MOTIVOS[0]);
+  const [bajaRes, setBajaRes] = useState<BajaResult | null>(null);
 
   const accepted = comprobantes.filter((c) => c.status === "aceptada").length;
   const queued = comprobantes.filter((c) => c.status === "encola").length;
@@ -56,6 +59,14 @@ export function Sunat() {
 
   function enviarResumen() {
     resumen.mutate(online, { onSuccess: (r) => setResumenRes(r) });
+  }
+
+  function comunicarBaja() {
+    if (!bajaFor) return;
+    baja.mutate(
+      { comprobanteId: bajaFor.id, motivo: bajaMotivo, online },
+      { onSuccess: (r) => { setBajaRes(r); setBajaFor(null); } },
+    );
   }
 
   return (
@@ -88,6 +99,18 @@ export function Sunat() {
             {formatMoney(resumenRes.total)} · {STATUS[resumenRes.status].label}
           </span>
           <button onClick={() => setResumenRes(null)} className="text-xs underline shrink-0">
+            Cerrar
+          </button>
+        </div>
+      )}
+
+      {bajaRes && (
+        <div className="rounded-md bg-warning/10 text-warning px-4 py-2 text-sm mb-4 flex items-center justify-between gap-3">
+          <span>
+            Comunicación de baja <span className="font-mono">{bajaRes.folio}</span> · anula{" "}
+            <span className="font-mono">{bajaRes.refFolio}</span> · {STATUS[bajaRes.status].label}
+          </span>
+          <button onClick={() => setBajaRes(null)} className="text-xs underline shrink-0">
             Cerrar
           </button>
         </div>
@@ -141,6 +164,18 @@ export function Sunat() {
                     Nota de crédito
                   </Button>
                 )}
+                {c.tipo === "Factura" && c.status === "aceptada" && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      setBajaMotivo(MOTIVOS[0]);
+                      setBajaFor(c);
+                    }}
+                  >
+                    Baja
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -182,6 +217,41 @@ export function Sunat() {
         </Modal>
       )}
 
+      {/* Comunicar baja (facturas) */}
+      {bajaFor && (
+        <Modal open onClose={() => setBajaFor(null)} labelledBy="baja-title" className="max-w-md">
+          <div className="p-5">
+            <h2 id="baja-title" className="text-lg font-bold mb-1">
+              Comunicación de baja
+            </h2>
+            <p className="text-muted text-sm mb-4">
+              Anula ante SUNAT la Factura <span className="font-mono">{bajaFor.folio}</span> ·{" "}
+              {formatMoney(bajaFor.total)}
+            </p>
+            <label className="text-xs uppercase tracking-wide text-muted mb-1.5 block">Motivo</label>
+            <select
+              value={bajaMotivo}
+              onChange={(e) => setBajaMotivo(e.target.value)}
+              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm mb-4"
+            >
+              {MOTIVOS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setBajaFor(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={comunicarBaja} disabled={baja.isPending}>
+                Comunicar baja
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {/* Ver comprobante */}
       {ver && (
         <Modal open onClose={() => setVer(null)} labelledBy="cpe-title" className="max-w-xl">
@@ -213,7 +283,17 @@ export function Sunat() {
               taxRate={ver.subtotal > 0 ? ver.igv / ver.subtotal : 0.18}
               status={ver.status}
             />
-            <div className="flex justify-end gap-2 mt-4 no-print">
+            <div className="flex flex-wrap justify-end gap-2 mt-4 no-print">
+              {ver.signedXml && (
+                <Button variant="secondary" onClick={() => downloadText(`${ver.folio}.xml`, ver.signedXml!, "application/xml")}>
+                  ⬇ XML firmado
+                </Button>
+              )}
+              {ver.cdr && (
+                <Button variant="secondary" onClick={() => downloadBase64(`R-${ver.folio}.zip`, ver.cdr!, "application/zip")}>
+                  ⬇ CDR
+                </Button>
+              )}
               <Button variant="secondary" onClick={() => window.print()}>
                 🖨 Imprimir
               </Button>
@@ -224,6 +304,24 @@ export function Sunat() {
       )}
     </div>
   );
+}
+
+function triggerDownload(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function downloadText(name: string, content: string, type: string) {
+  triggerDownload(new Blob([content], { type }), name);
+}
+function downloadBase64(name: string, b64: string, type: string) {
+  const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  triggerDownload(new Blob([bytes], { type }), name);
 }
 
 function Counter({ label, value, tone }: { label: string; value: number; tone: "success" | "warning" | "neutral" }) {

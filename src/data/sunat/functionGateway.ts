@@ -32,9 +32,14 @@ export function makeFunctionGateway(sb: SupabaseClient<Database>, tenantId?: str
       }
       const { data, error } = await sb.functions.invoke("sunat-emitir", { body });
       if (error) return { accepted: false, error: error.message };
-      const res = data as { accepted?: boolean; description?: string; error?: string };
+      const res = data as { accepted?: boolean; description?: string; error?: string; cdr?: string; xml?: string };
       if (res.error) return { accepted: false, error: res.error };
-      return { accepted: !!res.accepted, error: res.accepted ? undefined : res.description };
+      return {
+        accepted: !!res.accepted,
+        error: res.accepted ? undefined : res.description,
+        signedXml: res.xml,
+        cdr: res.cdr,
+      };
     },
   };
 }

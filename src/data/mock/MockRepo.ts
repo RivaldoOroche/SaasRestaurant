@@ -15,6 +15,7 @@ import type {
   Comprobante,
   EmitComprobanteInput,
   ResumenDiario,
+  BajaResult,
   FiscalCredentialsInput,
 } from "../model";
 import { stubSunatGateway } from "../sunat/gateway";
@@ -59,6 +60,15 @@ function uid(prefix: string): string {
 
 function nowTime(): string {
   return new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Demo: adjunta un XML firmado y un CDR de muestra al aceptar un comprobante. */
+function demoArtifacts(cpe: Comprobante): void {
+  cpe.signedXml =
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<!-- Representación demo del XML UBL firmado (en producción lo genera y firma la Edge Function) -->\n` +
+    `<Documento folio="${cpe.folio}" tipo="${cpe.tipo}" total="${cpe.total.toFixed(2)}" emitido="${cpe.issuedAt}"/>`;
+  cpe.cdr = btoa(`CDR demo | ${cpe.folio} | ACEPTADO POR SUNAT (beta) | ${cpe.issuedAt}`);
 }
 
 function loadState(): MockState {
@@ -431,6 +441,7 @@ export class MockRepo implements Repo {
       const res = await stubSunatGateway.submit(cpe);
       cpe.status = res.accepted ? "aceptada" : "rechazada";
       cpe.error = res.error ?? null;
+      if (res.accepted) demoArtifacts(cpe);
     }
     this.pushLog("SUNAT", `${input.tipo} ${cpe.folio} · ${cpe.status}`);
     this.persist();
@@ -463,6 +474,7 @@ export class MockRepo implements Repo {
       const res = await stubSunatGateway.submit(nc);
       nc.status = res.accepted ? "aceptada" : "rechazada";
       nc.error = res.error ?? null;
+      if (res.accepted) demoArtifacts(nc);
     }
     this.pushLog("SUNAT", `Nota de crédito ${nc.folio} · anula ${original.folio} · ${nc.status}`);
     this.persist();
@@ -488,6 +500,20 @@ export class MockRepo implements Repo {
     return resumen;
   }
 
+  async comunicarBaja(comprobanteId: string, motivo: string, online: boolean): Promise<BajaResult> {
+    const cpe = this.state.comprobantes.find((c) => c.id === comprobanteId);
+    if (!cpe) throw new Error("Comprobante no encontrado");
+    if (cpe.tipo !== "Factura") throw new Error("La comunicación de baja aplica a facturas");
+    const today = new Date().toISOString().slice(0, 10);
+    const folio = `RA-${today.replace(/-/g, "")}-1`;
+    // Demo: marca el comprobante como anulado (rechazada + nota) para reflejar la baja.
+    cpe.status = "rechazada";
+    cpe.error = `Dada de baja: ${motivo}`;
+    this.pushLog("SUNAT", `Comunicación de baja ${folio} · ${cpe.folio} · ${motivo}`);
+    this.persist();
+    return { folio, refFolio: cpe.folio, status: online ? "aceptada" : "encola" };
+  }
+
   async syncSunat(online: boolean): Promise<number> {
     if (!online) return 0;
     let sent = 0;
@@ -496,7 +522,10 @@ export class MockRepo implements Repo {
         const res = await stubSunatGateway.submit(cpe);
         cpe.status = res.accepted ? "aceptada" : "rechazada";
         cpe.error = res.error ?? null;
-        if (res.accepted) sent++;
+        if (res.accepted) {
+          demoArtifacts(cpe);
+          sent++;
+        }
       }
     }
     if (sent > 0) this.pushLog("SUNAT", `Sincronizó ${sent} comprobante(s)`);
@@ -511,6 +540,7 @@ export class MockRepo implements Repo {
     const res = await stubSunatGateway.submit(cpe);
     cpe.status = res.accepted ? "aceptada" : "rechazada";
     cpe.error = res.error ?? null;
+    if (res.accepted) demoArtifacts(cpe);
     this.pushLog("SUNAT", `Reintentó ${cpe.folio} · ${cpe.status}`);
     this.persist();
   }

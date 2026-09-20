@@ -206,7 +206,12 @@ export function useSunatActions() {
     mutationFn: (online: boolean) => repo.sendResumenDiario(online),
     onSuccess: invalidate,
   });
-  return { emit, sync, retry, notaCredito, resumen };
+  const baja = useMutation({
+    mutationFn: ({ comprobanteId, motivo, online }: { comprobanteId: string; motivo: string; online: boolean }) =>
+      repo.comunicarBaja(comprobanteId, motivo, online),
+    onSuccess: invalidate,
+  });
+  return { emit, sync, retry, notaCredito, resumen, baja };
 }
 
 /** Admin/tenant management actions. */
