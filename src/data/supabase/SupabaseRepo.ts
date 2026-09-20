@@ -20,17 +20,24 @@ import type {
   EmitComprobanteInput,
 } from "../model";
 import type { Database, Row } from "@/types/database";
-import { stubSunatGateway } from "../sunat/gateway";
+import { stubSunatGateway, type SunatGateway } from "../sunat/gateway";
+import { makeFunctionGateway } from "../sunat/functionGateway";
 
 /**
  * Real backend repo. Tenant scoping is enforced by RLS; we still set tenant_id
  * on inserts so rows land in the right tenant. One instance per tenant.
  */
 export class SupabaseRepo implements Repo {
+  private sunat: SunatGateway;
+
   constructor(
     private sb: SupabaseClient<Database>,
     private tenantId: string,
-  ) {}
+  ) {
+    // VITE_SUNAT_MODE=beta usa la Edge Function real; en otro caso, el stub.
+    this.sunat =
+      import.meta.env.VITE_SUNAT_MODE === "beta" ? makeFunctionGateway(sb) : stubSunatGateway;
+  }
 
   async getCategories(): Promise<Category[]> {
     const { data, error } = await this.sb
@@ -450,7 +457,7 @@ export class SupabaseRepo implements Repo {
     if (error) throw error;
     let cpe = mapComprobante(data);
     if (online) {
-      const res = await stubSunatGateway.submit(cpe);
+      const res = await this.sunat.submit(cpe);
       cpe = { ...cpe, status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null };
       await this.sb.rpc("set_comprobante_status", { cid: cpe.id, new_status: cpe.status, new_error: cpe.error });
     } else {
@@ -466,7 +473,7 @@ export class SupabaseRepo implements Repo {
     let sent = 0;
     for (const row of queued ?? []) {
       const cpe = mapComprobante(row);
-      const res = await stubSunatGateway.submit(cpe);
+      const res = await this.sunat.submit(cpe);
       await this.sb.rpc("set_comprobante_status", {
         cid: cpe.id,
         new_status: res.accepted ? "aceptada" : "rechazada",
@@ -486,7 +493,7 @@ export class SupabaseRepo implements Repo {
     const { data } = await this.sb.from("comprobantes").select("*").eq("id", id).maybeSingle();
     if (!data) return;
     const cpe = mapComprobante(data);
-    const res = await stubSunatGateway.submit(cpe);
+    const res = await this.sunat.submit(cpe);
     await this.sb.rpc("set_comprobante_status", {
       cid: id,
       new_status: res.accepted ? "aceptada" : "rechazada",
