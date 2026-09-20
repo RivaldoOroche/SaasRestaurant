@@ -164,6 +164,29 @@ export interface BusinessSettings {
   billingEndpoint?: string; // URL del OSE/PSE (no secreto)
 }
 
+/** Datos de una tarjeta para tokenizar (nunca se envían a nuestro backend). */
+export interface CardInput {
+  number: string;
+  expMonth: string;
+  expYear: string;
+  cvv: string;
+  email: string;
+}
+
+/** Cargo con tarjeta: se envía el token (no la tarjeta) a la Edge Function. */
+export interface CardChargeInput {
+  token: string;
+  amount: number; // en la moneda del negocio (no céntimos)
+  currency: string;
+  email: string;
+  description?: string;
+}
+export interface CardChargeResult {
+  success: boolean;
+  chargeId?: string;
+  error?: string;
+}
+
 /** Credenciales secretas de facturación (se escriben, nunca se leen del cliente). */
 export interface FiscalCredentialsInput {
   provider: BillingProvider;

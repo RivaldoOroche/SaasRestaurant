@@ -19,6 +19,8 @@ import type {
   ResumenDiario,
   BajaResult,
   FiscalCredentialsInput,
+  CardChargeInput,
+  CardChargeResult,
 } from "./model";
 
 export interface PayInput extends PayExtras {
@@ -98,6 +100,8 @@ export interface Repo {
   setCardCredentials(provider: string, secretKey: string): Promise<void>;
   /** Guarda (sin devolver) las credenciales de facturación electrónica. */
   setFiscalCredentials(input: FiscalCredentialsInput): Promise<void>;
+  /** Cobra con tarjeta usando el token del proveedor (cargo del lado del servidor). */
+  chargeCard(input: CardChargeInput): Promise<CardChargeResult>;
   getActivityLog(): Promise<LogEntry[]>;
 
   /** Subscribe to changes (kitchen + orders + tables). Returns an unsubscribe fn. */

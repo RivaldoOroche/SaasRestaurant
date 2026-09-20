@@ -17,6 +17,8 @@ import type {
   ResumenDiario,
   BajaResult,
   FiscalCredentialsInput,
+  CardChargeInput,
+  CardChargeResult,
 } from "../model";
 import { stubSunatGateway } from "../sunat/gateway";
 import {
@@ -564,6 +566,12 @@ export class MockRepo implements Repo {
     // Demo: no se persisten las credenciales secretas (solo se registra el cambio).
     this.pushLog("Ajustes", `Configuró credenciales de facturación (${input.provider})`);
     this.persist();
+  }
+  async chargeCard(input: CardChargeInput): Promise<CardChargeResult> {
+    // Demo: simula un cargo aprobado (en producción lo hace la Edge Function).
+    this.pushLog("Caja", `Cargo con tarjeta S/ ${input.amount.toFixed(2)} (demo)`);
+    this.persist();
+    return { success: true, chargeId: `chg_demo_${Math.random().toString(36).slice(2, 10)}` };
   }
   async getActivityLog() {
     return [...this.state.log];

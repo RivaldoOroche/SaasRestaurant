@@ -3,10 +3,12 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { computeCheckout, equalSplit } from "@/lib/checkout";
-import { useOrderActions, useCustomers, useSunatActions, useSettings } from "@/data/hooks";
+import { useOrderActions, useCustomers, useSunatActions, useSettings, useRepo } from "@/data/hooks";
 import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
 import { Qr } from "@/components/Qr";
+import { tokenizeCard } from "@/lib/cardToken";
+import { isBackendConfigured } from "@/lib/supabase";
 import { ComprobanteDoc } from "./ComprobanteDoc";
 import type { Order, Comprobante, ComprobanteTipo } from "@/data/model";
 
@@ -52,6 +54,13 @@ export function CobroModal({
   const [method, setMethod] = useState("efectivo");
   const [custId, setCustId] = useState<string | null>(null);
   const [redeem, setRedeem] = useState(0);
+  const repo = useRepo();
+  const [card, setCard] = useState({ number: "", expMonth: "", expYear: "", cvv: "", email: "" });
+  const [cardErr, setCardErr] = useState<string | null>(null);
+  const [cardBusy, setCardBusy] = useState(false);
+
+  const cardConfigured =
+    method === "tarjeta" && !!settings?.cardProvider && settings.cardProvider !== "ninguno" && !!settings.cardPublicKey;
 
   const customer = customers.find((c) => c.id === custId) ?? null;
   const preResult = useMemo(
@@ -77,6 +86,8 @@ export function CobroModal({
     setRuc("");
     setRazon("");
     setEmitted(null);
+    setCard({ number: "", expMonth: "", expYear: "", cvv: "", email: "" });
+    setCardErr(null);
   }
 
   async function emitComprobante() {
@@ -112,6 +123,35 @@ export function CobroModal({
       redeem: result.redeemApplied,
     });
     setStage("doc");
+  }
+
+  /** Cobro con tarjeta: tokeniza (con la llave pública) y cobra en el servidor. */
+  async function payCard() {
+    setCardErr(null);
+    setCardBusy(true);
+    try {
+      const provider = settings!.cardProvider!;
+      // Sin backend real (demo) no hay pasarela: usamos un token de prueba.
+      const token = !isBackendConfigured
+        ? `tok_demo_${Date.now()}`
+        : await tokenizeCard(provider, settings!.cardPublicKey!, card);
+      const res = await repo.chargeCard({
+        token,
+        amount: result.due,
+        currency: settings!.currency,
+        email: card.email,
+        description: `Mesa ${order.tableLabel}`,
+      });
+      if (!res.success) {
+        setCardErr(res.error ?? "El cargo fue rechazado");
+        return;
+      }
+      await pay();
+    } catch (e) {
+      setCardErr((e as Error).message ?? "No se pudo procesar la tarjeta");
+    } finally {
+      setCardBusy(false);
+    }
   }
 
   const methodLabel = METHODS.find((m) => m.key === method)?.label ?? method;
@@ -260,13 +300,66 @@ export function CobroModal({
                 )}
               </div>
             )}
+
+            {cardConfigured && (
+              <div className="space-y-2 rounded-lg bg-surface-alt border border-border-soft p-3">
+                <input
+                  value={card.number}
+                  onChange={(e) => setCard({ ...card, number: e.target.value })}
+                  placeholder="Número de tarjeta"
+                  inputMode="numeric"
+                  className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    value={card.expMonth}
+                    onChange={(e) => setCard({ ...card, expMonth: e.target.value })}
+                    placeholder="MM"
+                    inputMode="numeric"
+                    className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+                  />
+                  <input
+                    value={card.expYear}
+                    onChange={(e) => setCard({ ...card, expYear: e.target.value })}
+                    placeholder="AAAA"
+                    inputMode="numeric"
+                    className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+                  />
+                  <input
+                    value={card.cvv}
+                    onChange={(e) => setCard({ ...card, cvv: e.target.value })}
+                    placeholder="CVV"
+                    inputMode="numeric"
+                    className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+                  />
+                </div>
+                <input
+                  value={card.email}
+                  onChange={(e) => setCard({ ...card, email: e.target.value })}
+                  placeholder="Correo del cliente"
+                  inputMode="email"
+                  className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+                />
+                {cardErr && <p className="text-warning text-xs">{cardErr}</p>}
+                <p className="text-muted text-[11px]">
+                  La tarjeta se tokeniza con {settings!.cardProvider}; no pasa por nuestros servidores.
+                </p>
+              </div>
+            )}
+
             <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={() => setStage("cuenta")}>
                 ← Volver
               </Button>
-              <Button onClick={pay} disabled={actions.payOrder.isPending}>
-                {method === "yape" || method === "plin" ? "Confirmar pago recibido" : "Confirmar pago y emitir"}
-              </Button>
+              {cardConfigured ? (
+                <Button onClick={payCard} disabled={cardBusy || actions.payOrder.isPending}>
+                  {cardBusy ? "Procesando…" : `Cobrar ${formatMoney(result.due)}`}
+                </Button>
+              ) : (
+                <Button onClick={pay} disabled={actions.payOrder.isPending}>
+                  {method === "yape" || method === "plin" ? "Confirmar pago recibido" : "Confirmar pago y emitir"}
+                </Button>
+              )}
             </div>
           </div>
         )}

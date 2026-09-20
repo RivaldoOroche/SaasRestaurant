@@ -21,6 +21,8 @@ import type {
   ResumenDiario,
   BajaResult,
   FiscalCredentialsInput,
+  CardChargeInput,
+  CardChargeResult,
 } from "../model";
 import type { Database, Row } from "@/types/database";
 import { stubSunatGateway, type SunatGateway } from "../sunat/gateway";
@@ -743,6 +745,23 @@ export class SupabaseRepo implements Repo {
     if (input.keyPem !== undefined) row.key_pem = input.keyPem;
     if (input.apiToken !== undefined) row.api_token = input.apiToken;
     await this.sb.from("fiscal_credentials").upsert(row);
+  }
+
+  async chargeCard(input: CardChargeInput): Promise<CardChargeResult> {
+    const { data, error } = await this.sb.functions.invoke("pago-tarjeta", {
+      body: {
+        tenantId: this.tenantId,
+        token: input.token,
+        amount: input.amount,
+        currency: input.currency,
+        email: input.email,
+        description: input.description ?? "",
+      },
+    });
+    if (error) return { success: false, error: error.message };
+    const r = data as { success?: boolean; chargeId?: string; error?: string };
+    if (r.success) await this.log(`Cargo con tarjeta ${r.chargeId ?? ""} · S/ ${input.amount.toFixed(2)}`);
+    return { success: !!r.success, chargeId: r.chargeId, error: r.error };
   }
 
   async getActivityLog(): Promise<LogEntry[]> {
