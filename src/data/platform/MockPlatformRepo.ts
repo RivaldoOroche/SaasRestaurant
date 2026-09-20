@@ -22,7 +22,8 @@ function slugify(name: string): string {
 
 function makeLink(slug: string): string {
   const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-  return `https://app.wayrapos.pe/${slug}?onboard=${token}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://app.wayrapos.pe";
+  return `${origin}/onboarding/${slug}?token=${token}`;
 }
 
 const SEED_TENANTS: Tenant[] = [

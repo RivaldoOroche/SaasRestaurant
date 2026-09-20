@@ -144,7 +144,8 @@ export class SupabasePlatformRepo implements PlatformRepo {
     const tokenHash = await sha256Hex(token);
     const expires = new Date(Date.now() + 14 * 864e5).toISOString();
     await this.sb.from("onboarding_links").insert({ tenant_id: data.id, token_hash: tokenHash, expires_at: expires });
-    const link = `https://app.wayrapos.pe/${slug}?onboard=${token}`;
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://app.wayrapos.pe";
+    const link = `${origin}/onboarding/${slug}?token=${token}`;
     return { tenant: { ...mapTenant(data), link }, link };
   }
 

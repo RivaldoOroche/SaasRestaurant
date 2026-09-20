@@ -7,6 +7,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { Login } from "@/screens/Login";
 import { Placeholder } from "@/screens/Placeholder";
 import { CartaPublica } from "@/screens/public/CartaPublica";
+import { Onboarding } from "@/screens/public/Onboarding";
 import { Pedido } from "@/screens/pos/Pedido";
 import { Mesas } from "@/screens/pos/Mesas";
 import { Cocina } from "@/screens/pos/Cocina";
@@ -106,6 +107,7 @@ function Shell() {
   return (
     <Routes>
       <Route path="/carta/:slug" element={<CartaPublica />} />
+      <Route path="/onboarding/:slug" element={<Onboarding />} />
       <Route path="/login" element={<Login />} />
       <Route element={<AppShell />}>
         {TENANT_NAV.map(screenRoute)}
