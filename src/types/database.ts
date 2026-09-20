@@ -122,6 +122,7 @@ export type Database = {
         Args: { cid: string; new_status: SunatStatus; new_error: string | null };
         Returns: undefined;
       };
+      public_menu: { Args: { p_slug: string }; Returns: unknown };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
