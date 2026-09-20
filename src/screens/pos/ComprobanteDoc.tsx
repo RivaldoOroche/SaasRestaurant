@@ -1,5 +1,6 @@
 import { numeroALetras } from "@/lib/numeroALetras";
 import { formatMoney, type Currency } from "@/lib/money";
+import { Qr } from "@/components/Qr";
 import type { OrderLine, SunatStatus } from "@/data/model";
 
 export interface ComprobanteDocProps {
@@ -51,6 +52,17 @@ export function ComprobanteDoc({
   const titulo = tipo === "Factura" ? "FACTURA ELECTRÓNICA" : "BOLETA DE VENTA ELECTRÓNICA";
   const fecha = issuedAt.toLocaleDateString("es-PE");
   const hora = issuedAt.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+  const iso = issuedAt.toISOString().slice(0, 10);
+
+  // Cadena QR SUNAT: RUC|Tipo|Serie|Correlativo|IGV|Total|Fecha|TipoDocCli|NroDocCli|Hash|
+  const [serie, correlativo] = folio.split("-");
+  const tipoCod = tipo === "Factura" ? "01" : "03";
+  const tipoDocCli = cliente.docLabel === "RUC" ? "6" : cliente.docLabel === "DNI" ? "1" : "0";
+  const hash = fakeHash(folio + total);
+  const qrValue = [
+    emisor.ruc, tipoCod, serie ?? "", correlativo ?? "",
+    igv.toFixed(2), total.toFixed(2), iso, tipoDocCli, cliente.docNum, hash,
+  ].join("|") + "|";
 
   return (
     <div className="print-area bg-white text-[#1a1c2b] rounded-lg border border-[#e6e8f0] p-5 text-[12px] leading-relaxed">
@@ -129,11 +141,13 @@ export function ComprobanteDoc({
 
       {/* Pie: QR + leyenda + hash + estado */}
       <div className="flex items-start gap-3 mt-3 pt-3 border-t border-dashed border-[#c9ccd8]">
-        <QrPlaceholder />
+        <div className="shrink-0 border border-[#e0e2ea] p-[2px] bg-white">
+          <Qr value={qrValue} size={64} />
+        </div>
         <div className="flex-1 text-[10px] text-[#555] leading-snug">
           <p>Representación impresa de la {tipo} Electrónica.</p>
           <p>Autorizado mediante la normativa de comprobantes de pago electrónicos SUNAT.</p>
-          <p className="font-mono mt-1 break-all">Resumen: {fakeHash(folio + total)}</p>
+          <p className="font-mono mt-1 break-all">Resumen: {hash}</p>
           {status && (
             <p className="mt-1 font-semibold" style={{ color: status === "rechazada" ? "#b8863a" : "#3f7d5c" }}>
               {STATUS_LABEL[status]}
@@ -154,19 +168,3 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-function QrPlaceholder() {
-  // Cuadrícula tipo QR (decorativa). El QR real se genera con los datos del CPE.
-  const cells = [];
-  let seed = 7;
-  for (let i = 0; i < 49; i++) {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    cells.push((seed >> 8) % 3 === 0);
-  }
-  return (
-    <div className="grid grid-cols-7 gap-[1px] w-[56px] h-[56px] shrink-0 border border-[#e0e2ea] p-[2px]">
-      {cells.map((on, i) => (
-        <div key={i} className={on ? "bg-[#1a1c2b]" : "bg-white"} />
-      ))}
-    </div>
-  );
-}
