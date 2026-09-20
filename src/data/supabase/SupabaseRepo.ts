@@ -19,6 +19,7 @@ import type {
   Comprobante,
   EmitComprobanteInput,
   ResumenDiario,
+  FiscalCredentialsInput,
 } from "../model";
 import type { Database, Row } from "@/types/database";
 import { stubSunatGateway, type SunatGateway } from "../sunat/gateway";
@@ -37,7 +38,7 @@ export class SupabaseRepo implements Repo {
   ) {
     // VITE_SUNAT_MODE=beta usa la Edge Function real; en otro caso, el stub.
     this.sunat =
-      import.meta.env.VITE_SUNAT_MODE === "beta" ? makeFunctionGateway(sb) : stubSunatGateway;
+      import.meta.env.VITE_SUNAT_MODE === "beta" ? makeFunctionGateway(sb, tenantId) : stubSunatGateway;
   }
 
   async getCategories(): Promise<Category[]> {
@@ -596,6 +597,14 @@ export class SupabaseRepo implements Repo {
       plinNumber: data?.plin_number ?? "",
       cardProvider: (data?.card_provider ?? "ninguno") as BusinessSettings["cardProvider"],
       cardPublicKey: data?.card_public_key ?? "",
+      ruc: data?.ruc ?? "",
+      razonSocial: data?.razon_social ?? "",
+      direccionFiscal: data?.address ?? "",
+      ubigeo: data?.ubigeo ?? "",
+      billingProvider: (data?.billing_provider ?? "ninguno") as BusinessSettings["billingProvider"],
+      sunatMode: (data?.sunat_mode ?? "beta") as BusinessSettings["sunatMode"],
+      solUser: data?.sol_user ?? "",
+      billingEndpoint: data?.billing_endpoint ?? "",
     };
   }
   async updateSettings(patch: Partial<BusinessSettings>): Promise<void> {
@@ -610,6 +619,14 @@ export class SupabaseRepo implements Repo {
     if (patch.plinNumber !== undefined) row.plin_number = patch.plinNumber;
     if (patch.cardProvider !== undefined) row.card_provider = patch.cardProvider;
     if (patch.cardPublicKey !== undefined) row.card_public_key = patch.cardPublicKey;
+    if (patch.ruc !== undefined) row.ruc = patch.ruc;
+    if (patch.razonSocial !== undefined) row.razon_social = patch.razonSocial;
+    if (patch.direccionFiscal !== undefined) row.address = patch.direccionFiscal;
+    if (patch.ubigeo !== undefined) row.ubigeo = patch.ubigeo;
+    if (patch.billingProvider !== undefined) row.billing_provider = patch.billingProvider;
+    if (patch.sunatMode !== undefined) row.sunat_mode = patch.sunatMode;
+    if (patch.solUser !== undefined) row.sol_user = patch.solUser;
+    if (patch.billingEndpoint !== undefined) row.billing_endpoint = patch.billingEndpoint;
     await this.sb.from("business_settings").update(row).eq("tenant_id", this.tenantId);
   }
 
@@ -618,6 +635,21 @@ export class SupabaseRepo implements Repo {
     await this.sb
       .from("payment_credentials")
       .upsert({ tenant_id: this.tenantId, provider, secret_key: secretKey, updated_at: new Date().toISOString() });
+  }
+
+  async setFiscalCredentials(input: FiscalCredentialsInput): Promise<void> {
+    // Escribe (no lee) las credenciales de facturación; upsert por tenant.
+    // Solo se envían los campos provistos para no borrar los ya guardados.
+    const row: Database["public"]["Tables"]["fiscal_credentials"]["Insert"] = {
+      tenant_id: this.tenantId,
+      provider: input.provider,
+      updated_at: new Date().toISOString(),
+    };
+    if (input.solPass !== undefined) row.sol_pass = input.solPass;
+    if (input.certPem !== undefined) row.cert_pem = input.certPem;
+    if (input.keyPem !== undefined) row.key_pem = input.keyPem;
+    if (input.apiToken !== undefined) row.api_token = input.apiToken;
+    await this.sb.from("fiscal_credentials").upsert(row);
   }
 
   async getActivityLog(): Promise<LogEntry[]> {

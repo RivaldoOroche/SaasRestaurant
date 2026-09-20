@@ -42,10 +42,13 @@ export interface Tables {
     Row: { id: string; tenant_id: string; name: string; initials: string; role: AppRole; pin_hash: string | null; active: boolean } & Timestamps;
   };
   business_settings: {
-    Row: { tenant_id: string; name: string; currency: CurrencyCode; tax_rate: number; tip_presets: number[]; online_orders: boolean; auto_tip: boolean; ruc: string | null; address: string | null; yape_number: string | null; plin_number: string | null; card_provider: string; card_public_key: string | null; updated_at: string };
+    Row: { tenant_id: string; name: string; currency: CurrencyCode; tax_rate: number; tip_presets: number[]; online_orders: boolean; auto_tip: boolean; ruc: string | null; address: string | null; yape_number: string | null; plin_number: string | null; card_provider: string; card_public_key: string | null; razon_social: string | null; ubigeo: string | null; billing_provider: string; sunat_mode: string; sol_user: string | null; billing_endpoint: string | null; updated_at: string };
   };
   payment_credentials: {
     Row: { tenant_id: string; provider: string; secret_key: string | null; updated_at: string };
+  };
+  fiscal_credentials: {
+    Row: { tenant_id: string; provider: string; sol_pass: string | null; cert_pem: string | null; key_pem: string | null; api_token: string | null; updated_at: string };
   };
   menu_categories: {
     Row: { id: string; tenant_id: string; key: string; name: string; icon: string; subtitle: string; sort: number };

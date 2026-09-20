@@ -13,6 +13,7 @@
 //   SUNAT_KEY_PEM   = (llave privada PKCS#8 PEM)
 // Estos se guardan como secrets del proyecto (ver README).
 
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { construirUBL, calcularTotales } from "../_shared/sunat/ubl.ts";
 import { construirNotaCredito } from "../_shared/sunat/notaCredito.ts";
 import { numeroALetras } from "../_shared/sunat/numeroALetras.ts";
@@ -21,6 +22,62 @@ import { zipStore } from "../_shared/sunat/zip.ts";
 import type { Comprobante } from "../_shared/sunat/types.ts";
 
 const BETA = "https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService";
+const PROD = "https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService";
+
+/** Configuración de facturación resuelta para un tenant. */
+interface TenantFiscal {
+  ruc?: string;
+  razonSocial?: string;
+  direccion?: string;
+  ubigeo?: string;
+  solUser?: string;
+  solPass?: string;
+  certPem?: string;
+  keyPem?: string;
+  mode?: string; // 'beta' | 'produccion'
+}
+
+/**
+ * Lee el emisor (business_settings) y las credenciales secretas
+ * (fiscal_credentials) del tenant usando el service role. Devuelve null si no
+ * hay service role configurado o no se encuentra el tenant, para caer al
+ * fallback por variables de entorno (homologación beta).
+ */
+async function loadTenantFiscal(tenantId?: string): Promise<TenantFiscal | null> {
+  if (!tenantId) return null;
+  const url = env("SUPABASE_URL");
+  const serviceKey = env("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !serviceKey) return null;
+  try {
+    const admin = createClient(url, serviceKey);
+    const [{ data: settings }, { data: creds }] = await Promise.all([
+      admin
+        .from("business_settings")
+        .select("ruc, razon_social, address, ubigeo, sol_user, sunat_mode")
+        .eq("tenant_id", tenantId)
+        .maybeSingle(),
+      admin
+        .from("fiscal_credentials")
+        .select("sol_pass, cert_pem, key_pem")
+        .eq("tenant_id", tenantId)
+        .maybeSingle(),
+    ]);
+    if (!settings && !creds) return null;
+    return {
+      ruc: settings?.ruc ?? undefined,
+      razonSocial: settings?.razon_social ?? undefined,
+      direccion: settings?.address ?? undefined,
+      ubigeo: settings?.ubigeo ?? undefined,
+      solUser: settings?.sol_user ?? undefined,
+      mode: settings?.sunat_mode ?? undefined,
+      solPass: creds?.sol_pass ?? undefined,
+      certPem: creds?.cert_pem ?? undefined,
+      keyPem: creds?.key_pem ?? undefined,
+    };
+  } catch {
+    return null;
+  }
+}
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +118,7 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     // DTO simple desde el frontend; el emisor sale de los secrets del proyecto.
     const dto = (await req.json()) as {
+      tenantId?: string; // resuelve emisor + credenciales del tenant en el servidor
       tipo: "01" | "03" | "07";
       folio: string; // "F001-1001"
       buyerRuc?: string | null;
@@ -79,15 +137,18 @@ export default async function handler(req: Request): Promise<Response> {
     const [serie, correlativo] = (dto.folio ?? "").split("-");
     if (!serie || !correlativo) return json({ error: "folio inválido" }, 400);
 
-    const ruc = env("SUNAT_RUC", "20000000001");
-    const user = env("SUNAT_SOL_USER", "MODDATOS");
-    const pass = env("SUNAT_SOL_PASS", "MODDATOS");
-    const endpoint = env("SUNAT_ENDPOINT", BETA);
-    const certPem = env("SUNAT_CERT_PEM");
-    const keyPem = env("SUNAT_KEY_PEM");
-    if (!certPem || !keyPem) return json({ error: "Faltan SUNAT_CERT_PEM / SUNAT_KEY_PEM" }, 500);
+    // Configuración por tenant (si hay service role); si no, variables de entorno.
+    const tf = await loadTenantFiscal(dto.tenantId);
+    const ruc = tf?.ruc || env("SUNAT_RUC", "20000000001");
+    const user = tf?.solUser || env("SUNAT_SOL_USER", "MODDATOS");
+    const pass = tf?.solPass || env("SUNAT_SOL_PASS", "MODDATOS");
+    const modo = tf?.mode || env("SUNAT_MODE", "beta");
+    const endpoint = env("SUNAT_ENDPOINT", modo === "produccion" ? PROD : BETA);
+    const certPem = tf?.certPem || env("SUNAT_CERT_PEM");
+    const keyPem = tf?.keyPem || env("SUNAT_KEY_PEM");
+    if (!certPem || !keyPem) return json({ error: "Faltan certificado/llave (fiscal_credentials o SUNAT_CERT_PEM / SUNAT_KEY_PEM)" }, 500);
 
-    // Emisor desde secrets; cliente desde el DTO (o público en general).
+    // Emisor desde el tenant o desde secrets; cliente desde el DTO (o público).
     const igvTasa = dto.igvTasa ?? 0.18;
     const comp: Comprobante = {
       tipo: dto.tipo,
@@ -99,9 +160,9 @@ export default async function handler(req: Request): Promise<Response> {
       igvTasa,
       emisor: {
         ruc,
-        razonSocial: env("SUNAT_RAZON_SOCIAL", "EMPRESA DEMO SAC"),
-        direccion: env("SUNAT_DIRECCION", "AV. LA MAR 1234, MIRAFLORES, LIMA"),
-        ubigeo: env("SUNAT_UBIGEO", "150122"),
+        razonSocial: tf?.razonSocial || env("SUNAT_RAZON_SOCIAL", "EMPRESA DEMO SAC"),
+        direccion: tf?.direccion || env("SUNAT_DIRECCION", "AV. LA MAR 1234, MIRAFLORES, LIMA"),
+        ubigeo: tf?.ubigeo || env("SUNAT_UBIGEO", "150122"),
       },
       cliente: dto.buyerRuc
         ? { tipoDoc: "6", numDoc: dto.buyerRuc, nombre: dto.buyerName ?? "-" }

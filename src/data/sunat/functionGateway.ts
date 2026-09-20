@@ -8,11 +8,14 @@ import type { Comprobante } from "../model";
  * que firma el UBL y lo envía a SUNAT (beta por defecto). Se activa con
  * VITE_SUNAT_MODE=beta; en otro caso se usa el stub.
  */
-export function makeFunctionGateway(sb: SupabaseClient<Database>): SunatGateway {
+export function makeFunctionGateway(sb: SupabaseClient<Database>, tenantId?: string): SunatGateway {
   return {
     async submit(c: Comprobante): Promise<SunatResult> {
       const tipo = c.tipo === "Factura" ? "01" : c.tipo === "NotaCredito" ? "07" : "03";
       const body: Record<string, unknown> = {
+        // El emisor y las credenciales se resuelven en el servidor a partir del
+        // tenant (business_settings + fiscal_credentials); aquí solo el id.
+        tenantId,
         tipo,
         folio: c.folio,
         buyerRuc: c.buyerRuc,

@@ -237,6 +237,9 @@ export function useTenantActions() {
     mutationFn: ({ provider, secretKey }: { provider: string; secretKey: string }) =>
       repo.setCardCredentials(provider, secretKey),
   });
+  const setFiscalCredentials = useMutation({
+    mutationFn: (input: Parameters<typeof repo.setFiscalCredentials>[0]) => repo.setFiscalCredentials(input),
+  });
   const setMenuPrice = useMutation({
     mutationFn: ({ itemId, price }: { itemId: string; price: number }) => repo.setMenuPrice(itemId, price),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["menuItems"] }),
@@ -246,5 +249,13 @@ export function useTenantActions() {
       repo.setMenuAvailable(itemId, available),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["menuItems"] }),
   });
-  return { adjustInventory, reviewChange, updateSettings, setCardCredentials, setMenuPrice, setMenuAvailable };
+  return {
+    adjustInventory,
+    reviewChange,
+    updateSettings,
+    setCardCredentials,
+    setFiscalCredentials,
+    setMenuPrice,
+    setMenuAvailable,
+  };
 }

@@ -17,6 +17,20 @@ siguiente seam a implementar sobre esta misma función.
   `VITE_SUNAT_MODE=beta` (ver `src/data/sunat/functionGateway.ts`); en otro caso
   usa un stub y no envía nada real.
 
+## 0) Credenciales por tenant (multi-empresa)
+
+El frontend envía `tenantId` en el cuerpo. Si la función tiene `SUPABASE_URL` y
+`SUPABASE_SERVICE_ROLE_KEY` como secrets, resuelve el **emisor** desde
+`business_settings` (RUC, razón social, dirección, ubigeo, usuario SOL, modo) y
+las **credenciales secretas** desde `fiscal_credentials` (clave SOL, certificado
+PEM, llave PKCS#8) de ese tenant. El modo (`beta`/`produccion`) elige el endpoint
+automáticamente. Si no hay service role o no se encuentra el tenant, se usan las
+variables de entorno de abajo (útil para una única empresa u homologación beta).
+
+Cada tenant configura todo esto desde **Ajustes → Facturación** en la app; las
+credenciales secretas se guardan write-only (nunca se devuelven al navegador) y
+solo esta función las lee con el service role.
+
 ## 1) Credenciales de homologación (SUNAT beta)
 
 SUNAT publica un RUC y usuario SOL de pruebas:

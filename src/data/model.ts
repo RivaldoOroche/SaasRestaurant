@@ -137,6 +137,10 @@ export interface LogEntry {
 
 export type CardProvider = "ninguno" | "culqi" | "izipay" | "niubiz";
 
+/** Proveedor de facturación electrónica del tenant. */
+export type BillingProvider = "ninguno" | "sunat_directo" | "nubefact" | "bizlinks" | "efact";
+export type SunatMode = "beta" | "produccion";
+
 export interface BusinessSettings {
   name: string;
   currency: import("@/lib/money").Currency;
@@ -148,6 +152,25 @@ export interface BusinessSettings {
   plinNumber?: string;
   cardProvider?: CardProvider;
   cardPublicKey?: string; // clave pública/publicable (no secreta)
+  // --- Datos del emisor (empresa del tenant) ---
+  ruc?: string; // RUC de 11 dígitos del emisor
+  razonSocial?: string;
+  direccionFiscal?: string;
+  ubigeo?: string; // 6 dígitos (ubicación SUNAT)
+  // --- Facturación electrónica ---
+  billingProvider?: BillingProvider;
+  sunatMode?: SunatMode; // beta (homologación) o producción
+  solUser?: string; // usuario SOL (SUNAT directo) — no secreto
+  billingEndpoint?: string; // URL del OSE/PSE (no secreto)
+}
+
+/** Credenciales secretas de facturación (se escriben, nunca se leen del cliente). */
+export interface FiscalCredentialsInput {
+  provider: BillingProvider;
+  solPass?: string; // clave SOL (SUNAT directo)
+  certPem?: string; // certificado X.509 en PEM
+  keyPem?: string; // llave privada PKCS#8 en PEM
+  apiToken?: string; // token/API key del OSE/PSE
 }
 
 export type MenuChangeStatus = "pendiente" | "aprobado" | "rechazado";

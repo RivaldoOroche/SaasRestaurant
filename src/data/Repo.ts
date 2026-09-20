@@ -17,6 +17,7 @@ import type {
   Comprobante,
   EmitComprobanteInput,
   ResumenDiario,
+  FiscalCredentialsInput,
 } from "./model";
 
 export interface PayInput extends PayExtras {
@@ -92,6 +93,8 @@ export interface Repo {
   updateSettings(patch: Partial<BusinessSettings>): Promise<void>;
   /** Guarda (sin devolver) la llave secreta de la pasarela de tarjeta. */
   setCardCredentials(provider: string, secretKey: string): Promise<void>;
+  /** Guarda (sin devolver) las credenciales de facturación electrónica. */
+  setFiscalCredentials(input: FiscalCredentialsInput): Promise<void>;
   getActivityLog(): Promise<LogEntry[]>;
 
   /** Subscribe to changes (kitchen + orders + tables). Returns an unsubscribe fn. */

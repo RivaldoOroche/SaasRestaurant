@@ -146,6 +146,14 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   plinNumber: "987 654 321",
   cardProvider: "ninguno",
   cardPublicKey: "",
+  ruc: "20512345678",
+  razonSocial: "LA HIGUERA S.A.C.",
+  direccionFiscal: "Av. La Mar 1234, Miraflores, Lima",
+  ubigeo: "150122",
+  billingProvider: "ninguno",
+  sunatMode: "beta",
+  solUser: "",
+  billingEndpoint: "",
 };
 
 export const VOID_REASONS = [

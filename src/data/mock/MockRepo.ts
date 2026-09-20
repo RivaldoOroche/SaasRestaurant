@@ -15,6 +15,7 @@ import type {
   Comprobante,
   EmitComprobanteInput,
   ResumenDiario,
+  FiscalCredentialsInput,
 } from "../model";
 import { stubSunatGateway } from "../sunat/gateway";
 import {
@@ -527,6 +528,11 @@ export class MockRepo implements Repo {
     // Demo: no se persiste la llave secreta (solo se registra el cambio).
     void _secretKey;
     this.pushLog("Ajustes", `Configuró credenciales de ${provider}`);
+    this.persist();
+  }
+  async setFiscalCredentials(input: FiscalCredentialsInput) {
+    // Demo: no se persisten las credenciales secretas (solo se registra el cambio).
+    this.pushLog("Ajustes", `Configuró credenciales de facturación (${input.provider})`);
     this.persist();
   }
   async getActivityLog() {
