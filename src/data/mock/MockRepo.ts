@@ -366,6 +366,9 @@ export class MockRepo implements Repo {
   async getInventory() {
     return [...this.state.inventory];
   }
+  async getRecipes() {
+    return RECIPES;
+  }
   async adjustInventory(itemId: string, delta: number, actor: string) {
     const inv = this.state.inventory.find((i) => i.id === itemId);
     if (!inv) return;

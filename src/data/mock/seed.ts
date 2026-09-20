@@ -96,13 +96,13 @@ export const CUSTOMERS: Customer[] = [
 
 export function seedInventory(): InventoryItem[] {
   return [
-    { id: "inv-pesc", name: "Pescado fresco", unit: "kg", stock: 18, par: 20 },
-    { id: "inv-papa", name: "Papa amarilla", unit: "kg", stock: 40, par: 25 },
-    { id: "inv-aji", name: "Ají amarillo", unit: "kg", stock: 6, par: 8 },
-    { id: "inv-cul", name: "Culantro", unit: "atado", stock: 0, par: 10 },
-    { id: "inv-pisco", name: "Pisco", unit: "bot", stock: 12, par: 6 },
-    { id: "inv-limon", name: "Limón", unit: "kg", stock: 22, par: 15 },
-    { id: "inv-res", name: "Lomo de res", unit: "kg", stock: 14, par: 12 },
+    { id: "inv-pesc", name: "Pescado fresco", unit: "kg", stock: 18, par: 20, cost: 28 },
+    { id: "inv-papa", name: "Papa amarilla", unit: "kg", stock: 40, par: 25, cost: 4.5 },
+    { id: "inv-aji", name: "Ají amarillo", unit: "kg", stock: 6, par: 8, cost: 12 },
+    { id: "inv-cul", name: "Culantro", unit: "atado", stock: 0, par: 10, cost: 2 },
+    { id: "inv-pisco", name: "Pisco", unit: "bot", stock: 12, par: 6, cost: 45 },
+    { id: "inv-limon", name: "Limón", unit: "kg", stock: 22, par: 15, cost: 6 },
+    { id: "inv-res", name: "Lomo de res", unit: "kg", stock: 14, par: 12, cost: 38 },
   ];
 }
 

@@ -119,6 +119,7 @@ export interface InventoryItem {
   unit: string;
   stock: number;
   par: number;
+  cost?: number; // costo por unidad (para food cost)
 }
 
 /** Recipe: for a menu item, how much of each inventory item it consumes per unit. */

@@ -66,6 +66,8 @@ export interface Repo {
   // Inventory
   getInventory(): Promise<InventoryItem[]>;
   adjustInventory(itemId: string, delta: number, actor: string): Promise<void>;
+  /** Recetas: menú item id -> insumos consumidos por unidad. */
+  getRecipes(): Promise<Record<string, { inventoryId: string; qtyPerUnit: number }[]>>;
 
   // Menu changes (Carta)
   getMenuChanges(): Promise<MenuChange[]>;

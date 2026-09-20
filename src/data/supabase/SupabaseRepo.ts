@@ -379,8 +379,19 @@ export class SupabaseRepo implements Repo {
       unit: i.unit,
       stock: Number(i.stock),
       par: Number(i.par),
+      cost: i.cost != null ? Number(i.cost) : undefined,
     }));
   }
+  async getRecipes(): Promise<Record<string, { inventoryId: string; qtyPerUnit: number }[]>> {
+    const { data, error } = await this.sb.from("recipes").select("menu_item_id, inventory_id, qty_per_unit");
+    if (error) throw error;
+    const map: Record<string, { inventoryId: string; qtyPerUnit: number }[]> = {};
+    for (const r of data ?? []) {
+      (map[r.menu_item_id] ??= []).push({ inventoryId: r.inventory_id, qtyPerUnit: Number(r.qty_per_unit) });
+    }
+    return map;
+  }
+
   async adjustInventory(itemId: string, delta: number, actor: string): Promise<void> {
     const { data: inv } = await this.sb.from("inventory_items").select("stock, name").eq("id", itemId).maybeSingle();
     if (!inv) return;

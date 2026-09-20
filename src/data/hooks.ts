@@ -71,6 +71,10 @@ export function useInventory() {
   const repo = useRepo();
   return useQuery({ queryKey: ["inventory"], queryFn: () => repo.getInventory() });
 }
+export function useRecipes() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["recipes"], queryFn: () => repo.getRecipes() });
+}
 export function useMenuChanges() {
   const repo = useRepo();
   return useQuery({ queryKey: ["menuChanges"], queryFn: () => repo.getMenuChanges() });

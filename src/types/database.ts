@@ -75,7 +75,7 @@ export interface Tables {
     Row: { id: string; ticket_id: string; qty: number; name: string };
   };
   inventory_items: {
-    Row: { id: string; tenant_id: string; name: string; unit: string; stock: number; par: number };
+    Row: { id: string; tenant_id: string; name: string; unit: string; stock: number; par: number; cost: number | null };
   };
   recipes: {
     Row: { id: string; tenant_id: string; menu_item_id: string; inventory_id: string; qty_per_unit: number };
