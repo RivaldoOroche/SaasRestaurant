@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { numeroALetras } from "./numeroALetras.ts";
 import { construirUBL, calcularTotales } from "./ubl.ts";
+import { construirNotaCredito } from "./notaCredito.ts";
 import { zipStore } from "./zip.ts";
 import { firmarUBL } from "./sign.ts";
 import type { Comprobante } from "./types.ts";
@@ -52,6 +53,26 @@ describe("construirUBL", () => {
     expect(xml).toContain("CIENTO VEINTINUEVE CON 80/100");
     // dos líneas
     expect((xml.match(/<cac:InvoiceLine>/g) || []).length).toBe(2);
+  });
+});
+
+describe("construirNotaCredito", () => {
+  const xml = construirNotaCredito(
+    COMP,
+    { tipoDocRef: "01", folioRef: "F001-100", motivoCodigo: "01", motivo: "Anulación de la operación" },
+    numeroALetras(129.8),
+  );
+  it("emite CreditNote con motivo y documento afectado", () => {
+    expect(xml).toContain("<CreditNote ");
+    expect(xml).toContain("<cbc:ID>F001-123</cbc:ID>");
+    expect(xml).toContain("<cbc:ResponseCode>01</cbc:ResponseCode>");
+    expect(xml).toContain("<cbc:ReferenceID>F001-100</cbc:ReferenceID>");
+    expect(xml).toContain("<cbc:DocumentTypeCode>01</cbc:DocumentTypeCode>");
+    expect(xml).toContain("Anulación de la operación");
+    expect(xml).toContain("<ext:ExtensionContent></ext:ExtensionContent>");
+    // dos líneas de crédito
+    expect((xml.match(/<cac:CreditNoteLine>/g) || []).length).toBe(2);
+    expect(xml).toContain('<cbc:PayableAmount currencyID="PEN">129.80</cbc:PayableAmount>');
   });
 });
 

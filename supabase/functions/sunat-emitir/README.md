@@ -1,8 +1,14 @@
 # Edge Function `sunat-emitir` — facturación electrónica SUNAT
 
-Emite comprobantes electrónicos (boleta/factura) a SUNAT: arma el **UBL 2.1**,
-lo **firma** (RSA‑SHA256), lo comprime y lo envía por **SOAP `sendBill`**. Por
-defecto apunta al **ambiente beta / homologación** de SUNAT.
+Emite comprobantes electrónicos (boleta, factura y **nota de crédito** tipo 07)
+a SUNAT: arma el **UBL 2.1** (`Invoice` o `CreditNote`), lo **firma**
+(RSA‑SHA256), lo comprime y lo envía por **SOAP `sendBill`**. Por defecto apunta
+al **ambiente beta / homologación** de SUNAT.
+
+Para una nota de crédito el DTO incluye `tipo: "07"`, `refFolio` (documento
+afectado), `refTipo` (`01`/`03`), `motivo` y `motivoCodigo` (catálogo 09). El
+resumen diario de boletas se registra en el POS; su envío real (RC) queda como
+siguiente seam a implementar sobre esta misma función.
 
 - Lógica portable y con tests: `supabase/functions/_shared/sunat/` (UBL, importe
   en letras, ZIP, firma). Corre con `npm test`.

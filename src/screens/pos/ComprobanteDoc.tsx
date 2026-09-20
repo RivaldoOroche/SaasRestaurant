@@ -1,16 +1,18 @@
 import { numeroALetras } from "@/lib/numeroALetras";
 import { formatMoney, type Currency } from "@/lib/money";
 import { Qr } from "@/components/Qr";
-import type { OrderLine, SunatStatus } from "@/data/model";
+import type { ComprobanteTipo, OrderLine, SunatStatus } from "@/data/model";
 
 export interface ComprobanteDocProps {
-  tipo: "Boleta" | "Factura";
+  tipo: ComprobanteTipo;
   folio: string; // serie-correlativo, p.ej. B001-000123
   issuedAt?: Date;
   emisor: { razonSocial: string; nombreComercial?: string; ruc: string; direccion: string };
   cliente: { nombre: string; docLabel: string; docNum: string };
   lines: Pick<OrderLine, "name" | "qty" | "unitPrice" | "extraPrice">[];
   discount?: number;
+  refFolio?: string | null; // documento que modifica (notas de crédito)
+  motivo?: string | null; // motivo de la nota de crédito
   subtotal: number; // Op. gravada (neto, post-descuento)
   igv: number;
   total: number; // neto + IGV (sin propina)
@@ -42,6 +44,8 @@ export function ComprobanteDoc({
   cliente,
   lines,
   discount = 0,
+  refFolio,
+  motivo,
   subtotal,
   igv,
   total,
@@ -49,14 +53,20 @@ export function ComprobanteDoc({
   currency = "PEN",
   status,
 }: ComprobanteDocProps & { status?: SunatStatus }) {
-  const titulo = tipo === "Factura" ? "FACTURA ELECTRÓNICA" : "BOLETA DE VENTA ELECTRÓNICA";
+  const esNC = tipo === "NotaCredito";
+  const titulo = esNC
+    ? "NOTA DE CRÉDITO ELECTRÓNICA"
+    : tipo === "Factura"
+      ? "FACTURA ELECTRÓNICA"
+      : "BOLETA DE VENTA ELECTRÓNICA";
+  const tipoNombre = esNC ? "Nota de Crédito" : tipo;
   const fecha = issuedAt.toLocaleDateString("es-PE");
   const hora = issuedAt.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
   const iso = issuedAt.toISOString().slice(0, 10);
 
   // Cadena QR SUNAT: RUC|Tipo|Serie|Correlativo|IGV|Total|Fecha|TipoDocCli|NroDocCli|Hash|
   const [serie, correlativo] = folio.split("-");
-  const tipoCod = tipo === "Factura" ? "01" : "03";
+  const tipoCod = esNC ? "07" : tipo === "Factura" ? "01" : "03";
   const tipoDocCli = cliente.docLabel === "RUC" ? "6" : cliente.docLabel === "DNI" ? "1" : "0";
   const hash = fakeHash(folio + total);
   const qrValue = [
@@ -92,6 +102,14 @@ export function ComprobanteDoc({
           <p><span className="text-[#666]">Moneda:</span> {currency === "PEN" ? "SOLES (PEN)" : currency}</p>
         </div>
       </div>
+
+      {/* Documento que modifica (notas de crédito) */}
+      {esNC && (
+        <div className="py-2 text-[11.5px] border-b border-dashed border-[#c9ccd8]">
+          <p><span className="text-[#666]">Documento que modifica:</span> {refFolio || "—"}</p>
+          <p><span className="text-[#666]">Motivo:</span> {motivo || "Anulación de la operación"}</p>
+        </div>
+      )}
 
       {/* Ítems */}
       <table className="w-full mt-2 text-[11.5px]">
@@ -145,7 +163,7 @@ export function ComprobanteDoc({
           <Qr value={qrValue} size={64} />
         </div>
         <div className="flex-1 text-[10px] text-[#555] leading-snug">
-          <p>Representación impresa de la {tipo} Electrónica.</p>
+          <p>Representación impresa de la {tipoNombre} Electrónica.</p>
           <p>Autorizado mediante la normativa de comprobantes de pago electrónicos SUNAT.</p>
           <p className="font-mono mt-1 break-all">Resumen: {hash}</p>
           {status && (

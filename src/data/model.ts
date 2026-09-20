@@ -178,7 +178,7 @@ export interface PayExtras {
   tipPct?: number;
 }
 
-export type ComprobanteTipo = "Boleta" | "Factura";
+export type ComprobanteTipo = "Boleta" | "Factura" | "NotaCredito";
 export type SunatStatus = "encola" | "enviando" | "aceptada" | "rechazada";
 
 export interface Comprobante {
@@ -194,6 +194,17 @@ export interface Comprobante {
   status: SunatStatus;
   error: string | null;
   issuedAt: string;
+  refFolio?: string | null; // folio del comprobante que modifica (para NC)
+  motivo?: string | null; // motivo de la nota de crédito
+}
+
+/** Resultado del envío de un resumen diario de boletas a SUNAT. */
+export interface ResumenDiario {
+  folio: string; // p.ej. RC-20260920-1
+  fecha: string; // YYYY-MM-DD
+  count: number; // boletas incluidas
+  total: number; // importe total resumido
+  status: SunatStatus;
 }
 
 export interface EmitComprobanteInput {

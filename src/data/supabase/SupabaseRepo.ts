@@ -18,6 +18,7 @@ import type {
   OnlineOrder,
   Comprobante,
   EmitComprobanteInput,
+  ResumenDiario,
 } from "../model";
 import type { Database, Row } from "@/types/database";
 import { stubSunatGateway, type SunatGateway } from "../sunat/gateway";
@@ -478,6 +479,76 @@ export class SupabaseRepo implements Repo {
     return cpe;
   }
 
+  async emitNotaCredito(originalId: string, motivo: string, online: boolean): Promise<Comprobante> {
+    const { data: orig, error: oErr } = await this.sb
+      .from("comprobantes")
+      .select("*")
+      .eq("id", originalId)
+      .single();
+    if (oErr) throw oErr;
+    const original = mapComprobante(orig);
+    if (original.tipo === "NotaCredito") throw new Error("No se puede anular una nota de crédito");
+    const serie = original.folio.startsWith("F") ? "FC01" : "BC01";
+    const { data: folio, error: folioErr } = await this.sb.rpc("next_folio", {
+      tid: this.tenantId,
+      p_serie: serie,
+    });
+    if (folioErr) throw folioErr;
+    const { data, error } = await this.sb
+      .from("comprobantes")
+      .insert({
+        tenant_id: this.tenantId,
+        order_id: orig.order_id,
+        folio,
+        tipo: "NotaCredito",
+        buyer_ruc: original.buyerRuc,
+        buyer_name: original.buyerName,
+        subtotal: original.subtotal,
+        igv: original.igv,
+        total: original.total,
+        reference: `Anula ${original.folio}`,
+        ref_folio: original.folio,
+        motivo,
+        status: online ? "enviando" : "encola",
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    let cpe = mapComprobante(data);
+    if (online) {
+      const res = await this.sunat.submit(cpe);
+      cpe = { ...cpe, status: res.accepted ? "aceptada" : "rechazada", error: res.error ?? null };
+      await this.sb.rpc("set_comprobante_status", { cid: cpe.id, new_status: cpe.status, new_error: cpe.error });
+    } else {
+      await this.sb.from("sunat_outbox").insert({ tenant_id: this.tenantId, comprobante_id: cpe.id });
+    }
+    await this.log(`Nota de crédito ${folio} · anula ${original.folio} · ${cpe.status}`);
+    return cpe;
+  }
+
+  async sendResumenDiario(online: boolean): Promise<ResumenDiario> {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data } = await this.sb
+      .from("comprobantes")
+      .select("total")
+      .eq("tipo", "Boleta")
+      .eq("status", "aceptada")
+      .gte("issued_at", `${today}T00:00:00`)
+      .lte("issued_at", `${today}T23:59:59.999`);
+    const rows = data ?? [];
+    const total = Math.round(rows.reduce((s, r) => s + Number(r.total), 0) * 100) / 100;
+    const folio = `RC-${today.replace(/-/g, "")}-1`;
+    const resumen: ResumenDiario = {
+      folio,
+      fecha: today,
+      count: rows.length,
+      total,
+      status: online ? "aceptada" : "encola",
+    };
+    await this.log(`Resumen diario ${folio} · ${rows.length} boleta(s) · ${resumen.status}`);
+    return resumen;
+  }
+
   async syncSunat(online: boolean): Promise<number> {
     if (!online) return 0;
     const { data: queued } = await this.sb.from("comprobantes").select("*").eq("status", "encola");
@@ -618,6 +689,8 @@ function mapComprobante(r: Row<"comprobantes">): Comprobante {
     status: r.status,
     error: r.error,
     issuedAt: r.issued_at,
+    refFolio: r.ref_folio,
+    motivo: r.motivo,
   };
 }
 function mapLine(r: Row<"order_lines">): OrderLine {

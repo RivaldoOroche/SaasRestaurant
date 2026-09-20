@@ -16,6 +16,7 @@ import type {
   PayExtras,
   Comprobante,
   EmitComprobanteInput,
+  ResumenDiario,
 } from "./model";
 
 export interface PayInput extends PayExtras {
@@ -79,8 +80,12 @@ export interface Repo {
   // Fiscal (SUNAT)
   getComprobantes(): Promise<Comprobante[]>;
   emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante>;
+  /** Emite una nota de crédito que anula un comprobante ya emitido. */
+  emitNotaCredito(originalId: string, motivo: string, online: boolean): Promise<Comprobante>;
   syncSunat(online: boolean): Promise<number>;
   retryComprobante(id: string, online: boolean): Promise<void>;
+  /** Envía a SUNAT el resumen diario de las boletas del día. */
+  sendResumenDiario(online: boolean): Promise<ResumenDiario>;
 
   // Settings + audit
   getSettings(): Promise<BusinessSettings>;

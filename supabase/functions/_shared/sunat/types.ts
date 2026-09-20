@@ -1,6 +1,6 @@
 // Tipos del emisor de comprobantes electrónicos SUNAT.
 
-export type TipoComprobante = "01" | "03"; // 01 Factura, 03 Boleta
+export type TipoComprobante = "01" | "03" | "07"; // 01 Factura, 03 Boleta, 07 Nota de crédito
 export type TipoDocIdentidad = "6" | "1" | "0" | "-"; // 6 RUC, 1 DNI, 0 sin doc
 
 export interface Emisor {
@@ -41,4 +41,12 @@ export interface Totales {
   valorVenta: number; // gravado (sin IGV)
   igv: number;
   total: number; // con IGV
+}
+
+/** Referencia al documento que una nota de crédito modifica. */
+export interface NotaCreditoRef {
+  tipoDocRef: TipoComprobante; // 01 factura / 03 boleta afectada
+  folioRef: string; // serie-correlativo del documento afectado, p.ej. B001-1001
+  motivoCodigo?: string; // catálogo 09; "01" = anulación de la operación (por defecto)
+  motivo: string; // descripción del motivo
 }

@@ -14,6 +14,7 @@ import type {
   MenuItem,
   Comprobante,
   EmitComprobanteInput,
+  ResumenDiario,
 } from "../model";
 import { stubSunatGateway } from "../sunat/gateway";
 import {
@@ -395,9 +396,8 @@ export class MockRepo implements Repo {
   }
 
   // ---- Fiscal (SUNAT) ----
-  /** Next sequential folio per serie, derived from stored comprobantes so it survives reloads. */
-  private nextFolio(tipo: "Boleta" | "Factura"): string {
-    const serie = tipo === "Factura" ? "F001" : "B001";
+  /** Next sequential folio for a serie, derived from stored comprobantes so it survives reloads. */
+  private nextFolio(serie: string): string {
     const used = this.state.comprobantes
       .filter((c) => c.folio.startsWith(serie))
       .map((c) => parseInt(c.folio.split("-")[1] ?? "0", 10))
@@ -413,7 +413,7 @@ export class MockRepo implements Repo {
   async emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante> {
     const cpe: Comprobante = {
       id: uid("cpe"),
-      folio: this.nextFolio(input.tipo),
+      folio: this.nextFolio(input.tipo === "Factura" ? "F001" : "B001"),
       tipo: input.tipo,
       buyerRuc: input.buyerRuc ?? null,
       buyerName: input.buyerName ?? null,
@@ -434,6 +434,57 @@ export class MockRepo implements Repo {
     this.pushLog("SUNAT", `${input.tipo} ${cpe.folio} · ${cpe.status}`);
     this.persist();
     return cpe;
+  }
+
+  async emitNotaCredito(originalId: string, motivo: string, online: boolean): Promise<Comprobante> {
+    const original = this.state.comprobantes.find((c) => c.id === originalId);
+    if (!original) throw new Error("Comprobante no encontrado");
+    if (original.tipo === "NotaCredito") throw new Error("No se puede anular una nota de crédito");
+    const serie = original.folio.startsWith("F") ? "FC01" : "BC01";
+    const nc: Comprobante = {
+      id: uid("cpe"),
+      folio: this.nextFolio(serie),
+      tipo: "NotaCredito",
+      buyerRuc: original.buyerRuc,
+      buyerName: original.buyerName,
+      subtotal: original.subtotal,
+      igv: original.igv,
+      total: original.total,
+      reference: `Anula ${original.folio}`,
+      status: online ? "enviando" : "encola",
+      error: null,
+      issuedAt: new Date().toISOString(),
+      refFolio: original.folio,
+      motivo,
+    };
+    this.state.comprobantes.unshift(nc);
+    if (online) {
+      const res = await stubSunatGateway.submit(nc);
+      nc.status = res.accepted ? "aceptada" : "rechazada";
+      nc.error = res.error ?? null;
+    }
+    this.pushLog("SUNAT", `Nota de crédito ${nc.folio} · anula ${original.folio} · ${nc.status}`);
+    this.persist();
+    return nc;
+  }
+
+  async sendResumenDiario(online: boolean): Promise<ResumenDiario> {
+    const today = new Date().toISOString().slice(0, 10);
+    const boletas = this.state.comprobantes.filter(
+      (c) => c.tipo === "Boleta" && c.issuedAt.slice(0, 10) === today && c.status === "aceptada",
+    );
+    const total = Math.round(boletas.reduce((s, c) => s + c.total, 0) * 100) / 100;
+    const folio = `RC-${today.replace(/-/g, "")}-1`;
+    const resumen: ResumenDiario = {
+      folio,
+      fecha: today,
+      count: boletas.length,
+      total,
+      status: online ? "aceptada" : "encola",
+    };
+    this.pushLog("SUNAT", `Resumen diario ${folio} · ${boletas.length} boleta(s) · ${resumen.status}`);
+    this.persist();
+    return resumen;
   }
 
   async syncSunat(online: boolean): Promise<number> {

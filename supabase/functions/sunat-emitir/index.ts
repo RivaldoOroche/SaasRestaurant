@@ -14,6 +14,7 @@
 // Estos se guardan como secrets del proyecto (ver README).
 
 import { construirUBL, calcularTotales } from "../_shared/sunat/ubl.ts";
+import { construirNotaCredito } from "../_shared/sunat/notaCredito.ts";
 import { numeroALetras } from "../_shared/sunat/numeroALetras.ts";
 import { firmarUBL } from "../_shared/sunat/sign.ts";
 import { zipStore } from "../_shared/sunat/zip.ts";
@@ -60,7 +61,7 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     // DTO simple desde el frontend; el emisor sale de los secrets del proyecto.
     const dto = (await req.json()) as {
-      tipo: "01" | "03";
+      tipo: "01" | "03" | "07";
       folio: string; // "F001-1001"
       buyerRuc?: string | null;
       buyerName?: string | null;
@@ -69,6 +70,11 @@ export default async function handler(req: Request): Promise<Response> {
       total: number;
       igvTasa?: number;
       items?: { descripcion: string; cantidad: number; valorUnitario: number }[];
+      // Nota de crédito (tipo 07): documento afectado + motivo.
+      refFolio?: string | null; // serie-correlativo del documento afectado
+      refTipo?: "01" | "03"; // tipo del documento afectado
+      motivo?: string | null; // descripción del motivo
+      motivoCodigo?: string; // catálogo 09 ("01" anulación por defecto)
     };
     const [serie, correlativo] = (dto.folio ?? "").split("-");
     if (!serie || !correlativo) return json({ error: "folio inválido" }, 400);
@@ -106,9 +112,22 @@ export default async function handler(req: Request): Promise<Response> {
           : [{ descripcion: "Consumo", cantidad: 1, valorUnitario: dto.subtotal }],
     };
 
-    // 1) UBL + firma
+    // 1) UBL + firma. Nota de crédito (07) usa CreditNote; factura/boleta usan Invoice.
     const totales = calcularTotales(comp);
-    const xml = construirUBL(comp, `${numeroALetras(totales.total)} SOLES`);
+    const enLetras = `${numeroALetras(totales.total)} SOLES`;
+    const xml =
+      dto.tipo === "07"
+        ? construirNotaCredito(
+            comp,
+            {
+              tipoDocRef: dto.refTipo ?? "03",
+              folioRef: dto.refFolio ?? "",
+              motivoCodigo: dto.motivoCodigo ?? "01",
+              motivo: dto.motivo ?? "Anulación de la operación",
+            },
+            enLetras,
+          )
+        : construirUBL(comp, enLetras);
     const signed = await firmarUBL(xml, { privateKeyPem: keyPem, certificatePem: certPem });
 
     // 2) zip: RUC-TIPO-SERIE-CORRELATIVO

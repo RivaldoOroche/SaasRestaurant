@@ -197,7 +197,16 @@ export function useSunatActions() {
     mutationFn: ({ id, online }: { id: string; online: boolean }) => repo.retryComprobante(id, online),
     onSuccess: invalidate,
   });
-  return { emit, sync, retry };
+  const notaCredito = useMutation({
+    mutationFn: ({ originalId, motivo, online }: { originalId: string; motivo: string; online: boolean }) =>
+      repo.emitNotaCredito(originalId, motivo, online),
+    onSuccess: invalidate,
+  });
+  const resumen = useMutation({
+    mutationFn: (online: boolean) => repo.sendResumenDiario(online),
+    onSuccess: invalidate,
+  });
+  return { emit, sync, retry, notaCredito, resumen };
 }
 
 /** Admin/tenant management actions. */
