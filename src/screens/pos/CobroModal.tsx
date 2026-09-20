@@ -6,6 +6,7 @@ import { computeCheckout, equalSplit } from "@/lib/checkout";
 import { useOrderActions, useCustomers, useSunatActions } from "@/data/hooks";
 import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
+import { ComprobanteDoc } from "./ComprobanteDoc";
 import type { Order, Comprobante, ComprobanteTipo } from "@/data/model";
 
 type Stage = "cuenta" | "pago" | "doc";
@@ -242,56 +243,9 @@ export function CobroModal({
 
         {stage === "doc" && (
           <div>
-            <div className="print-area rounded-lg border border-border-soft bg-surface-alt p-4 font-mono text-sm">
-              <div className="text-center mb-3">
-                <p className="font-bold text-base">La Higuera</p>
-                <p className="text-xs text-muted">Av. La Mar 1234, Miraflores, Lima</p>
-                <p className="text-xs text-muted">RUC 20512345678</p>
-              </div>
-              <div className="border-t border-dashed border-border my-2" />
-              {order.lines.map((l) => (
-                <div key={l.id} className="flex justify-between">
-                  <span>
-                    {l.qty}× {l.name}
-                  </span>
-                  <span>{formatMoney((l.unitPrice + l.extraPrice) * l.qty)}</span>
-                </div>
-              ))}
-              <div className="border-t border-dashed border-border my-2" />
-              <Row label="Subtotal" value={formatMoney(result.subtotal)} />
-              <Row label={`IGV (${Math.round(taxRate * 100)}%)`} value={formatMoney(result.igv)} />
-              {result.discAmt > 0 && <Row label="Descuento" value={"− " + formatMoney(result.discAmt)} />}
-              {result.tipAmt > 0 && <Row label="Propina" value={formatMoney(result.tipAmt)} />}
-              <div className="flex justify-between font-bold mt-1">
-                <span>TOTAL</span>
-                <span>{formatMoney(result.grand)}</span>
-              </div>
-              {result.redeemApplied > 0 && (
-                <>
-                  <Row label="Puntos canjeados" value={"− " + formatMoney(result.redeemApplied)} />
-                  <div className="flex justify-between font-bold">
-                    <span>PAGADO</span>
-                    <span>{formatMoney(result.due)}</span>
-                  </div>
-                </>
-              )}
-              <p className="text-xs text-muted mt-2">Pagado con {methodLabel}</p>
-              {emitted && (
-                <p className="text-[11px] text-muted mt-3 text-center">
-                  {emitted.tipo} electrónica {emitted.folio} ·{" "}
-                  {emitted.status === "aceptada"
-                    ? "Aceptada por SUNAT"
-                    : emitted.status === "encola"
-                      ? "En cola (sin conexión)"
-                      : emitted.status === "rechazada"
-                        ? `Rechazada: ${emitted.error ?? ""}`
-                        : "Enviando…"}
-                </p>
-              )}
-            </div>
-
-            {!emitted ? (
-              <div className="mt-4 no-print space-y-3">
+            {/* Controles de emisión (arriba, no se imprimen) */}
+            {!emitted && (
+              <div className="mb-4 no-print space-y-3">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted mb-1.5">Tipo de comprobante</p>
                   <div className="flex gap-2">
@@ -323,23 +277,50 @@ export function CobroModal({
                     Sin conexión — el comprobante quedará en cola y se enviará a SUNAT al reconectar.
                   </p>
                 )}
-                <Button className="w-full" onClick={emitComprobante} disabled={sunat.emit.isPending}>
+              </div>
+            )}
+
+            {/* Representación impresa de la boleta/factura */}
+            <ComprobanteDoc
+              tipo={docTipo}
+              folio={emitted?.folio ?? `${docTipo === "Factura" ? "F001" : "B001"}-PENDIENTE`}
+              emisor={{
+                razonSocial: "LA HIGUERA S.A.C.",
+                nombreComercial: "La Higuera",
+                ruc: "20512345678",
+                direccion: "Av. La Mar 1234, Miraflores, Lima",
+              }}
+              cliente={
+                docTipo === "Factura"
+                  ? { nombre: razon || "—", docLabel: "RUC", docNum: ruc || "—" }
+                  : { nombre: "CLIENTES VARIOS", docLabel: "DNI", docNum: "—" }
+              }
+              lines={order.lines}
+              discount={result.discAmt}
+              subtotal={result.subtotal}
+              igv={result.igv}
+              total={result.netAmt}
+              taxRate={taxRate}
+              status={emitted?.status}
+            />
+
+            <div className="flex justify-between gap-2 mt-4 no-print">
+              {!emitted ? (
+                <Button onClick={emitComprobante} disabled={sunat.emit.isPending}>
                   Emitir {docTipo}
                 </Button>
-              </div>
-            ) : null}
-
-            <div className="flex justify-end gap-2 mt-4 no-print">
-              <Button variant="secondary" onClick={() => window.print()}>
-                🖨 Imprimir
-              </Button>
+              ) : (
+                <Button variant="secondary" onClick={() => window.print()}>
+                  🖨 Imprimir
+                </Button>
+              )}
               <Button
                 onClick={() => {
                   reset();
                   onPaid();
                 }}
               >
-                Listo
+                {emitted ? "Listo" : "Cerrar sin emitir"}
               </Button>
             </div>
           </div>
