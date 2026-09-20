@@ -51,9 +51,9 @@ export function Login() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="mx-auto mb-3 h-14 w-14 rounded-xl bg-accent-cta grid place-items-center text-2xl font-bold">
-            N
+            W
           </div>
-          <h1 className="text-2xl font-bold">NubePOS</h1>
+          <h1 className="text-2xl font-bold">Wayra POS</h1>
           <p className="text-white/60 text-sm">Punto de venta · SaaS para restaurantes</p>
         </div>
 

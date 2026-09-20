@@ -1,9 +1,9 @@
 {
-  "name": "nubepos",
+  "name": "wayra-pos",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "NubePOS — multi-tenant SaaS restaurant POS for Peru",
+  "description": "Wayra POS — multi-tenant SaaS restaurant POS for Peru",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

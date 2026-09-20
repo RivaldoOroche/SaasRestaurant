@@ -158,7 +158,7 @@ export function SaasInvoiceView({ charge, onClose }: { charge: SaasCharge; onClo
           Factura de suscripción
         </h2>
         <div className="print-area rounded-lg border border-border-soft bg-surface-alt p-4 font-mono text-sm">
-          <p className="font-bold">NubePOS S.A.C.</p>
+          <p className="font-bold">Wayra POS S.A.C.</p>
           <p className="text-xs text-muted">RUC 20600000001 · Lima, Perú</p>
           <div className="border-t border-dashed border-border my-2" />
           <p>Cliente: {charge.tenant}</p>

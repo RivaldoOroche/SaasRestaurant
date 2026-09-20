@@ -1,4 +1,4 @@
--- NubePOS core schema.
+-- Wayra POS core schema.
 -- Multi-tenant, single shared database. Every tenant-scoped table carries
 -- tenant_id; isolation is enforced by RLS (see 0002_rls.sql). Platform-level
 -- tables (tenants, plans, saas_invoices, support_tickets, platform_activity)

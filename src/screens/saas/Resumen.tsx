@@ -11,7 +11,7 @@ export function Resumen() {
 
   return (
     <div className="p-6 max-w-6xl">
-      <ScreenHeader title="NubePOS · Consola de plataforma" subtitle="Tu negocio SaaS · provees el POS a tus clientes (tenants)" />
+      <ScreenHeader title="Wayra POS · Consola de plataforma" subtitle="Tu negocio SaaS · provees el POS a tus clientes (tenants)" />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
         <Kpi label="MRR" value={formatMoney(s.mrr)} note="ingreso recurrente mensual" />

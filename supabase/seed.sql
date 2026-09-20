@@ -1,4 +1,4 @@
--- Demo seed for NubePOS (Peruvian context). Reference data + one demo tenant's
+-- Demo seed for Wayra POS (Peruvian context). Reference data + one demo tenant's
 -- catalog. Auth users can't be created from SQL, so create them in the Supabase
 -- dashboard (Auth), then insert matching `memberships` rows (see APP_SETUP.md).
 

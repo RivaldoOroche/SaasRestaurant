@@ -29,7 +29,7 @@ export function Rail() {
       )}
     >
       <div className="mb-2 h-10 w-10 rounded-lg bg-accent-cta grid place-items-center font-bold text-white mob:hidden">
-        N
+        W
       </div>
 
       <div className="flex-1 flex flex-col items-center gap-1 overflow-y-auto w-full mob:flex-row mob:overflow-x-auto mob:overflow-y-hidden">

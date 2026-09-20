@@ -1,4 +1,4 @@
-# NubePOS — setup
+# Wayra POS — setup
 
 React + TypeScript (Vite) frontend on Supabase (Postgres + Auth + RLS).
 

@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/Badge";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
 
-// The tenant's own subscription (their view as a customer of NubePOS).
+// The tenant's own subscription (their view as a customer of Wayra POS).
 const USAGE = [
   { metric: "Sucursales", cur: 3, cap: 3 },
   { metric: "Usuarios", cur: 12, cap: 15 },
@@ -26,7 +26,7 @@ const TIERS = [
 export function Suscripcion() {
   return (
     <div className="p-6 max-w-4xl">
-      <ScreenHeader title="Plan" subtitle="Tu suscripción a NubePOS" />
+      <ScreenHeader title="Plan" subtitle="Tu suscripción a Wayra POS" />
 
       <Card className="mb-4">
         <CardBody className="flex items-center justify-between">

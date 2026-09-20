@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...prev,
         role: "saas",
         tenantId: null,
-        tenantName: "NubePOS",
+        tenantName: "Wayra POS",
         impersonating: false,
       };
       saveSession(next);

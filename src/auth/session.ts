@@ -34,7 +34,7 @@ export interface MockUser {
 export const MOCK_TENANT_ID = "11111111-1111-1111-1111-111111111111";
 
 export const MOCK_USERS: MockUser[] = [
-  { pin: "0000", name: "Tú (SaaS)", initials: "SA", role: "saas", tenantId: "", tenantName: "NubePOS" },
+  { pin: "0000", name: "Tú (SaaS)", initials: "SA", role: "saas", tenantId: "", tenantName: "Wayra POS" },
   { pin: "1111", name: "Mónica R.", initials: "MR", role: "dueno", tenantId: MOCK_TENANT_ID, tenantName: "La Higuera" },
   { pin: "2222", name: "Iker Solís", initials: "IS", role: "admin", tenantId: MOCK_TENANT_ID, tenantName: "La Higuera" },
   { pin: "3333", name: "Ana Ruiz", initials: "AR", role: "mesero", tenantId: MOCK_TENANT_ID, tenantName: "La Higuera" },

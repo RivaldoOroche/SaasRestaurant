@@ -22,7 +22,7 @@ function slugify(name: string): string {
 
 function makeLink(slug: string): string {
   const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-  return `https://app.nubepos.pe/${slug}?onboard=${token}`;
+  return `https://app.wayrapos.pe/${slug}?onboard=${token}`;
 }
 
 const SEED_TENANTS: Tenant[] = [
