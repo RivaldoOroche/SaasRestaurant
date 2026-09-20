@@ -12,7 +12,7 @@ export type KdsColumn = "nuevos" | "preparacion" | "listos" | "entregado";
 export type ComprobanteTipo = "Boleta" | "Factura";
 export type SunatStatus = "encola" | "enviando" | "aceptada" | "rechazada";
 export type CurrencyCode = "PEN" | "USD" | "EUR";
-export type PayMethod = "efectivo" | "tarjeta" | "transferencia";
+export type PayMethod = "efectivo" | "tarjeta" | "transferencia" | "yape" | "plin";
 
 type Timestamps = { created_at: string };
 
@@ -42,7 +42,10 @@ export interface Tables {
     Row: { id: string; tenant_id: string; name: string; initials: string; role: AppRole; pin_hash: string | null; active: boolean } & Timestamps;
   };
   business_settings: {
-    Row: { tenant_id: string; name: string; currency: CurrencyCode; tax_rate: number; tip_presets: number[]; online_orders: boolean; auto_tip: boolean; ruc: string | null; address: string | null; updated_at: string };
+    Row: { tenant_id: string; name: string; currency: CurrencyCode; tax_rate: number; tip_presets: number[]; online_orders: boolean; auto_tip: boolean; ruc: string | null; address: string | null; yape_number: string | null; plin_number: string | null; card_provider: string; card_public_key: string | null; updated_at: string };
+  };
+  payment_credentials: {
+    Row: { tenant_id: string; provider: string; secret_key: string | null; updated_at: string };
   };
   menu_categories: {
     Row: { id: string; tenant_id: string; key: string; name: string; icon: string; subtitle: string; sort: number };

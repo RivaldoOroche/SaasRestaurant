@@ -135,6 +135,8 @@ export interface LogEntry {
   at: string;
 }
 
+export type CardProvider = "ninguno" | "culqi" | "izipay" | "niubiz";
+
 export interface BusinessSettings {
   name: string;
   currency: import("@/lib/money").Currency;
@@ -142,6 +144,10 @@ export interface BusinessSettings {
   tipPresets: number[];
   onlineOrders: boolean;
   autoTip: boolean;
+  yapeNumber?: string;
+  plinNumber?: string;
+  cardProvider?: CardProvider;
+  cardPublicKey?: string; // clave pública/publicable (no secreta)
 }
 
 export type MenuChangeStatus = "pendiente" | "aprobado" | "rechazado";

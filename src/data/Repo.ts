@@ -85,6 +85,8 @@ export interface Repo {
   // Settings + audit
   getSettings(): Promise<BusinessSettings>;
   updateSettings(patch: Partial<BusinessSettings>): Promise<void>;
+  /** Guarda (sin devolver) la llave secreta de la pasarela de tarjeta. */
+  setCardCredentials(provider: string, secretKey: string): Promise<void>;
   getActivityLog(): Promise<LogEntry[]>;
 
   /** Subscribe to changes (kitchen + orders + tables). Returns an unsubscribe fn. */

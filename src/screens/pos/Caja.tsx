@@ -8,6 +8,8 @@ import { cn } from "@/lib/cn";
 
 const METHOD_LABEL: Record<string, string> = {
   efectivo: "Efectivo",
+  yape: "Yape",
+  plin: "Plin",
   tarjeta: "Tarjeta",
   transferencia: "Transferencia",
 };
@@ -18,7 +20,7 @@ export function Caja() {
   const [closed, setClosed] = useState(false);
 
   const byMethod = useMemo(() => {
-    const m: Record<string, number> = { efectivo: 0, tarjeta: 0, transferencia: 0 };
+    const m: Record<string, number> = { efectivo: 0, yape: 0, plin: 0, tarjeta: 0, transferencia: 0 };
     for (const o of paid) {
       const key = o.paidMethod ?? "efectivo";
       m[key] = round2((m[key] ?? 0) + (o.paidTotal ?? 0));

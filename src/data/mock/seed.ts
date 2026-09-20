@@ -142,6 +142,10 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   tipPresets: [10, 15, 18],
   onlineOrders: true,
   autoTip: true,
+  yapeNumber: "987 654 321",
+  plinNumber: "987 654 321",
+  cardProvider: "ninguno",
+  cardPublicKey: "",
 };
 
 export const VOID_REASONS = [

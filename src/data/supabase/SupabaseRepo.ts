@@ -521,6 +521,10 @@ export class SupabaseRepo implements Repo {
       tipPresets: data?.tip_presets ?? [10, 15, 18],
       onlineOrders: data?.online_orders ?? true,
       autoTip: data?.auto_tip ?? true,
+      yapeNumber: data?.yape_number ?? "",
+      plinNumber: data?.plin_number ?? "",
+      cardProvider: (data?.card_provider ?? "ninguno") as BusinessSettings["cardProvider"],
+      cardPublicKey: data?.card_public_key ?? "",
     };
   }
   async updateSettings(patch: Partial<BusinessSettings>): Promise<void> {
@@ -531,7 +535,18 @@ export class SupabaseRepo implements Repo {
     if (patch.tipPresets !== undefined) row.tip_presets = patch.tipPresets;
     if (patch.onlineOrders !== undefined) row.online_orders = patch.onlineOrders;
     if (patch.autoTip !== undefined) row.auto_tip = patch.autoTip;
+    if (patch.yapeNumber !== undefined) row.yape_number = patch.yapeNumber;
+    if (patch.plinNumber !== undefined) row.plin_number = patch.plinNumber;
+    if (patch.cardProvider !== undefined) row.card_provider = patch.cardProvider;
+    if (patch.cardPublicKey !== undefined) row.card_public_key = patch.cardPublicKey;
     await this.sb.from("business_settings").update(row).eq("tenant_id", this.tenantId);
+  }
+
+  async setCardCredentials(provider: string, secretKey: string): Promise<void> {
+    // Escribe (no lee) la llave secreta; upsert por tenant.
+    await this.sb
+      .from("payment_credentials")
+      .upsert({ tenant_id: this.tenantId, provider, secret_key: secretKey, updated_at: new Date().toISOString() });
   }
 
   async getActivityLog(): Promise<LogEntry[]> {

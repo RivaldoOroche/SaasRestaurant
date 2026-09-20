@@ -472,6 +472,12 @@ export class MockRepo implements Repo {
     this.pushLog("Ajustes", `Actualizó configuración del negocio`);
     this.persist();
   }
+  async setCardCredentials(provider: string, _secretKey: string) {
+    // Demo: no se persiste la llave secreta (solo se registra el cambio).
+    void _secretKey;
+    this.pushLog("Ajustes", `Configuró credenciales de ${provider}`);
+    this.persist();
+  }
   async getActivityLog() {
     return [...this.state.log];
   }

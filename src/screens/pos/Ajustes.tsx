@@ -1,10 +1,14 @@
+import { useState } from "react";
 import { useSettings, useTenantActions } from "@/data/hooks";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card, CardBody } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import type { Currency } from "@/lib/money";
+import type { BusinessSettings, CardProvider } from "@/data/model";
 
 const CURRENCIES: Currency[] = ["PEN", "USD", "EUR"];
+const CARD_PROVIDERS: CardProvider[] = ["ninguno", "culqi", "izipay", "niubiz"];
 
 export function Ajustes() {
   const { data: settings } = useSettings();
@@ -68,8 +72,98 @@ export function Ajustes() {
             />
           </CardBody>
         </Card>
+
+        <PaymentsCard settings={settings} />
       </div>
     </div>
+  );
+}
+
+function PaymentsCard({ settings }: { settings: BusinessSettings }) {
+  const { updateSettings, setCardCredentials } = useTenantActions();
+  const [secret, setSecret] = useState("");
+  const provider = settings.cardProvider ?? "ninguno";
+
+  return (
+    <Card>
+      <CardBody className="space-y-4">
+        <h3 className="font-semibold">Pagos</h3>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Número Yape">
+            <input
+              defaultValue={settings.yapeNumber ?? ""}
+              onBlur={(e) => updateSettings.mutate({ yapeNumber: e.target.value })}
+              placeholder="9xx xxx xxx"
+              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+            />
+          </Field>
+          <Field label="Número Plin">
+            <input
+              defaultValue={settings.plinNumber ?? ""}
+              onBlur={(e) => updateSettings.mutate({ plinNumber: e.target.value })}
+              placeholder="9xx xxx xxx"
+              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+            />
+          </Field>
+        </div>
+
+        <Field label="Proveedor de tarjeta">
+          <div className="flex flex-wrap gap-2">
+            {CARD_PROVIDERS.map((p) => (
+              <button
+                key={p}
+                onClick={() => updateSettings.mutate({ cardProvider: p })}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm border capitalize",
+                  provider === p ? "bg-accent/20 border-accent text-accent" : "bg-chip-bg border-border",
+                )}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        {provider !== "ninguno" && (
+          <div className="grid grid-cols-1 gap-3">
+            <Field label="Llave pública (publicable)">
+              <input
+                defaultValue={settings.cardPublicKey ?? ""}
+                onBlur={(e) => updateSettings.mutate({ cardPublicKey: e.target.value })}
+                placeholder="pk_test_..."
+                className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+              />
+            </Field>
+            <Field label="Llave secreta (no se muestra luego)">
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                  placeholder="sk_test_..."
+                  className="flex-1 rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!secret || setCardCredentials.isPending}
+                  onClick={() => {
+                    setCardCredentials.mutate({ provider, secretKey: secret });
+                    setSecret("");
+                  }}
+                >
+                  Guardar
+                </Button>
+              </div>
+            </Field>
+            <p className="text-muted text-xs">
+              La llave secreta se guarda cifrada del lado del servidor y nunca se devuelve al navegador.
+            </p>
+          </div>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 

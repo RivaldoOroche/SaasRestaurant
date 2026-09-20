@@ -3,9 +3,10 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { computeCheckout, equalSplit } from "@/lib/checkout";
-import { useOrderActions, useCustomers, useSunatActions } from "@/data/hooks";
+import { useOrderActions, useCustomers, useSunatActions, useSettings } from "@/data/hooks";
 import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
+import { Qr } from "@/components/Qr";
 import { ComprobanteDoc } from "./ComprobanteDoc";
 import type { Order, Comprobante, ComprobanteTipo } from "@/data/model";
 
@@ -14,6 +15,8 @@ const DISCOUNTS = [0, 0.1, 0.15, 1];
 const TIPS = [0, 0.1, 0.15, 0.18];
 const METHODS = [
   { key: "efectivo", label: "Efectivo" },
+  { key: "yape", label: "Yape" },
+  { key: "plin", label: "Plin" },
   { key: "tarjeta", label: "Tarjeta" },
   { key: "transferencia", label: "Transferencia" },
 ];
@@ -35,6 +38,7 @@ export function CobroModal({
 }) {
   const actions = useOrderActions(order.tableId);
   const { data: customers = [] } = useCustomers();
+  const { data: settings } = useSettings();
   const sunat = useSunatActions();
   const online = useConnection((s) => s.online);
   const [docTipo, setDocTipo] = useState<ComprobanteTipo>("Boleta");
@@ -222,20 +226,46 @@ export function CobroModal({
 
         {stage === "pago" && (
           <div className="space-y-4">
-            <div className="text-center py-4">
-              <div className="text-4xl mb-2">💳</div>
-              <p className="font-semibold">Cobrar {formatMoney(result.due)}</p>
-              <p className="text-muted text-sm">Método: {methodLabel}</p>
-              {result.pointsEarned > 0 && (
-                <p className="text-muted text-xs mt-1">Acumulará {result.pointsEarned} pts</p>
-              )}
-            </div>
+            {method === "yape" || method === "plin" ? (
+              <div className="text-center py-2">
+                <p className="font-semibold mb-2">
+                  {method === "yape" ? "Yape" : "Plin"} — {formatMoney(result.due)}
+                </p>
+                <div className="inline-block bg-white p-2 rounded-md border border-border">
+                  <Qr
+                    value={`${method === "yape" ? "YAPE" : "PLIN"}|${(method === "yape" ? settings?.yapeNumber : settings?.plinNumber) ?? ""}|${result.due.toFixed(2)}|${order.tableLabel}`}
+                    size={150}
+                  />
+                </div>
+                <p className="text-sm mt-2">
+                  Escanea para pagar a{" "}
+                  <span className="font-mono font-semibold">
+                    {(method === "yape" ? settings?.yapeNumber : settings?.plinNumber) || "—"}
+                  </span>
+                </p>
+                <p className="text-muted text-xs mt-1">
+                  Pide al cliente que escanee y confirma cuando llegue el pago.
+                </p>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <div className="text-4xl mb-2">{method === "efectivo" ? "💵" : "💳"}</div>
+                <p className="font-semibold">Cobrar {formatMoney(result.due)}</p>
+                <p className="text-muted text-sm">Método: {methodLabel}</p>
+                {method === "tarjeta" && settings?.cardProvider && settings.cardProvider !== "ninguno" && (
+                  <p className="text-muted text-xs mt-1">Procesado con {settings.cardProvider}</p>
+                )}
+                {result.pointsEarned > 0 && (
+                  <p className="text-muted text-xs mt-1">Acumulará {result.pointsEarned} pts</p>
+                )}
+              </div>
+            )}
             <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={() => setStage("cuenta")}>
                 ← Volver
               </Button>
               <Button onClick={pay} disabled={actions.payOrder.isPending}>
-                Confirmar pago y emitir
+                {method === "yape" || method === "plin" ? "Confirmar pago recibido" : "Confirmar pago y emitir"}
               </Button>
             </div>
           </div>
