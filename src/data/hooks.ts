@@ -166,6 +166,27 @@ export function useKitchenActions() {
   return { advance };
 }
 
+/** Configuración de mesas (gerencia). */
+export function useTableActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["tables"] });
+  const addTable = useMutation({
+    mutationFn: (input: Parameters<typeof repo.addTable>[0]) => repo.addTable(input),
+    onSuccess: invalidate,
+  });
+  const updateTable = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof repo.updateTable>[1] }) =>
+      repo.updateTable(id, patch),
+    onSuccess: invalidate,
+  });
+  const removeTable = useMutation({
+    mutationFn: (id: string) => repo.removeTable(id),
+    onSuccess: invalidate,
+  });
+  return { addTable, updateTable, removeTable };
+}
+
 /** Floor actions: void a line, transfer or merge an order between tables. */
 export function useFloorActions() {
   const repo = useRepo();

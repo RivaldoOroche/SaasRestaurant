@@ -88,6 +88,30 @@ export class SupabaseRepo implements Repo {
     return (data ?? []).map(mapTable);
   }
 
+  async addTable(input: { zone: string; number: number; seats: number; branchId: string | null }): Promise<void> {
+    const { error } = await this.sb.from("restaurant_tables").insert({
+      tenant_id: this.tenantId,
+      branch_id: input.branchId,
+      zone: input.zone,
+      number: input.number,
+      seats: input.seats,
+      status: "libre",
+    });
+    if (error) throw error;
+  }
+
+  async updateTable(id: string, patch: Partial<{ zone: string; number: number; seats: number }>): Promise<void> {
+    const { error } = await this.sb.from("restaurant_tables").update(patch).eq("id", id);
+    if (error) throw error;
+  }
+
+  async removeTable(id: string): Promise<void> {
+    const { data: t } = await this.sb.from("restaurant_tables").select("status").eq("id", id).maybeSingle();
+    if (t && t.status !== "libre") throw new Error("No se puede eliminar una mesa ocupada");
+    const { error } = await this.sb.from("restaurant_tables").delete().eq("id", id);
+    if (error) throw error;
+  }
+
   async getOpenOrderForTable(tableId: string): Promise<Order | null> {
     const { data, error } = await this.sb
       .from("orders")

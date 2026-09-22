@@ -55,7 +55,7 @@ interface MockState {
   comprobantes: Comprobante[];
 }
 
-const KEY = "nubepos-mock-v3";
+const KEY = "nubepos-mock-v4";
 const COL_ORDER: KdsColumn[] = ["nuevos", "preparacion", "listos", "entregado"];
 
 function uid(prefix: string): string {
@@ -156,6 +156,37 @@ export class MockRepo implements Repo {
   async getTables(branchId?: string | null) {
     const all = [...this.state.tables];
     return branchId ? all.filter((t) => t.branchId === branchId) : all;
+  }
+
+  async addTable(input: { zone: string; number: number; seats: number; branchId: string | null }) {
+    this.state.tables.push({
+      id: uid("t"),
+      zone: input.zone,
+      number: input.number,
+      seats: input.seats,
+      status: "libre",
+      waiterId: null,
+      branchId: input.branchId,
+    });
+    this.pushLog("Gerencia", `Agregó Mesa ${input.number} (${input.zone})`);
+    this.persist();
+  }
+
+  async updateTable(id: string, patch: Partial<{ zone: string; number: number; seats: number }>) {
+    const t = this.state.tables.find((x) => x.id === id);
+    if (!t) return;
+    Object.assign(t, patch);
+    this.pushLog("Gerencia", `Editó Mesa ${t.number}`);
+    this.persist();
+  }
+
+  async removeTable(id: string) {
+    const t = this.state.tables.find((x) => x.id === id);
+    if (!t) return;
+    if (t.status !== "libre") throw new Error("No se puede eliminar una mesa ocupada");
+    this.state.tables = this.state.tables.filter((x) => x.id !== id);
+    this.pushLog("Gerencia", `Eliminó Mesa ${t.number}`);
+    this.persist();
   }
 
   // ---- Orders ----

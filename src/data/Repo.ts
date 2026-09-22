@@ -50,6 +50,10 @@ export interface Repo {
 
   // Floor
   getTables(branchId?: string | null): Promise<RestaurantTable[]>;
+  /** Configuración de mesas (gerencia). */
+  addTable(input: { zone: string; number: number; seats: number; branchId: string | null }): Promise<void>;
+  updateTable(id: string, patch: Partial<{ zone: string; number: number; seats: number }>): Promise<void>;
+  removeTable(id: string): Promise<void>;
 
   // Orders
   getOpenOrders(branchId?: string | null): Promise<Order[]>;
