@@ -6,6 +6,7 @@ import type {
   ModifierExtra,
   ModifierPref,
   RestaurantTable,
+  Branch,
   Order,
   OrderLine,
   KitchenTicket,
@@ -72,8 +73,16 @@ export class SupabaseRepo implements Repo {
     return (data ?? []).map((r) => ({ id: r.id, key: r.key, name: r.name }));
   }
 
-  async getTables(): Promise<RestaurantTable[]> {
-    const { data, error } = await this.sb.from("restaurant_tables").select("*").order("number");
+  async getBranches(): Promise<Branch[]> {
+    const { data, error } = await this.sb.from("branches").select("*").order("name");
+    if (error) throw error;
+    return (data ?? []).map((b) => ({ id: b.id, name: b.name, city: b.city }));
+  }
+
+  async getTables(branchId?: string | null): Promise<RestaurantTable[]> {
+    let q = this.sb.from("restaurant_tables").select("*").order("number");
+    if (branchId) q = q.eq("branch_id", branchId);
+    const { data, error } = await q;
     if (error) throw error;
     return (data ?? []).map(mapTable);
   }
@@ -109,6 +118,7 @@ export class SupabaseRepo implements Repo {
       openedAt: o.opened_at,
       paidMethod: o.paid_method,
       paidTotal: o.paid_total != null ? Number(o.paid_total) : null,
+      branchId: o.branch_id,
       lines: (lines ?? []).map(mapLine),
     };
   }
@@ -116,9 +126,10 @@ export class SupabaseRepo implements Repo {
   async openOrder(tableId: string): Promise<Order> {
     const existing = await this.getOpenOrderForTable(tableId);
     if (existing) return existing;
+    const { data: tbl } = await this.sb.from("restaurant_tables").select("branch_id").eq("id", tableId).maybeSingle();
     const { data, error } = await this.sb
       .from("orders")
-      .insert({ tenant_id: this.tenantId, table_id: tableId, status: "abierta" })
+      .insert({ tenant_id: this.tenantId, table_id: tableId, status: "abierta", branch_id: tbl?.branch_id ?? null })
       .select("*")
       .single();
     if (error) throw error;
@@ -301,23 +312,18 @@ export class SupabaseRepo implements Repo {
     if (error) throw error;
   }
 
-  async getOpenOrders(): Promise<Order[]> {
-    const { data, error } = await this.sb
-      .from("orders")
-      .select("*")
-      .not("status", "in", "(cobrada,anulada)")
-      .order("opened_at");
+  async getOpenOrders(branchId?: string | null): Promise<Order[]> {
+    let q = this.sb.from("orders").select("*").not("status", "in", "(cobrada,anulada)").order("opened_at");
+    if (branchId) q = q.eq("branch_id", branchId);
+    const { data, error } = await q;
     if (error) throw error;
     return Promise.all((data ?? []).map((o) => this.hydrateOrder(o)));
   }
 
-  async getPaidOrders(): Promise<Order[]> {
-    const { data, error } = await this.sb
-      .from("orders")
-      .select("*")
-      .eq("status", "cobrada")
-      .order("closed_at", { ascending: false })
-      .limit(200);
+  async getPaidOrders(branchId?: string | null): Promise<Order[]> {
+    let q = this.sb.from("orders").select("*").eq("status", "cobrada").order("closed_at", { ascending: false }).limit(200);
+    if (branchId) q = q.eq("branch_id", branchId);
+    const { data, error } = await q;
     if (error) throw error;
     return Promise.all((data ?? []).map((o) => this.hydrateOrder(o)));
   }
@@ -817,7 +823,7 @@ function mapItem(r: Row<"menu_items">): MenuItem {
   };
 }
 function mapTable(r: Row<"restaurant_tables">): RestaurantTable {
-  return { id: r.id, zone: r.zone, number: r.number, seats: r.seats, status: r.status, waiterId: r.waiter_id };
+  return { id: r.id, zone: r.zone, number: r.number, seats: r.seats, status: r.status, waiterId: r.waiter_id, branchId: r.branch_id };
 }
 function mapComprobante(r: Row<"comprobantes">): Comprobante {
   return {

@@ -21,12 +21,14 @@ import type {
   CardChargeResult,
 } from "../model";
 import { stubSunatGateway } from "../sunat/gateway";
+import type { Branch } from "../model";
 import {
   CATEGORIES,
   MENU_ITEMS,
   EXTRAS,
   PREFS,
   RECIPES,
+  BRANCHES,
   seedTables,
   seedInventory,
   seedMenuChanges,
@@ -147,8 +149,13 @@ export class MockRepo implements Repo {
     this.persist();
   }
 
-  async getTables() {
-    return [...this.state.tables];
+  async getBranches(): Promise<Branch[]> {
+    return BRANCHES.map((b) => ({ ...b }));
+  }
+
+  async getTables(branchId?: string | null) {
+    const all = [...this.state.tables];
+    return branchId ? all.filter((t) => t.branchId === branchId) : all;
   }
 
   // ---- Orders ----
@@ -158,12 +165,18 @@ export class MockRepo implements Repo {
     );
   }
 
-  async getOpenOrders() {
-    return this.state.orders.filter((o) => o.status !== "cobrada" && o.status !== "anulada" && o.lines.length > 0);
+  async getOpenOrders(branchId?: string | null) {
+    return this.state.orders.filter(
+      (o) =>
+        o.status !== "cobrada" &&
+        o.status !== "anulada" &&
+        o.lines.length > 0 &&
+        (!branchId || o.branchId === branchId),
+    );
   }
 
-  async getPaidOrders() {
-    return this.state.orders.filter((o) => o.status === "cobrada");
+  async getPaidOrders(branchId?: string | null) {
+    return this.state.orders.filter((o) => o.status === "cobrada" && (!branchId || o.branchId === branchId));
   }
 
   async getOpenOrderForTable(tableId: string) {
@@ -183,6 +196,7 @@ export class MockRepo implements Repo {
       status: "abierta",
       openedAt: new Date().toISOString(),
       lines: [],
+      branchId: table?.branchId ?? null,
     };
     this.state.orders.push(order);
     if (table) table.status = "ocupada";

@@ -4,6 +4,7 @@ import type {
   ModifierExtra,
   ModifierPref,
   RestaurantTable,
+  Branch,
   Order,
   KitchenTicket,
   DraftLine,
@@ -43,12 +44,15 @@ export interface Repo {
   setMenuPrice(itemId: string, price: number): Promise<void>;
   setMenuAvailable(itemId: string, available: boolean): Promise<void>;
 
+  // Sucursales
+  getBranches(): Promise<Branch[]>;
+
   // Floor
-  getTables(): Promise<RestaurantTable[]>;
+  getTables(branchId?: string | null): Promise<RestaurantTable[]>;
 
   // Orders
-  getOpenOrders(): Promise<Order[]>;
-  getPaidOrders(): Promise<Order[]>;
+  getOpenOrders(branchId?: string | null): Promise<Order[]>;
+  getPaidOrders(branchId?: string | null): Promise<Order[]>;
   getOpenOrderForTable(tableId: string): Promise<Order | null>;
   openOrder(tableId: string): Promise<Order>;
   addLine(orderId: string, line: DraftLine): Promise<void>;

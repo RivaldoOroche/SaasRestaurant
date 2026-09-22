@@ -68,6 +68,11 @@ export const PREFS: ModifierPref[] = [
 
 export const TERMS = ["Rojo", "Medio", "Tres cuartos", "Bien cocido"];
 
+export const BRANCHES = [
+  { id: "br-1", name: "Miraflores", city: "Lima" },
+  { id: "br-2", name: "San Isidro", city: "Lima" },
+];
+
 export function seedTables(): RestaurantTable[] {
   const tables: RestaurantTable[] = [];
   const zones: Array<[string, number, number]> = [
@@ -77,7 +82,9 @@ export function seedTables(): RestaurantTable[] {
   ];
   for (const [zone, lo, hi] of zones) {
     for (let n = lo; n <= hi; n++) {
-      tables.push({ id: `t-${n}`, zone, number: n, seats: zone === "Barra" ? 2 : 4, status: "libre", waiterId: null });
+      // Mesas 1–12 en Miraflores, 13–20 en San Isidro.
+      const branchId = n <= 12 ? "br-1" : "br-2";
+      tables.push({ id: `t-${n}`, zone, number: n, seats: zone === "Barra" ? 2 : 4, status: "libre", waiterId: null, branchId });
     }
   }
   // A couple pre-seeded as occupied for demo texture.

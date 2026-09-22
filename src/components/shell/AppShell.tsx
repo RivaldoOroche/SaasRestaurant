@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Outlet } from "react-router-dom";
 import { Rail } from "./Rail";
+import { BranchBar } from "./BranchBar";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { useRepoSubscription, useSunatActions } from "@/data/hooks";
@@ -25,6 +26,7 @@ export function AppShell() {
     <div className="flex h-full w-full bg-bg text-ink mob:flex-col">
       <Rail />
       <main className="flex-1 min-h-0 min-w-0 flex flex-col mob:order-1">
+        {session && session.role !== "saas" && <BranchBar />}
         {session && session.role !== "saas" && !online && (
           <div className="bg-warning/15 text-warning px-4 py-1.5 text-sm text-center no-print">
             📴 Sin conexión — ventas y comprobantes se registran localmente y se enviarán a SUNAT al reconectar.

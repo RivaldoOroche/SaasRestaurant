@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { getRepo } from "./index";
 import { useAuth } from "@/auth/AuthContext";
+import { useBranchStore } from "@/store/branch";
 import type { DraftLine } from "./model";
 import type { PayInput } from "./Repo";
 
@@ -39,9 +40,14 @@ export function usePrefs() {
   const repo = useRepo();
   return useQuery({ queryKey: ["prefs"], queryFn: () => repo.getPrefs() });
 }
+export function useBranches() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["branches"], queryFn: () => repo.getBranches() });
+}
 export function useTables() {
   const repo = useRepo();
-  return useQuery({ queryKey: ["tables"], queryFn: () => repo.getTables() });
+  const branchId = useBranchStore((s) => s.branchId);
+  return useQuery({ queryKey: ["tables", branchId], queryFn: () => repo.getTables(branchId) });
 }
 export function useOpenOrder(tableId: string | null) {
   const repo = useRepo();
@@ -57,11 +63,13 @@ export function useKitchenTickets() {
 }
 export function useOpenOrders() {
   const repo = useRepo();
-  return useQuery({ queryKey: ["openOrders"], queryFn: () => repo.getOpenOrders() });
+  const branchId = useBranchStore((s) => s.branchId);
+  return useQuery({ queryKey: ["openOrders", branchId], queryFn: () => repo.getOpenOrders(branchId) });
 }
 export function usePaidOrders() {
   const repo = useRepo();
-  return useQuery({ queryKey: ["paidOrders"], queryFn: () => repo.getPaidOrders() });
+  const branchId = useBranchStore((s) => s.branchId);
+  return useQuery({ queryKey: ["paidOrders", branchId], queryFn: () => repo.getPaidOrders(branchId) });
 }
 export function useCustomers() {
   const repo = useRepo();

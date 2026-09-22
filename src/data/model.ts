@@ -40,6 +40,12 @@ export interface ModifierPref {
   name: string;
 }
 
+export interface Branch {
+  id: string;
+  name: string;
+  city: string;
+}
+
 export interface RestaurantTable {
   id: string;
   zone: string;
@@ -47,6 +53,7 @@ export interface RestaurantTable {
   seats: number;
   status: TableStatus;
   waiterId: string | null;
+  branchId?: string | null;
 }
 
 export interface OrderLine {
@@ -72,6 +79,7 @@ export interface Order {
   lines: OrderLine[];
   paidMethod?: string | null;
   paidTotal?: number | null;
+  branchId?: string | null;
 }
 
 export interface TicketLine {
