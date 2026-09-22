@@ -5,6 +5,7 @@ import type {
   ModifierPref,
   RestaurantTable,
   Branch,
+  BranchSales,
   Order,
   KitchenTicket,
   DraftLine,
@@ -66,8 +67,11 @@ export interface Repo {
   payOrder(input: PayInput): Promise<void>;
 
   // Kitchen
-  getKitchenTickets(): Promise<KitchenTicket[]>;
+  getKitchenTickets(branchId?: string | null): Promise<KitchenTicket[]>;
   advanceTicket(ticketId: string): Promise<void>;
+
+  // Sucursales — ventas agregadas (comparativa del dueño)
+  getBranchSales(): Promise<BranchSales[]>;
 
   // CRM / loyalty
   getCustomers(): Promise<Customer[]>;

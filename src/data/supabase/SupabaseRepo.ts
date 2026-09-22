@@ -7,6 +7,7 @@ import type {
   ModifierPref,
   RestaurantTable,
   Branch,
+  BranchSales,
   Order,
   OrderLine,
   KitchenTicket,
@@ -179,6 +180,7 @@ export class SupabaseRepo implements Repo {
         order_id: orderId,
         table_label: `Mesa ${hydrated.tableLabel}`,
         col: "nuevos",
+        branch_id: hydrated.branchId ?? null,
       })
       .select("id")
       .single();
@@ -189,12 +191,10 @@ export class SupabaseRepo implements Repo {
     await this.sb.from("orders").update({ status: "en_cocina" }).eq("id", orderId);
   }
 
-  async getKitchenTickets(): Promise<KitchenTicket[]> {
-    const { data, error } = await this.sb
-      .from("kitchen_tickets")
-      .select("*")
-      .neq("col", "entregado")
-      .order("entered_at");
+  async getKitchenTickets(branchId?: string | null): Promise<KitchenTicket[]> {
+    let q = this.sb.from("kitchen_tickets").select("*").neq("col", "entregado").order("entered_at");
+    if (branchId) q = q.eq("branch_id", branchId);
+    const { data, error } = await q;
     if (error) throw error;
     const tickets = data ?? [];
     const ids = tickets.map((t) => t.id);
@@ -209,8 +209,28 @@ export class SupabaseRepo implements Repo {
       enteredAt: new Date(t.entered_at).getTime(),
       note: t.note,
       done: t.done,
+      branchId: t.branch_id,
       lines: (lines ?? []).filter((l) => l.ticket_id === t.id).map((l) => ({ qty: l.qty, name: l.name })),
     }));
+  }
+
+  async getBranchSales(): Promise<BranchSales[]> {
+    const [{ data: branches }, { data: paid }] = await Promise.all([
+      this.sb.from("branches").select("*").order("name"),
+      this.sb.from("orders").select("branch_id, paid_total").eq("status", "cobrada").limit(2000),
+    ]);
+    const totals = new Map<string, { sales: number; orders: number }>();
+    for (const o of paid ?? []) {
+      if (!o.branch_id) continue;
+      const cur = totals.get(o.branch_id) ?? { sales: 0, orders: 0 };
+      cur.sales += Number(o.paid_total ?? 0);
+      cur.orders += 1;
+      totals.set(o.branch_id, cur);
+    }
+    return (branches ?? []).map((b) => {
+      const t = totals.get(b.id) ?? { sales: 0, orders: 0 };
+      return { branchId: b.id, name: b.name, city: b.city, sales: Math.round(t.sales * 100) / 100, orders: t.orders };
+    });
   }
 
   async advanceTicket(ticketId: string): Promise<void> {

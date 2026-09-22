@@ -59,7 +59,12 @@ export function useOpenOrder(tableId: string | null) {
 }
 export function useKitchenTickets() {
   const repo = useRepo();
-  return useQuery({ queryKey: ["kitchen"], queryFn: () => repo.getKitchenTickets(), refetchInterval: 5000 });
+  const branchId = useBranchStore((s) => s.branchId);
+  return useQuery({ queryKey: ["kitchen", branchId], queryFn: () => repo.getKitchenTickets(branchId), refetchInterval: 5000 });
+}
+export function useBranchSales() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["branchSales"], queryFn: () => repo.getBranchSales() });
 }
 export function useOpenOrders() {
   const repo = useRepo();
@@ -140,7 +145,12 @@ export function useOrderActions(tableId: string | null) {
   });
   const payOrder = useMutation({
     mutationFn: (input: PayInput) => repo.payOrder(input),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      qc.invalidateQueries({ queryKey: ["paidOrders"] });
+      qc.invalidateQueries({ queryKey: ["openOrders"] });
+      qc.invalidateQueries({ queryKey: ["branchSales"] });
+    },
   });
 
   return { openOrder, addLine, setQty, removeLine, clearOrder, sendToKitchen, payOrder };

@@ -21,7 +21,7 @@ import type {
   CardChargeResult,
 } from "../model";
 import { stubSunatGateway } from "../sunat/gateway";
-import type { Branch } from "../model";
+import type { Branch, BranchSales } from "../model";
 import {
   CATEGORIES,
   MENU_ITEMS,
@@ -313,6 +313,7 @@ export class MockRepo implements Repo {
       note: "",
       done: false,
       lines: order.lines.map((l) => ({ qty: l.qty, name: l.name })),
+      branchId: order.branchId ?? null,
     };
     this.state.tickets.push(ticket);
     order.status = "en_cocina";
@@ -320,8 +321,16 @@ export class MockRepo implements Repo {
     this.persist();
   }
 
-  async getKitchenTickets() {
-    return this.state.tickets.filter((t) => t.col !== "entregado");
+  async getKitchenTickets(branchId?: string | null) {
+    return this.state.tickets.filter((t) => t.col !== "entregado" && (!branchId || t.branchId === branchId));
+  }
+
+  async getBranchSales(): Promise<BranchSales[]> {
+    return BRANCHES.map((b) => {
+      const paid = this.state.orders.filter((o) => o.status === "cobrada" && o.branchId === b.id);
+      const sales = Math.round(paid.reduce((s, o) => s + (o.paidTotal ?? 0), 0) * 100) / 100;
+      return { branchId: b.id, name: b.name, city: b.city, sales, orders: paid.length };
+    });
   }
 
   async advanceTicket(ticketId: string) {

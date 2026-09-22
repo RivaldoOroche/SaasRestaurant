@@ -97,6 +97,16 @@ export interface KitchenTicket {
   note: string;
   done: boolean;
   lines: TicketLine[];
+  branchId?: string | null;
+}
+
+/** Ventas agregadas por sucursal (comparativa del dueño). */
+export interface BranchSales {
+  branchId: string;
+  name: string;
+  city: string;
+  sales: number;
+  orders: number;
 }
 
 /** A line being built in the cart before it's persisted to an order. */

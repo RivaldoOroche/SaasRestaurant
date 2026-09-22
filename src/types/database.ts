@@ -75,7 +75,7 @@ export interface Tables {
     Row: { id: string; tenant_id: string; order_id: string; menu_item_id: string | null; name: string; qty: number; unit_price: number; extra_price: number; modifiers: string; split_payer: number | null } & Timestamps;
   };
   kitchen_tickets: {
-    Row: { id: string; tenant_id: string; order_id: string | null; table_label: string; col: KdsColumn; entered_at: string; note: string; done: boolean };
+    Row: { id: string; tenant_id: string; order_id: string | null; table_label: string; col: KdsColumn; entered_at: string; note: string; done: boolean; branch_id: string | null };
   };
   ticket_lines: {
     Row: { id: string; ticket_id: string; qty: number; name: string };
