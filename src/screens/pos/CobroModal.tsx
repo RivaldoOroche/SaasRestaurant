@@ -8,6 +8,7 @@ import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
 import { Qr } from "@/components/Qr";
 import { tokenizeCard } from "@/lib/cardToken";
+import { printThermal } from "@/lib/printThermal";
 import { isBackendConfigured } from "@/lib/supabase";
 import { ComprobanteDoc } from "./ComprobanteDoc";
 import type { Order, Comprobante, ComprobanteTipo } from "@/data/model";
@@ -433,9 +434,14 @@ export function CobroModal({
                   Emitir {docTipo}
                 </Button>
               ) : (
-                <Button variant="secondary" onClick={() => window.print()}>
-                  🖨 Imprimir
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="secondary" onClick={() => window.print()}>
+                    🖨 Imprimir
+                  </Button>
+                  <Button variant="secondary" onClick={printThermal}>
+                    🧾 80mm
+                  </Button>
+                </div>
               )}
               <Button
                 onClick={() => {

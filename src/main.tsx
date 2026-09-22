@@ -15,3 +15,12 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+// PWA: registra el service worker en producción (offline básico + instalable).
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* sin SW: la app sigue funcionando online */
+    });
+  });
+}

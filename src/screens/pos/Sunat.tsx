@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { formatMoney } from "@/lib/money";
+import { printThermal } from "@/lib/printThermal";
 import { ComprobanteDoc } from "./ComprobanteDoc";
 import type { Comprobante, ComprobanteTipo, ResumenDiario, BajaResult, SunatStatus } from "@/data/model";
 
@@ -296,6 +297,9 @@ export function Sunat() {
               )}
               <Button variant="secondary" onClick={() => window.print()}>
                 🖨 Imprimir
+              </Button>
+              <Button variant="secondary" onClick={printThermal}>
+                🧾 Ticket 80mm
               </Button>
               <Button onClick={() => setVer(null)}>Cerrar</Button>
             </div>

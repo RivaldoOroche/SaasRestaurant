@@ -1,0 +1,13 @@
+{
+  "name": "Wayra POS",
+  "short_name": "Wayra",
+  "description": "Punto de venta y facturación electrónica para restaurantes.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#161826",
+  "theme_color": "#161826",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

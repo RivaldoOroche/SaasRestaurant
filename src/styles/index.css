@@ -79,4 +79,16 @@
   .no-print {
     display: none !important;
   }
+  /* Ticket térmico 80mm: la anchura de página la fija printThermal() vía @page. */
+  body.print-80 .print-area {
+    width: 72mm !important;
+    max-width: 72mm !important;
+    font-size: 11px !important;
+    line-height: 1.35 !important;
+    padding: 0 !important;
+  }
+  body.print-80 .print-area .rounded-lg,
+  body.print-80 .print-area [class*="border"] {
+    border-radius: 0 !important;
+  }
 }
