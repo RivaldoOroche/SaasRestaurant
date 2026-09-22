@@ -509,6 +509,22 @@ export class SupabaseRepo implements Repo {
     return map;
   }
 
+  async setRecipe(menuItemId: string, lines: { inventoryId: string; qtyPerUnit: number }[]): Promise<void> {
+    // Reemplaza la receta: borra las líneas actuales e inserta las nuevas.
+    await this.sb.from("recipes").delete().eq("menu_item_id", menuItemId);
+    if (lines.length > 0) {
+      const { error } = await this.sb.from("recipes").insert(
+        lines.map((l) => ({
+          tenant_id: this.tenantId,
+          menu_item_id: menuItemId,
+          inventory_id: l.inventoryId,
+          qty_per_unit: l.qtyPerUnit,
+        })),
+      );
+      if (error) throw error;
+    }
+  }
+
   async adjustInventory(itemId: string, delta: number, actor: string): Promise<void> {
     const { data: inv } = await this.sb.from("inventory_items").select("stock, name").eq("id", itemId).maybeSingle();
     if (!inv) return;

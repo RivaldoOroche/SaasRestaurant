@@ -12,6 +12,7 @@ import type {
   BusinessSettings,
   MenuChange,
   MenuItem,
+  RecipeLine,
   Comprobante,
   EmitComprobanteInput,
   ResumenDiario,
@@ -59,6 +60,7 @@ interface MockState {
   comprobantes: Comprobante[];
   branches: Branch[];
   staff: MockStaff[];
+  recipes: Record<string, RecipeLine[]>;
 }
 
 function initialsOf(name: string): string {
@@ -119,6 +121,7 @@ function loadState(): MockState {
     comprobantes: [],
     branches: BRANCHES.map((b) => ({ ...b })),
     staff: seedStaff(),
+    recipes: JSON.parse(JSON.stringify(RECIPES)) as Record<string, RecipeLine[]>,
   };
 }
 
@@ -468,7 +471,7 @@ export class MockRepo implements Repo {
   private deductInventory(order: Order) {
     const need = new Map<string, number>();
     for (const line of order.lines) {
-      const recipe = line.itemId ? RECIPES[line.itemId] : undefined;
+      const recipe = line.itemId ? this.state.recipes[line.itemId] : undefined;
       if (!recipe) continue;
       for (const r of recipe) {
         need.set(r.inventoryId, (need.get(r.inventoryId) ?? 0) + r.qtyPerUnit * line.qty);
@@ -521,7 +524,13 @@ export class MockRepo implements Repo {
     return [...this.state.inventory];
   }
   async getRecipes() {
-    return RECIPES;
+    return this.state.recipes;
+  }
+  async setRecipe(menuItemId: string, lines: RecipeLine[]) {
+    if (lines.length === 0) delete this.state.recipes[menuItemId];
+    else this.state.recipes[menuItemId] = lines.map((l) => ({ ...l }));
+    this.pushLog("Gerencia", `Actualizó la receta de ${menuItemId}`);
+    this.persist();
   }
   async adjustInventory(itemId: string, delta: number, actor: string) {
     const inv = this.state.inventory.find((i) => i.id === itemId);

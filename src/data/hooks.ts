@@ -342,6 +342,11 @@ export function useTenantActions() {
       repo.setMenuAvailable(itemId, available),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["menuItems"] }),
   });
+  const setRecipe = useMutation({
+    mutationFn: ({ menuItemId, lines }: { menuItemId: string; lines: { inventoryId: string; qtyPerUnit: number }[] }) =>
+      repo.setRecipe(menuItemId, lines),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recipes"] }),
+  });
   return {
     adjustInventory,
     reviewChange,
@@ -350,5 +355,6 @@ export function useTenantActions() {
     setFiscalCredentials,
     setMenuPrice,
     setMenuAvailable,
+    setRecipe,
   };
 }
