@@ -6,6 +6,8 @@ import type {
   RestaurantTable,
   Branch,
   BranchSales,
+  StaffMember,
+  StaffRole,
   Order,
   KitchenTicket,
   DraftLine,
@@ -47,6 +49,15 @@ export interface Repo {
 
   // Sucursales
   getBranches(): Promise<Branch[]>;
+  addBranch(name: string, city: string): Promise<void>;
+  updateBranch(id: string, patch: Partial<{ name: string; city: string }>): Promise<void>;
+  removeBranch(id: string): Promise<void>;
+
+  // Personal (staff_members)
+  getStaff(): Promise<StaffMember[]>;
+  addStaff(input: { name: string; role: StaffRole; pin: string }): Promise<void>;
+  updateStaff(id: string, patch: Partial<{ name: string; role: StaffRole; active: boolean }>): Promise<void>;
+  setStaffPin(id: string, pin: string): Promise<void>;
 
   // Floor
   getTables(branchId?: string | null): Promise<RestaurantTable[]>;

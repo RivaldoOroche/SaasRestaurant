@@ -8,6 +8,8 @@ import type {
   RestaurantTable,
   Branch,
   BranchSales,
+  StaffMember,
+  StaffRole,
   Order,
   OrderLine,
   KitchenTicket,
@@ -78,6 +80,63 @@ export class SupabaseRepo implements Repo {
     const { data, error } = await this.sb.from("branches").select("*").order("name");
     if (error) throw error;
     return (data ?? []).map((b) => ({ id: b.id, name: b.name, city: b.city }));
+  }
+
+  async addBranch(name: string, city: string): Promise<void> {
+    const { error } = await this.sb.from("branches").insert({ tenant_id: this.tenantId, name, city });
+    if (error) throw error;
+  }
+  async updateBranch(id: string, patch: Partial<{ name: string; city: string }>): Promise<void> {
+    const { error } = await this.sb.from("branches").update(patch).eq("id", id);
+    if (error) throw error;
+  }
+  async removeBranch(id: string): Promise<void> {
+    const { count } = await this.sb
+      .from("restaurant_tables")
+      .select("id", { count: "exact", head: true })
+      .eq("branch_id", id);
+    if (count && count > 0) throw new Error("La sucursal tiene mesas; elimínalas o muévelas primero");
+    const { error } = await this.sb.from("branches").delete().eq("id", id);
+    if (error) throw error;
+  }
+
+  // ---- Personal ----
+  async getStaff(): Promise<StaffMember[]> {
+    const { data, error } = await this.sb
+      .from("staff_members")
+      .select("id, name, initials, role, active")
+      .order("name");
+    if (error) throw error;
+    return (data ?? []).map((s) => ({
+      id: s.id,
+      name: s.name,
+      initials: s.initials,
+      role: s.role as StaffRole,
+      active: s.active,
+    }));
+  }
+  async addStaff(input: { name: string; role: StaffRole; pin: string }): Promise<void> {
+    const pin_hash = await sha256Hex(input.pin);
+    const { error } = await this.sb.from("staff_members").insert({
+      tenant_id: this.tenantId,
+      name: input.name,
+      initials: initialsOf(input.name),
+      role: input.role,
+      pin_hash,
+      active: true,
+    });
+    if (error) throw error;
+  }
+  async updateStaff(id: string, patch: Partial<{ name: string; role: StaffRole; active: boolean }>): Promise<void> {
+    const row: Database["public"]["Tables"]["staff_members"]["Update"] = { ...patch };
+    if (patch.name) row.initials = initialsOf(patch.name);
+    const { error } = await this.sb.from("staff_members").update(row).eq("id", id);
+    if (error) throw error;
+  }
+  async setStaffPin(id: string, pin: string): Promise<void> {
+    const pin_hash = await sha256Hex(pin);
+    const { error } = await this.sb.from("staff_members").update({ pin_hash }).eq("id", id);
+    if (error) throw error;
   }
 
   async getTables(branchId?: string | null): Promise<RestaurantTable[]> {
@@ -846,6 +905,19 @@ export class SupabaseRepo implements Repo {
       void this.sb.removeChannel(channel);
     };
   }
+}
+
+async function sha256Hex(s: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
 }
 
 function mapCategory(r: Row<"menu_categories">): Category {

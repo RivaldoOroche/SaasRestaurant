@@ -46,6 +46,16 @@ export interface Branch {
   city: string;
 }
 
+export type StaffRole = "dueno" | "admin" | "mesero";
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  initials: string;
+  role: StaffRole;
+  active: boolean;
+}
+
 export interface RestaurantTable {
   id: string;
   zone: string;

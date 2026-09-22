@@ -66,6 +66,55 @@ export function useBranchSales() {
   const repo = useRepo();
   return useQuery({ queryKey: ["branchSales"], queryFn: () => repo.getBranchSales() });
 }
+export function useStaff() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["staff"], queryFn: () => repo.getStaff() });
+}
+
+/** Gestión de sucursales (dueño). */
+export function useBranchActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["branches"] });
+    qc.invalidateQueries({ queryKey: ["branchSales"] });
+  };
+  const addBranch = useMutation({
+    mutationFn: ({ name, city }: { name: string; city: string }) => repo.addBranch(name, city),
+    onSuccess: invalidate,
+  });
+  const updateBranch = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof repo.updateBranch>[1] }) =>
+      repo.updateBranch(id, patch),
+    onSuccess: invalidate,
+  });
+  const removeBranch = useMutation({
+    mutationFn: (id: string) => repo.removeBranch(id),
+    onSuccess: invalidate,
+  });
+  return { addBranch, updateBranch, removeBranch };
+}
+
+/** Gestión de personal (dueño). */
+export function useStaffActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["staff"] });
+  const addStaff = useMutation({
+    mutationFn: (input: Parameters<typeof repo.addStaff>[0]) => repo.addStaff(input),
+    onSuccess: invalidate,
+  });
+  const updateStaff = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof repo.updateStaff>[1] }) =>
+      repo.updateStaff(id, patch),
+    onSuccess: invalidate,
+  });
+  const setStaffPin = useMutation({
+    mutationFn: ({ id, pin }: { id: string; pin: string }) => repo.setStaffPin(id, pin),
+    onSuccess: invalidate,
+  });
+  return { addStaff, updateStaff, setStaffPin };
+}
 export function useOpenOrders() {
   const repo = useRepo();
   const branchId = useBranchStore((s) => s.branchId);

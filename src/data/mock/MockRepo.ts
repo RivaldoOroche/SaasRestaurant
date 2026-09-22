@@ -21,7 +21,7 @@ import type {
   CardChargeResult,
 } from "../model";
 import { stubSunatGateway } from "../sunat/gateway";
-import type { Branch, BranchSales } from "../model";
+import type { Branch, BranchSales, StaffMember, StaffRole } from "../model";
 import {
   CATEGORIES,
   MENU_ITEMS,
@@ -42,6 +42,10 @@ interface MenuOverride {
   available?: boolean;
 }
 
+interface MockStaff extends StaffMember {
+  pin?: string; // solo demo (local)
+}
+
 interface MockState {
   tables: RestaurantTable[];
   orders: Order[];
@@ -53,6 +57,26 @@ interface MockState {
   changes: MenuChange[];
   menuOverrides: Record<string, MenuOverride>;
   comprobantes: Comprobante[];
+  branches: Branch[];
+  staff: MockStaff[];
+}
+
+function initialsOf(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function seedStaff(): MockStaff[] {
+  return [
+    { id: uid("st"), name: "Mónica R.", initials: "MR", role: "dueno", active: true, pin: "1111" },
+    { id: uid("st"), name: "Iker Solís", initials: "IS", role: "admin", active: true, pin: "2222" },
+    { id: uid("st"), name: "Ana Ruiz", initials: "AR", role: "mesero", active: true, pin: "3333" },
+    { id: uid("st"), name: "Carlos Vega", initials: "CV", role: "mesero", active: true, pin: "4444" },
+  ];
 }
 
 const KEY = "nubepos-mock-v4";
@@ -93,6 +117,8 @@ function loadState(): MockState {
     changes: seedMenuChanges(),
     menuOverrides: {},
     comprobantes: [],
+    branches: BRANCHES.map((b) => ({ ...b })),
+    staff: seedStaff(),
   };
 }
 
@@ -150,7 +176,64 @@ export class MockRepo implements Repo {
   }
 
   async getBranches(): Promise<Branch[]> {
-    return BRANCHES.map((b) => ({ ...b }));
+    return this.state.branches.map((b) => ({ ...b }));
+  }
+
+  async addBranch(name: string, city: string) {
+    this.state.branches.push({ id: uid("br"), name, city });
+    this.pushLog("Dueño", `Creó sucursal ${name}`);
+    this.persist();
+  }
+  async updateBranch(id: string, patch: Partial<{ name: string; city: string }>) {
+    const b = this.state.branches.find((x) => x.id === id);
+    if (!b) return;
+    Object.assign(b, patch);
+    this.pushLog("Dueño", `Editó sucursal ${b.name}`);
+    this.persist();
+  }
+  async removeBranch(id: string) {
+    if (this.state.tables.some((t) => t.branchId === id)) {
+      throw new Error("La sucursal tiene mesas; elimínalas o muévelas primero");
+    }
+    const b = this.state.branches.find((x) => x.id === id);
+    this.state.branches = this.state.branches.filter((x) => x.id !== id);
+    if (b) this.pushLog("Dueño", `Eliminó sucursal ${b.name}`);
+    this.persist();
+  }
+
+  // ---- Personal ----
+  async getStaff(): Promise<StaffMember[]> {
+    return this.state.staff.map(({ pin: _pin, ...s }) => {
+      void _pin;
+      return { ...s };
+    });
+  }
+  async addStaff(input: { name: string; role: StaffRole; pin: string }) {
+    this.state.staff.push({
+      id: uid("st"),
+      name: input.name,
+      initials: initialsOf(input.name),
+      role: input.role,
+      active: true,
+      pin: input.pin,
+    });
+    this.pushLog("Dueño", `Agregó a ${input.name} (${input.role})`);
+    this.persist();
+  }
+  async updateStaff(id: string, patch: Partial<{ name: string; role: StaffRole; active: boolean }>) {
+    const s = this.state.staff.find((x) => x.id === id);
+    if (!s) return;
+    Object.assign(s, patch);
+    if (patch.name) s.initials = initialsOf(patch.name);
+    this.pushLog("Dueño", `Actualizó a ${s.name}`);
+    this.persist();
+  }
+  async setStaffPin(id: string, pin: string) {
+    const s = this.state.staff.find((x) => x.id === id);
+    if (!s) return;
+    s.pin = pin;
+    this.pushLog("Dueño", `Cambió el PIN de ${s.name}`);
+    this.persist();
   }
 
   async getTables(branchId?: string | null) {
@@ -360,7 +443,7 @@ export class MockRepo implements Repo {
   }
 
   async getBranchSales(): Promise<BranchSales[]> {
-    return BRANCHES.map((b) => {
+    return this.state.branches.map((b) => {
       const paid = this.state.orders.filter((o) => o.status === "cobrada" && o.branchId === b.id);
       const sales = Math.round(paid.reduce((s, o) => s + (o.paidTotal ?? 0), 0) * 100) / 100;
       return { branchId: b.id, name: b.name, city: b.city, sales, orders: paid.length };
