@@ -10,7 +10,13 @@ import { Modal } from "@/components/ui/Modal";
 import { formatMoney } from "@/lib/money";
 import { homePathForRole } from "@/lib/roles";
 import { cn } from "@/lib/cn";
+import { tokenizeCard } from "@/lib/cardToken";
+import { isBackendConfigured } from "@/lib/supabase";
 import type { Tenant, PlanTier, SaasCharge } from "@/data/platform/model";
+
+// Llave pública de la pasarela de la plataforma (para tokenizar la tarjeta del tenant).
+const PLATFORM_PK = import.meta.env.VITE_PLATFORM_CARD_PK as string | undefined;
+const PLATFORM_CARD = isBackendConfigured && !!PLATFORM_PK;
 
 const PLAN_TONE: Record<PlanTier, "neutral" | "accent" | "success"> = {
   Básico: "neutral",
@@ -78,10 +84,16 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
   const { enterTenant } = useAuth();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<SaasCharge | null>(null);
+  const [cobrar, setCobrar] = useState(false);
 
   function enter() {
     enterTenant(tenant.id, tenant.name);
     navigate(homePathForRole("dueno"));
+  }
+
+  async function cobrarDirecto() {
+    // Demo o pago no-tarjeta: registra la factura sin pasarela.
+    setInvoice(await charge.mutateAsync({ id: tenant.id, method: "tarjeta" }));
   }
 
   return (
@@ -136,16 +148,76 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
           <Button
             className="w-full"
             variant="secondary"
-            onClick={async () => setInvoice(await charge.mutateAsync({ id: tenant.id, method: "tarjeta" }))}
+            disabled={charge.isPending}
+            onClick={() => (PLATFORM_CARD ? setCobrar(true) : cobrarDirecto())}
           >
-            Cobrar / emitir factura
+            Cobrar suscripción / emitir factura
           </Button>
           <Button className="w-full" variant="ghost" onClick={() => toggleSuspend.mutate(tenant.id)}>
             {tenant.status === "Suspendido" ? "Reactivar" : "Suspender"}
           </Button>
         </div>
       </div>
+      {cobrar && (
+        <SaasCardModal
+          onClose={() => setCobrar(false)}
+          onCharge={async (token) => {
+            const inv = await charge.mutateAsync({ id: tenant.id, method: "tarjeta", token });
+            setCobrar(false);
+            setInvoice(inv);
+          }}
+        />
+      )}
       {invoice && <SaasInvoiceView charge={invoice} onClose={() => setInvoice(null)} />}
+    </Modal>
+  );
+}
+
+function SaasCardModal({ onClose, onCharge }: { onClose: () => void; onCharge: (token: string) => Promise<void> }) {
+  const [card, setCard] = useState({ number: "", expMonth: "", expYear: "", cvv: "", email: "" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function pay() {
+    setErr(null);
+    setBusy(true);
+    try {
+      const token = await tokenizeCard("culqi", PLATFORM_PK!, card);
+      await onCharge(token);
+    } catch (e) {
+      setErr((e as Error).message ?? "No se pudo procesar la tarjeta");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} labelledBy="saas-card-title" className="max-w-sm">
+      <div className="p-5 space-y-3">
+        <h2 id="saas-card-title" className="text-lg font-bold">Cobrar suscripción con tarjeta</h2>
+        <input
+          value={card.number}
+          onChange={(e) => setCard({ ...card, number: e.target.value })}
+          placeholder="Número de tarjeta"
+          className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+        />
+        <div className="grid grid-cols-3 gap-2">
+          <input value={card.expMonth} onChange={(e) => setCard({ ...card, expMonth: e.target.value })} placeholder="MM" className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono" />
+          <input value={card.expYear} onChange={(e) => setCard({ ...card, expYear: e.target.value })} placeholder="AAAA" className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono" />
+          <input value={card.cvv} onChange={(e) => setCard({ ...card, cvv: e.target.value })} placeholder="CVV" className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono" />
+        </div>
+        <input
+          value={card.email}
+          onChange={(e) => setCard({ ...card, email: e.target.value })}
+          placeholder="Correo del responsable"
+          className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+        />
+        {err && <p className="text-warning text-xs">{err}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button onClick={pay} disabled={busy}>{busy ? "Procesando…" : "Cobrar"}</Button>
+        </div>
+      </div>
     </Modal>
   );
 }

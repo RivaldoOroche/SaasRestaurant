@@ -55,7 +55,8 @@ export function usePlatformActions() {
     onSuccess: invalidate,
   });
   const charge = useMutation({
-    mutationFn: ({ id, method }: { id: string; method: string }) => repo.chargeTenant(id, method),
+    mutationFn: ({ id, method, token }: { id: string; method: string; token?: string }) =>
+      repo.chargeTenant(id, method, token),
     onSuccess: invalidate,
   });
   return { createTenant, setPlan, toggleSuspend, charge };

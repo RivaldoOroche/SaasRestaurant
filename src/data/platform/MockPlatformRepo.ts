@@ -200,10 +200,17 @@ export class MockPlatformRepo implements PlatformRepo {
     this.emit();
   }
 
-  async chargeTenant(id: string, method: string): Promise<SaasCharge> {
+  async chargeTenant(id: string, method: string, _token?: string): Promise<SaasCharge> {
+    void _token; // demo: no hay pasarela real
     const t = this.tenants.find((x) => x.id === id);
     const base = t ? Math.round((PLAN_PRICE[t.plan] / 1.18) * 100) / 100 : 0;
     const total = t ? PLAN_PRICE[t.plan] : 0;
+    // El pago activa la suscripción.
+    if (t && total > 0) {
+      t.status = "Activo";
+      t.mrr = PLAN_PRICE[t.plan];
+      this.emit();
+    }
     return {
       folio: `NP-F001-${Math.floor(1000 + Math.random() * 9000)}`,
       tenant: t?.name ?? "",

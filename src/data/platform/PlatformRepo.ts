@@ -21,6 +21,8 @@ export interface PlatformRepo {
   createTenant(input: NewTenantInput): Promise<{ tenant: Tenant; link: string }>;
   setTenantPlan(id: string, plan: PlanTier): Promise<void>;
   toggleSuspend(id: string): Promise<void>;
-  chargeTenant(id: string, method: string): Promise<SaasCharge>;
+  /** Cobra la suscripción del tenant. Con method "tarjeta" y un token de la
+   *  pasarela de la plataforma, ejecuta el cargo real vía Edge Function. */
+  chargeTenant(id: string, method: string, token?: string): Promise<SaasCharge>;
   subscribe(cb: () => void): () => void;
 }

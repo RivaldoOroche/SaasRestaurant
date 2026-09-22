@@ -70,6 +70,7 @@ supabase functions deploy sunat-emitir
 supabase functions deploy sunat-lotes
 supabase functions deploy pago-tarjeta
 supabase functions deploy onboarding-complete
+supabase functions deploy saas-cobrar
 ```
 
 Secrets del proyecto (se leen con el service role):
@@ -89,6 +90,9 @@ supabase secrets set \
 - **pago-tarjeta** — cobra con la llave secreta del tenant en
   `payment_credentials` (Culqi implementado; Izipay/Niubiz como seam).
 - **onboarding-complete** — crea el dueño y siembra el tenant desde el link firmado.
+- **saas-cobrar** — cobra la suscripción de un tenant con la pasarela de **la
+  plataforma** (secret `PLATFORM_CULQI_SECRET`); registra la factura SaaS y activa
+  el tenant. La consola tokeniza con `VITE_PLATFORM_CARD_PK`.
 
 Cada tenant configura sus datos y credenciales desde **Ajustes → Datos del emisor /
 Facturación / Pagos** (las secretas se guardan write-only, nunca se devuelven al

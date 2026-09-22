@@ -165,20 +165,34 @@ export class SupabasePlatformRepo implements PlatformRepo {
       .eq("id", id);
   }
 
-  async chargeTenant(id: string, method: string): Promise<SaasCharge> {
+  async chargeTenant(id: string, method: string, token?: string): Promise<SaasCharge> {
     const { data: t, error } = await this.sb.from("tenants").select("*").eq("id", id).single();
     if (error || !t) throw error ?? new Error("Tenant no encontrado");
     const total = PLAN_PRICE[t.plan];
     const base = Math.round((total / 1.18) * 100) / 100;
     const folio = `NP-F001-${Math.floor(1000 + Math.random() * 9000)}`;
-    await this.sb.from("saas_invoices").insert({
-      tenant_id: id,
-      folio,
-      amount: total,
-      igv: Math.round((total - base) * 100) / 100,
-      method: method as "efectivo" | "tarjeta" | "transferencia",
-      paid: true,
-    });
+
+    // Con tarjeta y token, ejecuta el cargo real con la pasarela de la plataforma.
+    if (method === "tarjeta" && token) {
+      const { data: res, error: fnErr } = await this.sb.functions.invoke("saas-cobrar", {
+        body: { tenantId: id, token, amount: total, folio },
+      });
+      if (fnErr) throw new Error(fnErr.message);
+      const r = res as { success?: boolean; error?: string };
+      if (!r.success) throw new Error(r.error ?? "El cargo de la suscripción fue rechazado");
+      // La Edge Function registra la factura y activa el tenant.
+    } else {
+      await this.sb.from("saas_invoices").insert({
+        tenant_id: id,
+        folio,
+        amount: total,
+        igv: Math.round((total - base) * 100) / 100,
+        method: method as "efectivo" | "tarjeta" | "transferencia",
+        paid: true,
+      });
+      await this.sb.from("tenants").update({ status: "Activo", mrr: total }).eq("id", id);
+    }
+
     return {
       folio,
       tenant: t.name,
