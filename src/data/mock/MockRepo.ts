@@ -158,17 +158,20 @@ export class MockRepo implements Repo {
     return branchId ? all.filter((t) => t.branchId === branchId) : all;
   }
 
-  async addTable(input: { zone: string; number: number; seats: number; branchId: string | null }) {
-    this.state.tables.push({
-      id: uid("t"),
-      zone: input.zone,
-      number: input.number,
-      seats: input.seats,
-      status: "libre",
-      waiterId: null,
-      branchId: input.branchId,
-    });
-    this.pushLog("Gerencia", `Agregó Mesa ${input.number} (${input.zone})`);
+  async addTable(input: { zone: string; number: number; seats: number; branchId: string | null; count?: number }) {
+    const count = Math.max(1, input.count ?? 1);
+    for (let i = 0; i < count; i++) {
+      this.state.tables.push({
+        id: uid("t"),
+        zone: input.zone,
+        number: input.number + i,
+        seats: input.seats,
+        status: "libre",
+        waiterId: null,
+        branchId: input.branchId,
+      });
+    }
+    this.pushLog("Gerencia", `Agregó ${count} mesa(s) en ${input.zone}`);
     this.persist();
   }
 

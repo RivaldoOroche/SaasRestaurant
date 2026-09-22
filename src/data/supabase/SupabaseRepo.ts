@@ -88,15 +88,17 @@ export class SupabaseRepo implements Repo {
     return (data ?? []).map(mapTable);
   }
 
-  async addTable(input: { zone: string; number: number; seats: number; branchId: string | null }): Promise<void> {
-    const { error } = await this.sb.from("restaurant_tables").insert({
+  async addTable(input: { zone: string; number: number; seats: number; branchId: string | null; count?: number }): Promise<void> {
+    const count = Math.max(1, input.count ?? 1);
+    const rows = Array.from({ length: count }, (_, i) => ({
       tenant_id: this.tenantId,
       branch_id: input.branchId,
       zone: input.zone,
-      number: input.number,
+      number: input.number + i,
       seats: input.seats,
-      status: "libre",
-    });
+      status: "libre" as const,
+    }));
+    const { error } = await this.sb.from("restaurant_tables").insert(rows);
     if (error) throw error;
   }
 

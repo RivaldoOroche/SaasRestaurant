@@ -117,6 +117,7 @@ function TableConfigModal({ tables, onClose }: { tables: RestaurantTable[]; onCl
   const branchId = useBranchStore((s) => s.branchId);
   const [zone, setZone] = useState("");
   const [seats, setSeats] = useState(4);
+  const [count, setCount] = useState(1);
   const [err, setErr] = useState<string | null>(null);
 
   const zonesExistentes = [...new Set(tables.map((t) => t.zone))];
@@ -125,7 +126,7 @@ function TableConfigModal({ tables, onClose }: { tables: RestaurantTable[]; onCl
   function agregar() {
     setErr(null);
     const z = zone.trim() || zonesExistentes[0] || "Salón";
-    addTable.mutate({ zone: z, number: nextNumber, seats, branchId });
+    addTable.mutate({ zone: z, number: nextNumber, seats, branchId, count });
     setZone(z);
   }
 
@@ -137,15 +138,17 @@ function TableConfigModal({ tables, onClose }: { tables: RestaurantTable[]; onCl
 
         {/* Agregar */}
         <div className="rounded-lg bg-surface-alt border border-border-soft p-3 mb-4">
-          <p className="text-xs uppercase tracking-wide text-muted mb-2">Agregar mesa (Nº {nextNumber})</p>
+          <p className="text-xs uppercase tracking-wide text-muted mb-2">
+            Agregar mesas {count > 1 ? `(Nº ${nextNumber}–${nextNumber + count - 1})` : `(Nº ${nextNumber})`}
+          </p>
           <div className="flex flex-wrap items-end gap-2">
             <div className="flex-1 min-w-[10rem]">
-              <label className="text-xs text-muted">Zona</label>
+              <label className="text-xs text-muted">Zona (elige o escribe una nueva)</label>
               <input
                 list="zonas"
                 value={zone}
                 onChange={(e) => setZone(e.target.value)}
-                placeholder={zonesExistentes[0] ?? "Salón"}
+                placeholder="Ej. Terraza, Jardín, VIP…"
                 className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
               />
               <datalist id="zonas">
@@ -154,13 +157,24 @@ function TableConfigModal({ tables, onClose }: { tables: RestaurantTable[]; onCl
                 ))}
               </datalist>
             </div>
-            <div className="w-24">
+            <div className="w-20">
               <label className="text-xs text-muted">Sillas</label>
               <input
                 type="number"
                 min={1}
                 value={seats}
                 onChange={(e) => setSeats(Math.max(1, Number(e.target.value) || 1))}
+                className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <div className="w-20">
+              <label className="text-xs text-muted">Cantidad</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={count}
+                onChange={(e) => setCount(Math.min(50, Math.max(1, Number(e.target.value) || 1)))}
                 className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
               />
             </div>

@@ -5,6 +5,7 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { generateConfigPdf } from "@/lib/configPdf";
+import { ConfigChecklist } from "@/components/ConfigChecklist";
 import type { Currency } from "@/lib/money";
 import type { BusinessSettings, CardProvider, BillingProvider, SunatMode } from "@/data/model";
 
@@ -27,6 +28,7 @@ export function Ajustes() {
     <div className="p-6 max-w-2xl">
       <ScreenHeader title="Ajustes del negocio" subtitle="Moneda, impuestos y preferencias" />
       <div className="space-y-4">
+        <ConfigChecklist />
         <Card>
           <CardBody className="space-y-4">
             <Field label="Nombre del negocio">

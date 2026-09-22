@@ -50,8 +50,8 @@ export interface Repo {
 
   // Floor
   getTables(branchId?: string | null): Promise<RestaurantTable[]>;
-  /** Configuración de mesas (gerencia). */
-  addTable(input: { zone: string; number: number; seats: number; branchId: string | null }): Promise<void>;
+  /** Configuración de mesas (gerencia). `count` agrega varias mesas de una zona. */
+  addTable(input: { zone: string; number: number; seats: number; branchId: string | null; count?: number }): Promise<void>;
   updateTable(id: string, patch: Partial<{ zone: string; number: number; seats: number }>): Promise<void>;
   removeTable(id: string): Promise<void>;
 
