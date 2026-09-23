@@ -303,7 +303,8 @@ export class SupabasePlatformRepo implements PlatformRepo {
     const token = new URL(link).searchParams.get("token");
     if (!token) throw new Error("No se pudo generar el token de alta");
     const { data, error } = await this.sb.functions.invoke("onboarding-complete", {
-      body: { token, email: credentials.email, password: credentials.password, ownerName: input.ownerName },
+      // Contraseña temporal fijada por el dueño del SaaS → forzar cambio al ingresar.
+      body: { token, email: credentials.email, password: credentials.password, ownerName: input.ownerName, mustChangePassword: true },
     });
     if (error) throw new Error(error.message);
     const r = data as { success?: boolean; error?: string };

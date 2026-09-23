@@ -12,6 +12,7 @@ import { LibroReclamaciones } from "@/screens/public/LibroReclamaciones";
 import { Legal } from "@/screens/public/Legal";
 import { Reclamaciones } from "@/screens/pos/Reclamaciones";
 import { Reservas } from "@/screens/pos/Reservas";
+import { ForceChangePassword } from "@/screens/auth/ForceChangePassword";
 import { Pedido } from "@/screens/pos/Pedido";
 import { Mesas } from "@/screens/pos/Mesas";
 import { Cocina } from "@/screens/pos/Cocina";
@@ -112,9 +113,13 @@ function HomeRedirect() {
 
 function Shell() {
   const apply = useTheme((s) => s.apply);
+  const { session, mustChangePassword } = useAuth();
   useEffect(() => {
     apply();
   }, [apply]);
+
+  // Puerta obligatoria: contraseña temporal pendiente de cambiar.
+  if (session && mustChangePassword) return <ForceChangePassword />;
 
   return (
     <Routes>

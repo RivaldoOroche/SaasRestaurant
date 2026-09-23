@@ -15,6 +15,10 @@ export interface AuthValue {
   exitTenant: () => void;
   /** Lock the session and return to the PIN screen. */
   lock: () => void;
+  /** true si el usuario entró con una contraseña temporal y debe cambiarla. */
+  mustChangePassword: boolean;
+  /** Cambia la contraseña y limpia la marca de cambio obligatorio. */
+  changePassword: (newPassword: string) => Promise<string | null>;
 }
 
 export const AuthContext = createContext<AuthValue | null>(null);

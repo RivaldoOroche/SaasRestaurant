@@ -29,7 +29,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
-    const { token, email, password, ownerName } = await req.json();
+    const { token, email, password, ownerName, mustChangePassword } = await req.json();
     if (!token || !email || !password) return json({ error: "Faltan token, email o contraseña" }, 400);
     if (String(password).length < 8) return json({ error: "La contraseña debe tener al menos 8 caracteres" }, 400);
 
@@ -57,7 +57,7 @@ export default async function handler(req: Request): Promise<Response> {
       email,
       password,
       email_confirm: true,
-      user_metadata: { name: ownerName ?? "" },
+      user_metadata: { name: ownerName ?? "", must_change_password: !!mustChangePassword },
     });
     if (uErr || !created?.user) return json({ error: `No se pudo crear el usuario: ${uErr?.message ?? "desconocido"}` }, 400);
     const userId = created.user.id;
