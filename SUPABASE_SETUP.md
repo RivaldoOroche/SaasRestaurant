@@ -30,6 +30,12 @@ Hay **dos caminos**. Elige uno:
 - **A. Dashboard (sin instalar nada)** — copiar/pegar SQL en el navegador. Más simple.
 - **B. CLI** — un comando aplica todo. Mejor para repetir/automatizar.
 
+> **Atajo todo-en-uno**: si solo quieres dejar la base lista rápido, abre el
+> SQL Editor, pega **`supabase/setup_all.sql`** (contiene las 17 migraciones
+> **en orden** + el seed) y pulsa **Run** una sola vez. Luego salta a la
+> [sección 5](#5-crear-las-cuentas-de-acceso) (cuentas de Auth). Los pasos 3 y 4
+> de abajo son la versión detallada archivo por archivo.
+
 ---
 
 ## 2) Crear el proyecto Supabase
