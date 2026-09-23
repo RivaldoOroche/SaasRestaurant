@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatMoney } from "@/lib/money";
+import { sendNotification } from "@/data/notify";
 import type { Complaint } from "@/data/model";
 
 export function Reclamaciones() {
@@ -110,7 +111,24 @@ function ComplaintCard({ c }: { c: Complaint }) {
             <Button
               size="sm"
               disabled={!text.trim() || respond.isPending}
-              onClick={() => respond.mutate({ id: c.id, response: text }, { onSuccess: () => setOpen(false) })}
+              onClick={() =>
+                respond.mutate(
+                  { id: c.id, response: text },
+                  {
+                    onSuccess: () => {
+                      setOpen(false);
+                      // Notifica al consumidor por correo (best-effort).
+                      if (c.consumerEmail) {
+                        void sendNotification({
+                          to: c.consumerEmail,
+                          subject: `Respuesta a tu reclamo N° ${c.correlativo}`,
+                          message: `<p>Hola ${c.consumerName},</p><p>Respondimos tu Hoja de Reclamación N° ${c.correlativo}:</p><blockquote>${text}</blockquote>`,
+                        });
+                      }
+                    },
+                  },
+                )
+              }
             >
               Guardar respuesta
             </Button>

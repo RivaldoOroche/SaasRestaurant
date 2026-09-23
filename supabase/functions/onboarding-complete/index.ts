@@ -6,6 +6,7 @@
 //   body: { token, email, password, ownerName }  ->  { success, tenantId?, error? }
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { enviarEmail } from "../_shared/notificaciones/mailer.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -85,6 +86,20 @@ export default async function handler(req: Request): Promise<Response> {
 
     // 6) Marcar el link como usado.
     await admin.from("onboarding_links").update({ used_at: new Date().toISOString() }).eq("id", link.id);
+
+    // 7) Correo de bienvenida (best-effort: no bloquea el alta si no hay proveedor).
+    try {
+      await enviarEmail(
+        email,
+        `Bienvenido a Wayra POS — ${tenant?.name ?? "tu negocio"}`,
+        `<p>Hola ${ownerName ?? ""},</p>
+         <p>Tu cuenta de <b>${tenant?.name ?? "Wayra POS"}</b> ya está activa. Ingresa con tu correo y la contraseña que definiste.</p>
+         <p>Desde <b>Ajustes</b> puedes configurar tu emisor (RUC/SUNAT), pagos, mesas y carta.</p>
+         <p>— El equipo de Wayra POS</p>`,
+      );
+    } catch (_) {
+      // ignorar fallos de correo
+    }
 
     return json({ success: true, tenantId });
   } catch (e) {

@@ -76,6 +76,18 @@ supabase functions deploy pago-tarjeta
 supabase functions deploy pago-webhook
 supabase functions deploy onboarding-complete
 supabase functions deploy saas-cobrar
+supabase functions deploy notificar
+```
+
+Notificaciones (correo/WhatsApp) — secrets opcionales (si no están, el envío se
+omite sin romper el flujo):
+
+```bash
+supabase secrets set \
+  RESEND_API_KEY=re_xxx \
+  NOTIFY_FROM="Wayra POS <noreply@tudominio.pe>" \
+  WHATSAPP_API_URL=https://tu-endpoint-whatsapp \
+  WHATSAPP_API_TOKEN=xxx
 ```
 
 Secrets del proyecto (se leen con el service role):
@@ -103,6 +115,9 @@ supabase secrets set \
 - **saas-cobrar** — cobra la suscripción de un tenant con la pasarela de **la
   plataforma** (secret `PLATFORM_CULQI_SECRET`); registra la factura SaaS y activa
   el tenant. La consola tokeniza con `VITE_PLATFORM_CARD_PK`.
+- **notificar** — envía correo (Resend) o WhatsApp (endpoint configurable). Se
+  usa en el correo de bienvenida del onboarding y al responder reclamos; es
+  best-effort (si faltan secrets, no envía y no rompe el flujo).
 
 Cada tenant configura sus datos y credenciales desde **Ajustes → Datos del emisor /
 Facturación / Pagos** (las secretas se guardan write-only, nunca se devuelven al
