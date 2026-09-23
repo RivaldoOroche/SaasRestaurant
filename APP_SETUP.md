@@ -1,5 +1,9 @@
 # Wayra POS — setup y despliegue
 
+> ¿Vas a montar Supabase desde cero (esquema + datos de prueba + cuentas +
+> funciones)? Sigue la guía paso a paso **[SUPABASE_SETUP.md](./SUPABASE_SETUP.md)**.
+
+
 React + TypeScript (Vite) sobre Supabase (Postgres + Auth + RLS) + Edge Functions
 (Deno). SUNAT (facturación electrónica), pagos con tarjeta y onboarding de tenants
 usan Edge Functions con service role.
