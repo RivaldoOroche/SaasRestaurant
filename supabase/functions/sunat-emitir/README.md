@@ -40,6 +40,24 @@ Cada tenant configura todo esto desde **Ajustes → Facturación** en la app; la
 credenciales secretas se guardan write-only (nunca se devuelven al navegador) y
 solo esta función las lee con el service role.
 
+## 0.1) Proveedor de facturación (multi-modo)
+
+Cada tenant elige en **Ajustes → Facturación** cómo emitir, y la función enruta
+según `business_settings.billing_provider` (ver `_shared/sunat/emisor.ts`):
+
+| Proveedor | Cómo emite | Necesita |
+|---|---|---|
+| `sunat_directo` | Firma el UBL con el **certificado del tenant** y hace `sendBill` al WS de SUNAT (beta/prod según `sunat_mode`) | `sol_user`, `sol_pass`, `cert_pem`, `key_pem` |
+| `efact` / `bizlinks` (OSE) | Igual que el directo pero al **endpoint del OSE** (`billing_endpoint`) con las credenciales del OSE | `billing_endpoint`, `sol_user`, `sol_pass`, `cert_pem`, `key_pem` |
+| `nubefact` | Envía **JSON** al API de Nubefact (`billing_endpoint` = la *ruta* del emisor) con `Authorization: <api_token>`; Nubefact arma, firma y envía por ti y devuelve enlaces al PDF/XML y la cadena QR | `billing_endpoint`, `api_token` |
+
+Todos devuelven el mismo `EmitResult` normalizado
+(`accepted`, `code`, `description`, `folio`, y según el caso `cdr`/`xml` o
+`pdfUrl`/`xmlUrl`/`qr`). Con Nubefact **no** hace falta cargar certificado.
+
+Para una sola empresa sin service role, puedes fijar el proveedor por entorno:
+`SUNAT_PROVIDER` (`sunat_directo` por defecto), `SUNAT_ENDPOINT`, `SUNAT_API_TOKEN`.
+
 ## 1) Credenciales de homologación (SUNAT beta)
 
 SUNAT publica un RUC y usuario SOL de pruebas:

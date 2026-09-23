@@ -5,6 +5,9 @@ export interface SunatResult {
   error?: string;
   signedXml?: string; // XML UBL firmado (si el gateway lo devuelve)
   cdr?: string; // CDR de SUNAT (base64 del ZIP)
+  pdfUrl?: string; // enlace al PDF (proveedores tipo Nubefact)
+  xmlUrl?: string; // enlace al XML (proveedores tipo Nubefact)
+  qr?: string; // cadena para el código QR
 }
 
 /**

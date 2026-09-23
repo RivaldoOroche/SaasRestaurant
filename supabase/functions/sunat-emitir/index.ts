@@ -14,15 +14,9 @@
 // Estos se guardan como secrets del proyecto (ver README).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { construirUBL, calcularTotales } from "../_shared/sunat/ubl.ts";
-import { construirNotaCredito } from "../_shared/sunat/notaCredito.ts";
-import { numeroALetras } from "../_shared/sunat/numeroALetras.ts";
-import { firmarUBL } from "../_shared/sunat/sign.ts";
-import { zipStore } from "../_shared/sunat/zip.ts";
-import type { Comprobante } from "../_shared/sunat/types.ts";
-
-const BETA = "https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService";
-const PROD = "https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService";
+import { emitirComprobante } from "../_shared/sunat/emisor.ts";
+import type { EmisorConfig } from "../_shared/sunat/emisor.ts";
+import type { Comprobante, NotaCreditoRef } from "../_shared/sunat/types.ts";
 
 /** Configuración de facturación resuelta para un tenant. */
 interface TenantFiscal {
@@ -35,6 +29,9 @@ interface TenantFiscal {
   certPem?: string;
   keyPem?: string;
   mode?: string; // 'beta' | 'produccion'
+  provider?: string; // billing_provider
+  endpoint?: string; // billing_endpoint (OSE / API)
+  apiToken?: string; // token del OSE/PSE
 }
 
 /**
@@ -53,12 +50,12 @@ async function loadTenantFiscal(tenantId?: string): Promise<TenantFiscal | null>
     const [{ data: settings }, { data: creds }] = await Promise.all([
       admin
         .from("business_settings")
-        .select("ruc, razon_social, address, ubigeo, sol_user, sunat_mode")
+        .select("ruc, razon_social, address, ubigeo, sol_user, sunat_mode, billing_provider, billing_endpoint")
         .eq("tenant_id", tenantId)
         .maybeSingle(),
       admin
         .from("fiscal_credentials")
-        .select("sol_pass, cert_pem, key_pem")
+        .select("sol_pass, cert_pem, key_pem, api_token")
         .eq("tenant_id", tenantId)
         .maybeSingle(),
     ]);
@@ -70,9 +67,12 @@ async function loadTenantFiscal(tenantId?: string): Promise<TenantFiscal | null>
       ubigeo: settings?.ubigeo ?? undefined,
       solUser: settings?.sol_user ?? undefined,
       mode: settings?.sunat_mode ?? undefined,
+      provider: settings?.billing_provider ?? undefined,
+      endpoint: settings?.billing_endpoint ?? undefined,
       solPass: creds?.sol_pass ?? undefined,
       certPem: creds?.cert_pem ?? undefined,
       keyPem: creds?.key_pem ?? undefined,
+      apiToken: creds?.api_token ?? undefined,
     };
   } catch {
     return null;
@@ -87,28 +87,6 @@ const cors = {
 
 function env(k: string, def = ""): string {
   return (globalThis as { Deno?: { env: { get(k: string): string | undefined } } }).Deno?.env.get(k) ?? def;
-}
-
-function b64(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
-}
-
-function soapEnvelope(ruc: string, user: string, pass: string, fileName: string, contentB64: string): string {
-  return (
-    `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ser="http://service.sunat.gob.pe">` +
-    `<soapenv:Header>` +
-    `<wsse:Security xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">` +
-    `<wsse:UsernameToken>` +
-    `<wsse:Username>${ruc}${user}</wsse:Username>` +
-    `<wsse:Password>${pass}</wsse:Password>` +
-    `</wsse:UsernameToken></wsse:Security></soapenv:Header>` +
-    `<soapenv:Body><ser:sendBill>` +
-    `<fileName>${fileName}</fileName>` +
-    `<contentFile>${contentB64}</contentFile>` +
-    `</ser:sendBill></soapenv:Body></soapenv:Envelope>`
-  );
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -139,17 +117,21 @@ export default async function handler(req: Request): Promise<Response> {
 
     // Configuración por tenant (si hay service role); si no, variables de entorno.
     const tf = await loadTenantFiscal(dto.tenantId);
-    const ruc = tf?.ruc || env("SUNAT_RUC", "20000000001");
-    const user = tf?.solUser || env("SUNAT_SOL_USER", "MODDATOS");
-    const pass = tf?.solPass || env("SUNAT_SOL_PASS", "MODDATOS");
-    const modo = tf?.mode || env("SUNAT_MODE", "beta");
-    const endpoint = env("SUNAT_ENDPOINT", modo === "produccion" ? PROD : BETA);
-    const certPem = tf?.certPem || env("SUNAT_CERT_PEM");
-    const keyPem = tf?.keyPem || env("SUNAT_KEY_PEM");
-    if (!certPem || !keyPem) return json({ error: "Faltan certificado/llave (fiscal_credentials o SUNAT_CERT_PEM / SUNAT_KEY_PEM)" }, 500);
+    const provider = tf?.provider || env("SUNAT_PROVIDER", "sunat_directo");
+    const igvTasa = dto.igvTasa ?? 0.18;
+    const cfg: EmisorConfig = {
+      provider,
+      mode: tf?.mode || env("SUNAT_MODE", "beta"),
+      ruc: tf?.ruc || env("SUNAT_RUC", "20000000001"),
+      solUser: tf?.solUser || env("SUNAT_SOL_USER", "MODDATOS"),
+      solPass: tf?.solPass || env("SUNAT_SOL_PASS", "MODDATOS"),
+      certPem: tf?.certPem || env("SUNAT_CERT_PEM") || undefined,
+      keyPem: tf?.keyPem || env("SUNAT_KEY_PEM") || undefined,
+      endpoint: tf?.endpoint || env("SUNAT_ENDPOINT") || undefined,
+      apiToken: tf?.apiToken || env("SUNAT_API_TOKEN") || undefined,
+    };
 
     // Emisor desde el tenant o desde secrets; cliente desde el DTO (o público).
-    const igvTasa = dto.igvTasa ?? 0.18;
     const comp: Comprobante = {
       tipo: dto.tipo,
       serie,
@@ -159,7 +141,7 @@ export default async function handler(req: Request): Promise<Response> {
       moneda: "PEN",
       igvTasa,
       emisor: {
-        ruc,
+        ruc: cfg.ruc,
         razonSocial: tf?.razonSocial || env("SUNAT_RAZON_SOCIAL", "EMPRESA DEMO SAC"),
         direccion: tf?.direccion || env("SUNAT_DIRECCION", "AV. LA MAR 1234, MIRAFLORES, LIMA"),
         ubigeo: tf?.ubigeo || env("SUNAT_UBIGEO", "150122"),
@@ -173,49 +155,19 @@ export default async function handler(req: Request): Promise<Response> {
           : [{ descripcion: "Consumo", cantidad: 1, valorUnitario: dto.subtotal }],
     };
 
-    // 1) UBL + firma. Nota de crédito (07) usa CreditNote; factura/boleta usan Invoice.
-    const totales = calcularTotales(comp);
-    const enLetras = `${numeroALetras(totales.total)} SOLES`;
-    const xml =
+    const ncRef: NotaCreditoRef | undefined =
       dto.tipo === "07"
-        ? construirNotaCredito(
-            comp,
-            {
-              tipoDocRef: dto.refTipo ?? "03",
-              folioRef: dto.refFolio ?? "",
-              motivoCodigo: dto.motivoCodigo ?? "01",
-              motivo: dto.motivo ?? "Anulación de la operación",
-            },
-            enLetras,
-          )
-        : construirUBL(comp, enLetras);
-    const signed = await firmarUBL(xml, { privateKeyPem: keyPem, certificatePem: certPem });
+        ? {
+            tipoDocRef: dto.refTipo ?? "03",
+            folioRef: dto.refFolio ?? "",
+            motivoCodigo: dto.motivoCodigo ?? "01",
+            motivo: dto.motivo ?? "Anulación de la operación",
+          }
+        : undefined;
 
-    // 2) zip: RUC-TIPO-SERIE-CORRELATIVO
-    const base = `${ruc}-${comp.tipo}-${comp.serie}-${comp.correlativo}`;
-    const zip = zipStore(`${base}.xml`, new TextEncoder().encode(signed));
-
-    // 3) SOAP sendBill
-    const envelope = soapEnvelope(ruc, user, pass, `${base}.zip`, b64(zip));
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "text/xml; charset=utf-8", SOAPAction: "" },
-      body: envelope,
-    });
-    const text = await resp.text();
-
-    // 4) Parseo mínimo de la respuesta
-    const fault = text.match(/<faultstring>([\s\S]*?)<\/faultstring>/);
-    if (fault) {
-      const codeM = text.match(/<faultcode>([\s\S]*?)<\/faultcode>/);
-      return json({ accepted: false, code: codeM?.[1] ?? "fault", description: fault[1], folio: base });
-    }
-    const appResp = text.match(/<applicationResponse>([\s\S]*?)<\/applicationResponse>/);
-    if (appResp) {
-      // CDR recibido = SUNAT aceptó el comprobante. Devolvemos también el XML firmado.
-      return json({ accepted: true, code: "0", description: "Aceptado por SUNAT", folio: base, cdr: appResp[1], xml: signed });
-    }
-    return json({ accepted: false, code: "unknown", description: "Respuesta no reconocida", raw: text.slice(0, 500) }, 502);
+    // Enruta la emisión según el proveedor del tenant (directo / OSE / Nubefact).
+    const result = await emitirComprobante(comp, ncRef, cfg);
+    return json(result, result.accepted ? 200 : result.code === "config" ? 400 : 200);
   } catch (e) {
     return json({ error: String((e as Error).message ?? e) }, 500);
   }
