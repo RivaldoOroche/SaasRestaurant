@@ -12,6 +12,8 @@ import type {
   PlatformSettings,
   PlatformFiscalCredentialsInput,
   ChargeProposal,
+  Cohort,
+  RevenuePoint,
 } from "./model";
 
 /** Platform-owner (SaaS) data access. Separate from the tenant Repo. */
@@ -31,6 +33,10 @@ export interface PlatformRepo {
   /** Guarda (sin devolver) las credenciales secretas del emisor de la plataforma. */
   setPlatformFiscalCredentials(input: PlatformFiscalCredentialsInput): Promise<void>;
   getRetention(): Promise<Retention>;
+  /** Cohortes reales por mes de alta (retención actual por cohorte). */
+  getCohorts(): Promise<Cohort[]>;
+  /** Ingresos por mes a partir de las facturas de suscripción cobradas. */
+  getRevenueSeries(): Promise<RevenuePoint[]>;
   createTenant(input: NewTenantInput): Promise<{ tenant: Tenant; link: string }>;
   /** Alta rápida: crea el tenant y también la cuenta del dueño con una contraseña
    *  temporal (sin enviar link). El dueño entra de inmediato con correo + clave. */

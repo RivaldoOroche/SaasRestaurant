@@ -13,7 +13,7 @@ import type {
   ChargeProposal,
 } from "./model";
 import { MOCK_TENANT_ID } from "@/auth/session";
-import { deriveRetentionMetrics } from "./retention";
+import { deriveRetentionMetrics, deriveCohorts } from "./retention";
 
 function isoAgo(mins: number): string {
   return new Date(Date.now() - mins * 60_000).toISOString();
@@ -104,12 +104,12 @@ function currentPeriod(): string {
 }
 
 const SEED_TENANTS: Tenant[] = [
-  { id: MOCK_TENANT_ID, name: "La Higuera", slug: "la-higuera", ownerName: "Mónica R.", plan: "Pro", mrr: 1499, status: "Activo", since: "Mar 2025", branches: 3, users: 12, isYou: true, link: null },
-  { id: uid("t"), name: "Cevichería El Muelle", slug: "cevicheria-el-muelle", ownerName: "Andrés Ríos", plan: "Enterprise", mrr: 4800, status: "Activo", since: "Jun 2024", branches: 11, users: 64, isYou: false, link: null },
-  { id: uid("t"), name: "Sushi Nami", slug: "sushi-nami", ownerName: "Keiko Tanaka", plan: "Pro", mrr: 1499, status: "Activo", since: "Nov 2025", branches: 2, users: 9, isYou: false, link: null },
-  { id: uid("t"), name: "Tacos El Farol", slug: "tacos-el-farol", ownerName: "Raúl Méndez", plan: "Básico", mrr: 699, status: "Activo", since: "Ene 2025", branches: 1, users: 3, isYou: false, link: null },
-  { id: uid("t"), name: "Café Aurora", slug: "cafe-aurora", ownerName: "Paula Vega", plan: "Pro", mrr: 0, status: "Prueba", since: "Feb 2026", branches: 1, users: 4, isYou: false, link: null },
-  { id: uid("t"), name: "Brasas del Sur", slug: "brasas-del-sur", ownerName: "Jorge Salas", plan: "Básico", mrr: 0, status: "Suspendido", since: "Set 2025", branches: 1, users: 2, isYou: false, link: null },
+  { id: MOCK_TENANT_ID, name: "La Higuera", slug: "la-higuera", ownerName: "Mónica R.", plan: "Pro", mrr: 1499, status: "Activo", since: "Mar 2025", branches: 3, users: 12, isYou: true, link: null, cohort: "2025-03" },
+  { id: uid("t"), name: "Cevichería El Muelle", slug: "cevicheria-el-muelle", ownerName: "Andrés Ríos", plan: "Enterprise", mrr: 4800, status: "Activo", since: "Jun 2024", branches: 11, users: 64, isYou: false, link: null, cohort: "2024-06" },
+  { id: uid("t"), name: "Sushi Nami", slug: "sushi-nami", ownerName: "Keiko Tanaka", plan: "Pro", mrr: 1499, status: "Activo", since: "Nov 2025", branches: 2, users: 9, isYou: false, link: null, cohort: "2025-11" },
+  { id: uid("t"), name: "Tacos El Farol", slug: "tacos-el-farol", ownerName: "Raúl Méndez", plan: "Básico", mrr: 699, status: "Activo", since: "Ene 2025", branches: 1, users: 3, isYou: false, link: null, cohort: "2025-01" },
+  { id: uid("t"), name: "Café Aurora", slug: "cafe-aurora", ownerName: "Paula Vega", plan: "Pro", mrr: 0, status: "Prueba", since: "Feb 2026", branches: 1, users: 4, isYou: false, link: null, cohort: "2026-02" },
+  { id: uid("t"), name: "Brasas del Sur", slug: "brasas-del-sur", ownerName: "Jorge Salas", plan: "Básico", mrr: 0, status: "Suspendido", since: "Set 2025", branches: 1, users: 2, isYou: false, link: null, cohort: "2025-09" },
 ];
 
 export class MockPlatformRepo implements PlatformRepo {
@@ -293,6 +293,23 @@ export class MockPlatformRepo implements PlatformRepo {
     };
   }
 
+  async getCohorts() {
+    return deriveCohorts(this.tenants);
+  }
+
+  async getRevenueSeries() {
+    // Serie de ingresos derivada del MRR actual (demo): últimos 6 meses.
+    const mrr = this.tenants.reduce((s, t) => s + t.mrr, 0);
+    const now = new Date();
+    const pts = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const factor = 0.7 + (5 - i) * 0.06;
+      pts.push({ month: d.toISOString().slice(0, 7), amount: Math.round(mrr * factor) });
+    }
+    return pts;
+  }
+
   async createTenant(input: NewTenantInput) {
     const slug = slugify(input.name);
     const tenant: Tenant = {
@@ -308,6 +325,7 @@ export class MockPlatformRepo implements PlatformRepo {
       users: 1,
       isYou: false,
       link: makeLink(slug),
+      cohort: currentPeriod(),
     };
     this.tenants.unshift(tenant);
     this.log(tenant.name, "Plataforma", "plan", "info", `Tenant creado · plan ${input.plan} (prueba 14 días)`);
@@ -330,6 +348,7 @@ export class MockPlatformRepo implements PlatformRepo {
       users: 1,
       isYou: false,
       link: null, // la cuenta ya existe: no hace falta link de invitación
+      cohort: currentPeriod(),
     };
     this.tenants.unshift(tenant);
     this.log(

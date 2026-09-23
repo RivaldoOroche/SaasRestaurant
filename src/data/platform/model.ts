@@ -15,6 +15,21 @@ export interface Tenant {
   users: number;
   isYou: boolean; // La Higuera, the demo tenant
   link: string | null;
+  cohort?: string; // mes de alta (YYYY-MM) para el análisis de cohortes
+}
+
+/** Fila de cohorte: tenants dados de alta el mismo mes y su retención actual. */
+export interface Cohort {
+  cohort: string; // YYYY-MM
+  size: number;
+  active: number;
+  retainedPct: number;
+  mrr: number;
+}
+
+export interface RevenuePoint {
+  month: string; // YYYY-MM
+  amount: number;
 }
 
 export interface PlatformSummary {

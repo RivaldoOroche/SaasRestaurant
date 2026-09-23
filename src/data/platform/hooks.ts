@@ -37,6 +37,14 @@ export function useRetention() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "retention"], queryFn: () => repo.getRetention() });
 }
+export function useCohorts() {
+  const repo = useP();
+  return useQuery({ queryKey: ["platform", "cohorts"], queryFn: () => repo.getCohorts() });
+}
+export function useRevenueSeries() {
+  const repo = useP();
+  return useQuery({ queryKey: ["platform", "revenue"], queryFn: () => repo.getRevenueSeries() });
+}
 export function useActivity() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "activity"], queryFn: () => repo.getActivity(), refetchInterval: 8000 });

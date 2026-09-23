@@ -1,10 +1,83 @@
-import { useRetention } from "@/data/platform/hooks";
+import { useRetention, useCohorts, useRevenueSeries } from "@/data/platform/hooks";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
+
+/** Cohortes reales por mes de alta + serie de ingresos real. */
+function CohortsAndRevenue() {
+  const { data: cohorts = [] } = useCohorts();
+  const { data: revenue = [] } = useRevenueSeries();
+  const maxRev = Math.max(1, ...revenue.map((p) => p.amount));
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+      <Card>
+        <CardBody>
+          <h3 className="font-semibold mb-1">Cohortes por mes de alta</h3>
+          <p className="text-muted text-xs mb-3">Retención actual de cada camada de clientes (dato real).</p>
+          {cohorts.length === 0 ? (
+            <p className="text-muted text-sm">Sin cohortes aún.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-muted text-xs uppercase tracking-wide">
+                  <th className="text-left font-medium py-1">Cohorte</th>
+                  <th className="text-right font-medium py-1">Altas</th>
+                  <th className="text-right font-medium py-1">Activos</th>
+                  <th className="text-right font-medium py-1">Retención</th>
+                  <th className="text-right font-medium py-1">MRR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cohorts.map((c) => (
+                  <tr key={c.cohort} className="border-t border-border-soft">
+                    <td className="py-1 font-mono">{c.cohort}</td>
+                    <td className="py-1 text-right">{c.size}</td>
+                    <td className="py-1 text-right">{c.active}</td>
+                    <td className="py-1 text-right">
+                      <span
+                        className={cn(
+                          "inline-block rounded px-1.5 py-0.5 text-xs",
+                          c.retainedPct >= 80 ? "bg-success/20 text-success" : c.retainedPct >= 50 ? "bg-warning/20 text-warning" : "bg-chip-bg",
+                        )}
+                      >
+                        {c.retainedPct}%
+                      </span>
+                    </td>
+                    <td className="py-1 text-right font-mono">{formatMoney(c.mrr)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardBody>
+          <h3 className="font-semibold mb-1">Ingresos por mes</h3>
+          <p className="text-muted text-xs mb-3">Facturas de suscripción cobradas (dato real).</p>
+          {revenue.length === 0 ? (
+            <p className="text-muted text-sm">Aún no hay cobros registrados.</p>
+          ) : (
+            <div className="flex items-end gap-2 h-40">
+              {revenue.map((p) => (
+                <div key={p.month} className="flex-1 flex flex-col items-center justify-end h-full">
+                  <span className="text-[10px] font-mono mb-1">{Math.round(p.amount / 1000)}k</span>
+                  <div className="w-full rounded-t bg-accent" style={{ height: `${(p.amount / maxRev) * 100}%` }} />
+                  <span className="text-[10px] text-muted mt-1">{p.month.slice(5)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
 
 const RISK_TONE = { low: "success", mid: "warning", high: "neutral" } as const;
 
@@ -31,6 +104,8 @@ export function Retencion() {
         <Kpi label="LTV / CAC" value={`${(r.ltv / r.cac).toFixed(1)}×`} note={`LTV ${formatMoney(r.ltv)}`} tone="success" />
         <Kpi label="Vida media" value={`${r.lifetimeMonths} meses`} note="+3 vs. trimestre" />
       </div>
+
+      <CohortsAndRevenue />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
         <Card>

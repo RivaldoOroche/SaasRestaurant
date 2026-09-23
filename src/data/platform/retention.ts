@@ -1,4 +1,28 @@
-import type { Tenant } from "./model";
+import type { Tenant, Cohort } from "./model";
+
+/** Cohortes reales por mes de alta a partir del estado actual de los tenants. */
+export function deriveCohorts(tenants: Tenant[]): Cohort[] {
+  const map = new Map<string, Tenant[]>();
+  for (const t of tenants) {
+    const key = t.cohort ?? "s/f";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(t);
+  }
+  return [...map.entries()]
+    .filter(([k]) => k !== "s/f")
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([cohort, rows]) => {
+      const active = rows.filter((r) => r.status === "Activo").length;
+      const mrr = rows.reduce((s, r) => s + r.mrr, 0);
+      return {
+        cohort,
+        size: rows.length,
+        active,
+        retainedPct: rows.length ? Math.round((active / rows.length) * 1000) / 10 : 0,
+        mrr,
+      };
+    });
+}
 
 /** Métricas de retención derivadas del estado real de los tenants. */
 export function deriveRetentionMetrics(tenants: Tenant[]) {

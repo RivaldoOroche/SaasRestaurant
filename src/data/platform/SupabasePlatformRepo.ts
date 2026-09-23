@@ -14,8 +14,10 @@ import type {
   PlatformFiscalCredentialsInput,
   ChargeProposal,
   ChargeStatus,
+  Cohort,
+  RevenuePoint,
 } from "./model";
-import { deriveRetentionMetrics } from "./retention";
+import { deriveRetentionMetrics, deriveCohorts } from "./retention";
 import type { Database, Row } from "@/types/database";
 import { MockPlatformRepo } from "./MockPlatformRepo";
 
@@ -74,6 +76,7 @@ function mapTenant(r: Row<"tenants">): Tenant {
     users: 1,
     isYou: r.slug === "la-higuera",
     link: null,
+    cohort: (r.since ?? r.created_at ?? "").slice(0, 7) || undefined,
   };
 }
 
@@ -372,6 +375,24 @@ export class SupabasePlatformRepo implements PlatformRepo {
       method,
       date: new Date().toLocaleDateString("es-PE"),
     };
+  }
+
+  async getCohorts(): Promise<Cohort[]> {
+    const tenants = await this.getTenants();
+    return deriveCohorts(tenants);
+  }
+
+  async getRevenueSeries(): Promise<RevenuePoint[]> {
+    // Ingresos reales por mes desde las facturas de suscripción cobradas.
+    const { data } = await this.sb.from("saas_invoices").select("amount, issued_at, paid").eq("paid", true);
+    const map = new Map<string, number>();
+    for (const r of data ?? []) {
+      const month = new Date(r.issued_at).toISOString().slice(0, 7);
+      map.set(month, (map.get(month) ?? 0) + Number(r.amount));
+    }
+    return [...map.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([month, amount]) => ({ month, amount: Math.round(amount * 100) / 100 }));
   }
 
   // --- Cobros de suscripción con aprobación (dunning) ---
