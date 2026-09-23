@@ -20,6 +20,8 @@ import type {
   FiscalCredentialsInput,
   CardCredentialsInput,
   Complaint,
+  Reservation,
+  WaitlistEntry,
   CardChargeInput,
   CardChargeResult,
 } from "../model";
@@ -748,6 +750,49 @@ export class MockRepo implements Repo {
       this.pushLog("Reclamaciones", `Respondió la hoja N° ${c.correlativo}`);
       this.persist();
     }
+  }
+
+  private reservations: Reservation[] = [
+    { id: "rsv-1", name: "Familia Quispe", phone: "999888777", partySize: 4, zone: "Terraza", date: new Date().toISOString().slice(0, 10), atTime: "20:30", status: "confirmada" },
+    { id: "rsv-2", name: "Luis Ramírez", partySize: 2, zone: "Salón", date: new Date().toISOString().slice(0, 10), atTime: "21:00", status: "pendiente" },
+  ];
+  private waitlistEntries: WaitlistEntry[] = [
+    { id: "wl-1", name: "Ana", partySize: 3, waitLabel: "~15 min", status: "esperando", createdAt: new Date().toISOString() },
+  ];
+
+  async getReservations() {
+    return this.reservations.map((r) => ({ ...r }));
+  }
+  async addReservation(input: Omit<Reservation, "id" | "status">) {
+    this.reservations.push({ ...input, id: `rsv-${Math.random().toString(36).slice(2, 8)}`, status: "pendiente" });
+    this.pushLog("Reservas", `Reserva · ${input.name} (${input.partySize})`);
+    this.persist();
+  }
+  async updateReservation(id: string, patch: Partial<Reservation>) {
+    const r = this.reservations.find((x) => x.id === id);
+    if (r) Object.assign(r, patch);
+    this.persist();
+  }
+  async removeReservation(id: string) {
+    this.reservations = this.reservations.filter((x) => x.id !== id);
+    this.persist();
+  }
+  async getWaitlist() {
+    return this.waitlistEntries.map((w) => ({ ...w }));
+  }
+  async addWaitlist(input: Omit<WaitlistEntry, "id" | "status" | "createdAt">) {
+    this.waitlistEntries.push({ ...input, id: `wl-${Math.random().toString(36).slice(2, 8)}`, status: "esperando", createdAt: new Date().toISOString() });
+    this.pushLog("Reservas", `Lista de espera · ${input.name}`);
+    this.persist();
+  }
+  async updateWaitlist(id: string, patch: Partial<WaitlistEntry>) {
+    const w = this.waitlistEntries.find((x) => x.id === id);
+    if (w) Object.assign(w, patch);
+    this.persist();
+  }
+  async removeWaitlist(id: string) {
+    this.waitlistEntries = this.waitlistEntries.filter((x) => x.id !== id);
+    this.persist();
   }
   async setFiscalCredentials(input: FiscalCredentialsInput) {
     // Demo: no se persisten las credenciales secretas (solo se registra el cambio).

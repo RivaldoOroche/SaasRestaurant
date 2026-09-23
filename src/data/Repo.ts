@@ -27,6 +27,8 @@ import type {
   CardChargeInput,
   CardChargeResult,
   Complaint,
+  Reservation,
+  WaitlistEntry,
 } from "./model";
 
 export interface PayInput extends PayExtras {
@@ -135,6 +137,16 @@ export interface Repo {
   getComplaints(): Promise<Complaint[]>;
   /** Responde una hoja de reclamación (marca respondida). */
   respondComplaint(id: string, response: string): Promise<void>;
+
+  // Reservas y lista de espera
+  getReservations(): Promise<Reservation[]>;
+  addReservation(input: Omit<Reservation, "id" | "status">): Promise<void>;
+  updateReservation(id: string, patch: Partial<Reservation>): Promise<void>;
+  removeReservation(id: string): Promise<void>;
+  getWaitlist(): Promise<WaitlistEntry[]>;
+  addWaitlist(input: Omit<WaitlistEntry, "id" | "status" | "createdAt">): Promise<void>;
+  updateWaitlist(id: string, patch: Partial<WaitlistEntry>): Promise<void>;
+  removeWaitlist(id: string): Promise<void>;
   getActivityLog(): Promise<LogEntry[]>;
 
   /** Subscribe to changes (kitchen + orders + tables). Returns an unsubscribe fn. */

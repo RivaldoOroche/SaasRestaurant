@@ -27,6 +27,8 @@ import type {
   FiscalCredentialsInput,
   CardCredentialsInput,
   Complaint,
+  Reservation,
+  WaitlistEntry,
   CardChargeInput,
   CardChargeResult,
 } from "../model";
@@ -986,6 +988,94 @@ export class SupabaseRepo implements Repo {
       .eq("id", id);
     if (error) throw error;
     await this.log(`Respondió una hoja del Libro de Reclamaciones`);
+  }
+
+  async getReservations(): Promise<Reservation[]> {
+    const { data, error } = await this.sb
+      .from("reservations")
+      .select("*")
+      .order("res_date", { ascending: true })
+      .order("at_time", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      phone: r.phone ?? undefined,
+      partySize: r.party_size,
+      zone: r.zone,
+      date: r.res_date,
+      atTime: r.at_time,
+      status: r.status as Reservation["status"],
+      notes: r.notes ?? undefined,
+    }));
+  }
+  async addReservation(input: Omit<Reservation, "id" | "status">): Promise<void> {
+    const { error } = await this.sb.from("reservations").insert({
+      tenant_id: this.tenantId,
+      name: input.name,
+      phone: input.phone ?? null,
+      party_size: input.partySize,
+      zone: input.zone,
+      res_date: input.date,
+      at_time: input.atTime,
+      notes: input.notes ?? null,
+    });
+    if (error) throw error;
+    await this.log(`Reserva registrada · ${input.name} (${input.partySize}) · ${input.date} ${input.atTime}`);
+  }
+  async updateReservation(id: string, patch: Partial<Reservation>): Promise<void> {
+    const row: Database["public"]["Tables"]["reservations"]["Update"] = {};
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.phone !== undefined) row.phone = patch.phone;
+    if (patch.partySize !== undefined) row.party_size = patch.partySize;
+    if (patch.zone !== undefined) row.zone = patch.zone;
+    if (patch.date !== undefined) row.res_date = patch.date;
+    if (patch.atTime !== undefined) row.at_time = patch.atTime;
+    if (patch.status !== undefined) row.status = patch.status;
+    if (patch.notes !== undefined) row.notes = patch.notes;
+    const { error } = await this.sb.from("reservations").update(row).eq("id", id);
+    if (error) throw error;
+  }
+  async removeReservation(id: string): Promise<void> {
+    await this.sb.from("reservations").delete().eq("id", id);
+  }
+
+  async getWaitlist(): Promise<WaitlistEntry[]> {
+    const { data, error } = await this.sb.from("waitlist").select("*").order("created_at", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map((w) => ({
+      id: w.id,
+      name: w.name,
+      phone: w.phone ?? undefined,
+      partySize: w.party_size,
+      waitLabel: w.wait_label,
+      status: w.status as WaitlistEntry["status"],
+      createdAt: w.created_at,
+    }));
+  }
+  async addWaitlist(input: Omit<WaitlistEntry, "id" | "status" | "createdAt">): Promise<void> {
+    const { error } = await this.sb.from("waitlist").insert({
+      tenant_id: this.tenantId,
+      name: input.name,
+      phone: input.phone ?? null,
+      party_size: input.partySize,
+      wait_label: input.waitLabel,
+    });
+    if (error) throw error;
+    await this.log(`Lista de espera · ${input.name} (${input.partySize})`);
+  }
+  async updateWaitlist(id: string, patch: Partial<WaitlistEntry>): Promise<void> {
+    const row: Database["public"]["Tables"]["waitlist"]["Update"] = {};
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.phone !== undefined) row.phone = patch.phone;
+    if (patch.partySize !== undefined) row.party_size = patch.partySize;
+    if (patch.waitLabel !== undefined) row.wait_label = patch.waitLabel;
+    if (patch.status !== undefined) row.status = patch.status;
+    const { error } = await this.sb.from("waitlist").update(row).eq("id", id);
+    if (error) throw error;
+  }
+  async removeWaitlist(id: string): Promise<void> {
+    await this.sb.from("waitlist").delete().eq("id", id);
   }
 
   async getActivityLog(): Promise<LogEntry[]> {

@@ -161,6 +161,29 @@ export function useComplaints() {
   const repo = useRepo();
   return useQuery({ queryKey: ["complaints"], queryFn: () => repo.getComplaints() });
 }
+export function useReservations() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["reservations"], queryFn: () => repo.getReservations() });
+}
+export function useWaitlist() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["waitlist"], queryFn: () => repo.getWaitlist() });
+}
+export function useReservaActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const inv = () => {
+    qc.invalidateQueries({ queryKey: ["reservations"] });
+    qc.invalidateQueries({ queryKey: ["waitlist"] });
+  };
+  const addReservation = useMutation({ mutationFn: (i: Parameters<typeof repo.addReservation>[0]) => repo.addReservation(i), onSuccess: inv });
+  const updateReservation = useMutation({ mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof repo.updateReservation>[1] }) => repo.updateReservation(id, patch), onSuccess: inv });
+  const removeReservation = useMutation({ mutationFn: (id: string) => repo.removeReservation(id), onSuccess: inv });
+  const addWaitlist = useMutation({ mutationFn: (i: Parameters<typeof repo.addWaitlist>[0]) => repo.addWaitlist(i), onSuccess: inv });
+  const updateWaitlist = useMutation({ mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof repo.updateWaitlist>[1] }) => repo.updateWaitlist(id, patch), onSuccess: inv });
+  const removeWaitlist = useMutation({ mutationFn: (id: string) => repo.removeWaitlist(id), onSuccess: inv });
+  return { addReservation, updateReservation, removeReservation, addWaitlist, updateWaitlist, removeWaitlist };
+}
 export function useComplaintActions() {
   const repo = useRepo();
   const qc = useQueryClient();

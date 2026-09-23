@@ -233,6 +233,30 @@ export interface CardCredentialsInput {
   webhookSecret?: string; // secreto para verificar la firma de los webhooks
 }
 
+export type ReservationStatus = "pendiente" | "confirmada" | "sentada" | "cancelada";
+export interface Reservation {
+  id: string;
+  name: string;
+  phone?: string;
+  partySize: number;
+  zone: string;
+  date: string; // YYYY-MM-DD
+  atTime: string; // HH:MM
+  status: ReservationStatus;
+  notes?: string;
+}
+
+export type WaitlistStatus = "esperando" | "llamado" | "sentado" | "retirado";
+export interface WaitlistEntry {
+  id: string;
+  name: string;
+  phone?: string;
+  partySize: number;
+  waitLabel: string;
+  status: WaitlistStatus;
+  createdAt: string;
+}
+
 /** Hoja del Libro de Reclamaciones (Indecopi). */
 export interface Complaint {
   id: string;

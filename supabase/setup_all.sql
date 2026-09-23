@@ -1,10 +1,8 @@
 -- =====================================================================
 -- Wayra POS - Script unico de instalacion (todo en uno)
 -- =====================================================================
---
--- Concatena las migraciones del esquema (0001 -> ultima) + seed.sql.
--- Pegar UNA vez en el SQL Editor de Supabase y Run. Luego crear los
--- usuarios de Auth + memberships (SUPABASE_SETUP.md seccion 5).
+-- Concatena las migraciones (0001 -> ultima) + seed.sql. Pegar UNA vez
+-- en el SQL Editor de Supabase y Run. Luego Auth + memberships (SUPABASE_SETUP.md).
 -- =====================================================================
 
 
@@ -1169,6 +1167,28 @@ create policy platform_fiscal_ins on platform_fiscal_credentials
   for insert with check (app.is_platform_admin());
 create policy platform_fiscal_upd on platform_fiscal_credentials
   for update using (app.is_platform_admin()) with check (app.is_platform_admin());
+
+
+-- ==================================================================
+-- Migracion 0022_reservas.sql
+-- ==================================================================
+
+-- Reservas y lista de espera: enriquecemos las tablas base con contacto, fecha,
+-- sucursal y estado para poder gestionarlas desde el POS.
+
+alter table reservations add column if not exists phone     text;
+alter table reservations add column if not exists res_date  date not null default current_date;
+alter table reservations add column if not exists status    text not null default 'pendiente'; -- pendiente|confirmada|sentada|cancelada
+alter table reservations add column if not exists branch_id uuid references branches(id) on delete set null;
+alter table reservations add column if not exists notes     text;
+alter table reservations add column if not exists created_at timestamptz not null default now();
+create index if not exists reservations_tenant_date_idx on reservations (tenant_id, res_date);
+
+alter table waitlist add column if not exists phone     text;
+alter table waitlist add column if not exists status    text not null default 'esperando'; -- esperando|llamado|sentado|retirado
+alter table waitlist add column if not exists branch_id uuid references branches(id) on delete set null;
+alter table waitlist add column if not exists created_at timestamptz not null default now();
+create index if not exists waitlist_tenant_idx on waitlist (tenant_id, created_at);
 
 
 -- ==================================================================

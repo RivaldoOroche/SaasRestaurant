@@ -36,6 +36,7 @@ const OWNER_ONLY: Role[] = ["dueno"];
 export const TENANT_NAV: NavEntry[] = [
   { key: "pedido", label: "Pedido", path: "/pos/pedido", icon: "🧾", roles: TENANT_ROLES, section: "top" },
   { key: "mesas", label: "Mesas", path: "/pos/mesas", icon: "🍽️", roles: TENANT_ROLES, section: "top" },
+  { key: "reservas", label: "Reservas", path: "/pos/reservas", icon: "📅", roles: TENANT_ROLES, section: "top" },
   { key: "cuentas", label: "Cuentas", path: "/pos/cuentas", icon: "📑", roles: TENANT_ROLES, section: "top" },
   { key: "cocina", label: "Cocina", path: "/pos/cocina", icon: "👨‍🍳", roles: TENANT_ROLES, section: "top" },
   { key: "online", label: "En línea", path: "/pos/online", icon: "🛵", roles: TENANT_ROLES, section: "top" },

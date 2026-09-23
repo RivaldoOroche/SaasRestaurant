@@ -117,6 +117,35 @@ export interface Tables {
       received_at: string;
     };
   };
+  reservations: {
+    Row: {
+      id: string;
+      tenant_id: string;
+      name: string;
+      phone: string | null;
+      party_size: number;
+      zone: string;
+      at_time: string;
+      res_date: string;
+      status: string;
+      branch_id: string | null;
+      notes: string | null;
+      created_at: string;
+    };
+  };
+  waitlist: {
+    Row: {
+      id: string;
+      tenant_id: string;
+      name: string;
+      phone: string | null;
+      party_size: number;
+      wait_label: string;
+      status: string;
+      branch_id: string | null;
+      created_at: string;
+    };
+  };
   complaints: {
     Row: {
       id: string;
