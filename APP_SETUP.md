@@ -77,6 +77,14 @@ supabase functions deploy pago-webhook
 supabase functions deploy onboarding-complete
 supabase functions deploy saas-cobrar
 supabase functions deploy notificar
+supabase functions deploy cron-tareas
+```
+
+Tareas programadas (dunning + alertas) — protege la función con un secreto y
+prográmala (ver `OBSERVABILITY.md §6`):
+
+```bash
+supabase secrets set CRON_SECRET=$(openssl rand -hex 16)
 ```
 
 Notificaciones (correo/WhatsApp) — secrets opcionales (si no están, el envío se

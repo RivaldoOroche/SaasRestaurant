@@ -1,0 +1,30 @@
+name: Tareas programadas (dunning + alertas)
+
+# Corre a las 13:00 UTC (08:00 Lima) todos los días. Ajusta el horario a gusto.
+on:
+  schedule:
+    - cron: "0 13 * * *"
+  workflow_dispatch: {} # permite dispararlo manualmente desde la pestaña Actions
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invocar cron-tareas
+        env:
+          FUNCTIONS_URL: ${{ secrets.SUPABASE_FUNCTIONS_URL }} # https://<ref>.functions.supabase.co
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$FUNCTIONS_URL" ]; then
+            echo "Falta el secret SUPABASE_FUNCTIONS_URL — omito la ejecución."
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/out.json -w "%{http_code}" -X POST \
+            "$FUNCTIONS_URL/cron-tareas" \
+            -H "Authorization: Bearer $ANON_KEY" \
+            -H "x-cron-secret: $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+          echo "HTTP $code"; cat /tmp/out.json; echo
+          test "$code" -ge 200 -a "$code" -lt 300

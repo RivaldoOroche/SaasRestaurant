@@ -38,14 +38,9 @@ de falla que puedes vigilar desde la **consola SaaS → Bitácora** (filtro nive
   'fallida'`.
 - **Suscripciones en riesgo**: `tenants.status = 'Suspendido'`.
 
-Sugerencia: un cron (Supabase **pg_cron** o un GitHub Action programado) que
-consulte estas tablas y dispare la Edge Function `notificar` cuando haya
-novedades. Ejemplo de condición diaria:
-
-```sql
-select count(*) from comprobantes
-where status = 'rechazada' and issued_at > now() - interval '1 day';
-```
+Esto ya está implementado en la Edge Function **`cron-tareas`** (ver §6): corre
+el dunning y envía un correo de alertas cuando hay comprobantes rechazados,
+cobros fallidos o tenants suspendidos.
 
 ## 4. Respaldos (backups)
 
@@ -74,8 +69,42 @@ where status = 'rechazada' and issued_at > now() - interval '1 day';
 - El panel de **Retención → Estado de servicios** de la consola SaaS resume la
   salud de API/DB/SUNAT/Pagos.
 
+## 6. Tareas programadas (dunning + alertas)
+
+La Edge Function **`cron-tareas`** hace dos cosas con el service role, en una
+sola corrida diaria:
+
+1. **Dunning**: propone los cobros de suscripción del periodo para los tenants
+   Activos/Suspendidos que no tengan una propuesta abierta. **No cobra**: el
+   dueño del SaaS las aprueba en la consola → **Cobros** (cada cobro pasa por
+   validación de RUC/razón social antes de ejecutarse).
+2. **Alertas**: cuenta comprobantes rechazados, cobros fallidos y tenants
+   suspendidos de las últimas 24 h y, si hay novedades, envía un correo de
+   resumen al `billing_email` de `platform_settings` (vía `notificar`).
+
+Protégela con un secreto y prográmala con **una** de estas dos opciones:
+
+```bash
+supabase secrets set CRON_SECRET=$(openssl rand -hex 16)
+supabase functions deploy cron-tareas
+```
+
+- **Opción A — GitHub Action** (sin extensiones de BD): `.github/workflows/cron.yml`
+  ya está listo; define en el repo los secrets `SUPABASE_FUNCTIONS_URL`
+  (`https://<ref>.functions.supabase.co`), `SUPABASE_ANON_KEY` y `CRON_SECRET`.
+  Corre a las 13:00 UTC y puede dispararse a mano desde la pestaña *Actions*.
+- **Opción B — pg_cron** (desde la base): ejecuta `supabase/cron_pg_cron.sql`
+  reemplazando los marcadores por los tuyos.
+
+Prueba manual:
+
+```bash
+curl -X POST "https://<ref>.functions.supabase.co/cron-tareas" \
+  -H "Authorization: Bearer <ANON_KEY>" -H "x-cron-secret: <CRON_SECRET>"
+```
+
 ---
 
-Con esto tienes: errores del cliente y del servidor, alertas sobre las señales de
-negocio que ya guardas, respaldos con capacidad de restaurar, y monitoreo de
-disponibilidad.
+Con esto tienes: errores del cliente y del servidor, alertas automáticas sobre
+las señales de negocio que ya guardas, dunning programado con aprobación,
+respaldos con capacidad de restaurar, y monitoreo de disponibilidad.
