@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { generateConfigPdf } from "@/lib/configPdf";
 import { ConfigChecklist } from "@/components/ConfigChecklist";
+import { useLang } from "@/i18n";
 import type { Currency } from "@/lib/money";
 import type { BusinessSettings, CardProvider, BillingProvider, SunatMode } from "@/data/model";
 
@@ -22,6 +23,7 @@ const BILLING_PROVIDERS: { key: BillingProvider; label: string }[] = [
 export function Ajustes() {
   const { data: settings } = useSettings();
   const { updateSettings } = useTenantActions();
+  const { lang, setLang } = useLang();
   if (!settings) return null;
 
   return (
@@ -63,6 +65,23 @@ export function Ajustes() {
                 <StepBtn onClick={() => updateSettings.mutate({ taxRate: Math.max(0, settings.taxRate - 1) })}>−</StepBtn>
                 <span className="w-12 text-center font-mono">{settings.taxRate}%</span>
                 <StepBtn onClick={() => updateSettings.mutate({ taxRate: Math.min(25, settings.taxRate + 1) })}>+</StepBtn>
+              </div>
+            </Field>
+
+            <Field label="Idioma / Language">
+              <div className="flex gap-2">
+                {(["es", "en"] as const).map((l) => (
+                  <button
+                    key={l}
+                    onClick={() => setLang(l)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-sm border",
+                      lang === l ? "bg-accent/20 border-accent text-accent" : "bg-chip-bg border-border",
+                    )}
+                  >
+                    {l === "es" ? "Español" : "English"}
+                  </button>
+                ))}
               </div>
             </Field>
           </CardBody>

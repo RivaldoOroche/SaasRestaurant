@@ -9,9 +9,16 @@ export const CURRENCY_SYMBOL: Record<Currency, string> = {
 
 export const DEFAULT_TAX_RATE = 0.18; // IGV
 
-/** Formats an amount with the tenant's currency symbol, es-PE grouping. */
+/** Agrupación numérica acorde a la moneda (miles/decimales). */
+const CURRENCY_LOCALE: Record<Currency, string> = {
+  PEN: "es-PE",
+  USD: "en-US",
+  EUR: "de-DE",
+};
+
+/** Formats an amount with the tenant's currency symbol and locale grouping. */
 export function formatMoney(amount: number, currency: Currency = "PEN"): string {
-  const n = new Intl.NumberFormat("es-PE", {
+  const n = new Intl.NumberFormat(CURRENCY_LOCALE[currency] ?? "es-PE", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);

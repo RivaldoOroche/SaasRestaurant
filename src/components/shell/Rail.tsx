@@ -3,6 +3,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { navForRole } from "@/lib/roles";
 import { effectivePermissions } from "@/lib/permissions";
 import { useRolePermissions } from "@/data/hooks";
+import { useT } from "@/i18n";
 import { useTheme } from "@/store/theme";
 import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
@@ -16,6 +17,7 @@ export function Rail() {
   const { theme, toggle } = useTheme();
   const { online, toggle: toggleNet } = useConnection();
   const { data: overrides = {} } = useRolePermissions();
+  const t = useT();
   if (!session) return null;
   const isTenant = session.role !== "saas";
 
@@ -39,13 +41,13 @@ export function Rail() {
 
       <div className="flex-1 flex flex-col items-center gap-1 overflow-y-auto w-full mob:flex-row mob:overflow-x-auto mob:overflow-y-hidden">
         {top.map((e) => (
-          <RailButton key={e.key} to={e.path} icon={e.icon} label={e.label} />
+          <RailButton key={e.key} to={e.path} icon={e.icon} label={t(`nav.${e.key}`)} />
         ))}
       </div>
 
       <div className="flex flex-col items-center gap-1.5 border-t border-white/10 pt-2 w-full mob:flex-row mob:border-t-0 mob:border-l mob:border-white/10 mob:pl-1.5 mob:ml-1 mob:w-auto mob:pt-0">
         {bottom.map((e) => (
-          <RailButton key={e.key} to={e.path} icon={e.icon} label={e.label} />
+          <RailButton key={e.key} to={e.path} icon={e.icon} label={t(`nav.${e.key}`)} />
         ))}
         {isTenant && (
           <button
