@@ -8,6 +8,7 @@ import type {
   PlatformActivity,
   ActivityCategory,
   ActivityLevel,
+  PlatformSettings,
 } from "./model";
 import { MOCK_TENANT_ID } from "@/auth/session";
 
@@ -105,6 +106,12 @@ export class MockPlatformRepo implements PlatformRepo {
   };
   private tickets: SupportTicket[] = seedTickets();
   private activity: PlatformActivity[] = seedActivity();
+  private settings: PlatformSettings = {
+    razonSocial: "Wayra POS S.A.C.",
+    ruc: "20601234567",
+    direccion: "Av. Javier Prado 1234, San Isidro, Lima",
+    billingEmail: "facturacion@wayrapos.pe",
+  };
   private listeners = new Set<() => void>();
 
   private emit() {
@@ -203,6 +210,15 @@ export class MockPlatformRepo implements PlatformRepo {
 
   async getActivity() {
     return this.activity.map((a) => ({ ...a }));
+  }
+
+  async getPlatformSettings() {
+    return { ...this.settings };
+  }
+  async updatePlatformSettings(patch: Partial<PlatformSettings>) {
+    this.settings = { ...this.settings, ...patch };
+    this.log("Plataforma", "Plataforma", "sistema", "info", "Actualizó los datos del emisor del SaaS");
+    this.emit();
   }
 
   async getRetention() {

@@ -10,6 +10,7 @@ import type {
   PlatformActivity,
   ActivityCategory,
   ActivityLevel,
+  PlatformSettings,
 } from "./model";
 import type { Database, Row } from "@/types/database";
 import { MockPlatformRepo } from "./MockPlatformRepo";
@@ -203,6 +204,24 @@ export class SupabasePlatformRepo implements PlatformRepo {
       entries.push(mapActivity(p.id, "Plataforma", p.actor, p.message, p.created_at));
     }
     return entries.sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 300);
+  }
+
+  async getPlatformSettings(): Promise<PlatformSettings> {
+    const { data } = await this.sb.from("platform_settings").select("*").eq("id", true).maybeSingle();
+    return {
+      razonSocial: data?.razon_social ?? "",
+      ruc: data?.ruc ?? "",
+      direccion: data?.direccion ?? "",
+      billingEmail: data?.billing_email ?? "",
+    };
+  }
+  async updatePlatformSettings(patch: Partial<PlatformSettings>): Promise<void> {
+    const row: Database["public"]["Tables"]["platform_settings"]["Update"] = { id: true };
+    if (patch.razonSocial !== undefined) row.razon_social = patch.razonSocial;
+    if (patch.ruc !== undefined) row.ruc = patch.ruc;
+    if (patch.direccion !== undefined) row.direccion = patch.direccion;
+    if (patch.billingEmail !== undefined) row.billing_email = patch.billingEmail;
+    await this.sb.from("platform_settings").upsert(row, { onConflict: "id" });
   }
 
   getRetention(): Promise<Retention> {

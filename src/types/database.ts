@@ -35,6 +35,9 @@ export interface Tables {
   platform_activity: {
     Row: { id: string; actor: string; message: string; created_at: string };
   };
+  platform_settings: {
+    Row: { id: boolean; razon_social: string; ruc: string; direccion: string; billing_email: string; updated_at: string };
+  };
   onboarding_links: {
     Row: { id: string; tenant_id: string; token_hash: string; expires_at: string; used_at: string | null } & Timestamps;
   };

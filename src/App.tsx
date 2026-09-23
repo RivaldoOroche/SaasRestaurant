@@ -28,6 +28,7 @@ import { Ingresos } from "@/screens/saas/Ingresos";
 import { Planes } from "@/screens/saas/Planes";
 import { Soporte } from "@/screens/saas/Soporte";
 import { Bitacora } from "@/screens/saas/Bitacora";
+import { ConfigSaaS } from "@/screens/saas/ConfigSaaS";
 
 // Chart-heavy screens are code-split so Recharts loads on demand.
 const Reportes = lazy(() => import("@/screens/pos/Reportes").then((m) => ({ default: m.Reportes })));
@@ -63,6 +64,7 @@ const SCREENS: Record<string, ComponentType> = {
   planes: Planes,
   soporte: Soporte,
   bitacora: Bitacora,
+  configsaas: ConfigSaaS,
 };
 
 /** Which build phase each screen is delivered in (shown on placeholders). */

@@ -90,6 +90,14 @@ export interface Retention {
   health: { svc: string; up: string; ok: boolean }[];
 }
 
+/** Datos del emisor del SaaS (tu empresa) para facturar a los tenants. */
+export interface PlatformSettings {
+  razonSocial: string;
+  ruc: string;
+  direccion: string;
+  billingEmail: string;
+}
+
 export interface NewTenantInput {
   name: string;
   ownerName: string;

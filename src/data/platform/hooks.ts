@@ -41,6 +41,10 @@ export function useActivity() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "activity"], queryFn: () => repo.getActivity(), refetchInterval: 8000 });
 }
+export function usePlatformSettings() {
+  const repo = useP();
+  return useQuery({ queryKey: ["platform", "settings"], queryFn: () => repo.getPlatformSettings() });
+}
 
 export function usePlatformActions() {
   const repo = useP();
@@ -73,5 +77,9 @@ export function usePlatformActions() {
       repo.updateTicket(id, patch),
     onSuccess: invalidate,
   });
-  return { createTenant, setPlan, toggleSuspend, charge, updatePlan, updateTicket };
+  const updatePlatformSettings = useMutation({
+    mutationFn: (patch: Parameters<typeof repo.updatePlatformSettings>[0]) => repo.updatePlatformSettings(patch),
+    onSuccess: invalidate,
+  });
+  return { createTenant, setPlan, toggleSuspend, charge, updatePlan, updateTicket, updatePlatformSettings };
 }
