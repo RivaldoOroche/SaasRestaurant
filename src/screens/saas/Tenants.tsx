@@ -80,11 +80,17 @@ export function Tenants() {
 }
 
 function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
-  const { setPlan, toggleSuspend, charge } = usePlatformActions();
+  const { setPlan, toggleSuspend, charge, regenerateLink } = usePlatformActions();
   const { enterTenant } = useAuth();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<SaasCharge | null>(null);
   const [cobrar, setCobrar] = useState(false);
+  const [link, setLink] = useState<string | null>(tenant.link);
+
+  async function regenerate() {
+    const res = await regenerateLink.mutateAsync(tenant.id);
+    setLink(res.link);
+  }
 
   function enter() {
     enterTenant(tenant.id, tenant.name);
@@ -129,19 +135,28 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
           ))}
         </div>
 
-        {tenant.link && (
+        {link && (
           <div className="mb-4">
-            <p className="text-xs uppercase tracking-wide text-muted mb-1">Link de acceso del tenant</p>
+            <p className="text-xs uppercase tracking-wide text-muted mb-1">Link de invitación del dueño</p>
             <div className="flex gap-2">
-              <input readOnly value={tenant.link} className="flex-1 rounded-md bg-chip-bg border border-border px-2 py-1.5 text-xs font-mono" />
-              <Button size="sm" variant="secondary" onClick={() => navigator.clipboard?.writeText(tenant.link!)}>
+              <input readOnly value={link} className="flex-1 rounded-md bg-chip-bg border border-border px-2 py-1.5 text-xs font-mono" />
+              <Button size="sm" variant="secondary" onClick={() => navigator.clipboard?.writeText(link)}>
                 Copiar
               </Button>
             </div>
+            <p className="text-[11px] text-muted mt-1">De un solo uso · caduca en 14 días. Al regenerarlo, el anterior deja de servir.</p>
           </div>
         )}
 
         <div className="space-y-2">
+          <Button
+            className="w-full"
+            variant="ghost"
+            disabled={regenerateLink.isPending}
+            onClick={regenerate}
+          >
+            {regenerateLink.isPending ? "Generando…" : link ? "Regenerar link de invitación" : "Generar link de invitación"}
+          </Button>
           <Button className="w-full" onClick={enter}>
             Entrar como cliente
           </Button>
@@ -262,25 +277,68 @@ export function SaasInvoiceView({ charge, onClose }: { charge: SaasCharge; onClo
   );
 }
 
+type NewMode = "link" | "cuenta";
+
+/** Genera una contraseña temporal legible (sin caracteres ambiguos). */
+function tempPassword(): string {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789abcdefghijkmnpqrstuvwxyz";
+  let out = "";
+  const rnd = new Uint32Array(10);
+  crypto.getRandomValues(rnd);
+  for (let i = 0; i < 10; i++) out += chars[rnd[i] % chars.length];
+  return out;
+}
+
 function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { createTenant } = usePlatformActions();
+  const { createTenant, createTenantWithOwner } = usePlatformActions();
+  const [mode, setMode] = useState<NewMode>("link");
   const [name, setName] = useState("");
   const [owner, setOwner] = useState("");
   const [plan, setPlan] = useState<PlanTier>("Pro");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState(tempPassword());
   const [link, setLink] = useState<string | null>(null);
+  const [account, setAccount] = useState<{ email: string; password: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   function close() {
+    setMode("link");
     setName("");
     setOwner("");
     setPlan("Pro");
+    setEmail("");
+    setPassword(tempPassword());
     setLink(null);
+    setAccount(null);
+    setErr(null);
     onClose();
   }
 
+  const busy = createTenant.isPending || createTenantWithOwner.isPending;
+
   async function create() {
-    const res = await createTenant.mutateAsync({ name, ownerName: owner, plan });
-    setLink(res.link);
+    setErr(null);
+    try {
+      if (mode === "cuenta") {
+        if (!email || password.length < 8) {
+          setErr("Ingresa un correo y una contraseña de al menos 8 caracteres.");
+          return;
+        }
+        await createTenantWithOwner.mutateAsync({
+          input: { name, ownerName: owner, plan },
+          credentials: { email, password },
+        });
+        setAccount({ email, password });
+      } else {
+        const res = await createTenant.mutateAsync({ name, ownerName: owner, plan });
+        setLink(res.link);
+      }
+    } catch (e) {
+      setErr((e as Error).message ?? "No se pudo crear el cliente");
+    }
   }
+
+  const done = link || account;
 
   return (
     <Modal open={open} onClose={close} labelledBy="nt-title" className="max-w-md">
@@ -288,7 +346,7 @@ function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void 
         <h2 id="nt-title" className="text-xl font-bold mb-4">
           Nuevo cliente (tenant)
         </h2>
-        {!link ? (
+        {!done ? (
           <div className="space-y-3">
             <input
               value={name}
@@ -316,14 +374,100 @@ function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void 
                 </button>
               ))}
             </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted mb-1">Cómo dar acceso</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setMode("link")}
+                  className={cn(
+                    "rounded-md px-2 py-2 text-xs border text-left",
+                    mode === "link" ? "bg-accent/20 border-accent text-accent" : "bg-chip-bg border-border",
+                  )}
+                >
+                  <span className="block font-semibold">Enviar invitación</span>
+                  <span className="block text-[11px] opacity-80">El dueño crea su contraseña</span>
+                </button>
+                <button
+                  onClick={() => setMode("cuenta")}
+                  className={cn(
+                    "rounded-md px-2 py-2 text-xs border text-left",
+                    mode === "cuenta" ? "bg-accent/20 border-accent text-accent" : "bg-chip-bg border-border",
+                  )}
+                >
+                  <span className="block font-semibold">Crear cuenta ahora</span>
+                  <span className="block text-[11px] opacity-80">Con contraseña temporal</span>
+                </button>
+              </div>
+            </div>
+
+            {mode === "cuenta" && (
+              <div className="space-y-2 rounded-md border border-border-soft p-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Correo del dueño"
+                  className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+                />
+                <div className="flex gap-2">
+                  <input
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Contraseña temporal"
+                    className="flex-1 rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+                  />
+                  <Button size="sm" variant="secondary" onClick={() => setPassword(tempPassword())}>
+                    Generar
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted">
+                  El dueño entra de inmediato con este correo y contraseña; pídele que la cambie al ingresar.
+                </p>
+              </div>
+            )}
+
             <p className="text-muted text-xs">Se crea con 14 días de prueba.</p>
+            {err && <p className="text-warning text-xs">{err}</p>}
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={close}>
                 Cancelar
               </Button>
-              <Button onClick={create} disabled={!name || !owner || createTenant.isPending}>
-                Crear cliente
+              <Button
+                onClick={create}
+                disabled={!name || !owner || (mode === "cuenta" && !email) || busy}
+              >
+                {busy ? "Creando…" : mode === "cuenta" ? "Crear cliente y cuenta" : "Crear cliente"}
               </Button>
+            </div>
+          </div>
+        ) : account ? (
+          <div className="space-y-3">
+            <div className="rounded-md bg-success/10 text-success px-3 py-2 text-sm">
+              Cliente y cuenta creados ✓ — comparte estas credenciales con el dueño:
+            </div>
+            <div className="rounded-md border border-border bg-chip-bg px-3 py-2 text-sm space-y-1">
+              <p>
+                <span className="text-muted text-xs">Correo:</span>{" "}
+                <span className="font-mono">{account.email}</span>
+              </p>
+              <p>
+                <span className="text-muted text-xs">Contraseña:</span>{" "}
+                <span className="font-mono">{account.password}</span>
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => navigator.clipboard?.writeText(`Correo: ${account.email}\nContraseña: ${account.password}`)}
+            >
+              Copiar credenciales
+            </Button>
+            <p className="text-[11px] text-muted">
+              Por seguridad, indícale que cambie la contraseña al iniciar sesión.
+            </p>
+            <div className="flex justify-end">
+              <Button onClick={close}>Listo</Button>
             </div>
           </div>
         ) : (
@@ -332,11 +476,12 @@ function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void 
               Cliente creado ✓ — comparte su link único de acceso:
             </div>
             <div className="flex gap-2">
-              <input readOnly value={link} className="flex-1 rounded-md bg-chip-bg border border-border px-2 py-1.5 text-xs font-mono" />
-              <Button size="sm" variant="secondary" onClick={() => navigator.clipboard?.writeText(link)}>
+              <input readOnly value={link!} className="flex-1 rounded-md bg-chip-bg border border-border px-2 py-1.5 text-xs font-mono" />
+              <Button size="sm" variant="secondary" onClick={() => navigator.clipboard?.writeText(link!)}>
                 Copiar
               </Button>
             </div>
+            <p className="text-[11px] text-muted">De un solo uso · caduca en 14 días.</p>
             <div className="flex justify-end">
               <Button onClick={close}>Listo</Button>
             </div>

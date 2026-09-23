@@ -54,6 +54,15 @@ export function usePlatformActions() {
     mutationFn: (input: NewTenantInput) => repo.createTenant(input),
     onSuccess: invalidate,
   });
+  const createTenantWithOwner = useMutation({
+    mutationFn: ({ input, credentials }: { input: NewTenantInput; credentials: { email: string; password: string } }) =>
+      repo.createTenantWithOwner(input, credentials),
+    onSuccess: invalidate,
+  });
+  const regenerateLink = useMutation({
+    mutationFn: (id: string) => repo.regenerateLink(id),
+    onSuccess: invalidate,
+  });
   const setPlan = useMutation({
     mutationFn: ({ id, plan }: { id: string; plan: PlanTier }) => repo.setTenantPlan(id, plan),
     onSuccess: invalidate,
@@ -81,5 +90,15 @@ export function usePlatformActions() {
     mutationFn: (patch: Parameters<typeof repo.updatePlatformSettings>[0]) => repo.updatePlatformSettings(patch),
     onSuccess: invalidate,
   });
-  return { createTenant, setPlan, toggleSuspend, charge, updatePlan, updateTicket, updatePlatformSettings };
+  return {
+    createTenant,
+    createTenantWithOwner,
+    regenerateLink,
+    setPlan,
+    toggleSuspend,
+    charge,
+    updatePlan,
+    updateTicket,
+    updatePlatformSettings,
+  };
 }

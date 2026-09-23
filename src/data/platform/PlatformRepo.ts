@@ -28,6 +28,14 @@ export interface PlatformRepo {
   updatePlatformSettings(patch: Partial<PlatformSettings>): Promise<void>;
   getRetention(): Promise<Retention>;
   createTenant(input: NewTenantInput): Promise<{ tenant: Tenant; link: string }>;
+  /** Alta rápida: crea el tenant y también la cuenta del dueño con una contraseña
+   *  temporal (sin enviar link). El dueño entra de inmediato con correo + clave. */
+  createTenantWithOwner(
+    input: NewTenantInput,
+    credentials: { email: string; password: string },
+  ): Promise<{ tenant: Tenant; email: string }>;
+  /** Genera un nuevo link de invitación para el tenant e invalida los anteriores. */
+  regenerateLink(id: string): Promise<{ link: string }>;
   setTenantPlan(id: string, plan: PlanTier): Promise<void>;
   toggleSuspend(id: string): Promise<void>;
   /** Cobra la suscripción del tenant. Con method "tarjeta" y un token de la

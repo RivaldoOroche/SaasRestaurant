@@ -117,12 +117,28 @@ navegador). Desde ahí también puede descargar el **PDF de configuración**.
 
 ## 5. Alta de un nuevo tenant (onboarding)
 
-1. En la consola SaaS → **Tenants → nuevo tenant**: genera un **link firmado**
-   (token hasheado, expira en 14 días, un solo uso).
+En la consola SaaS → **Tenants → + Nuevo cliente** eliges **cómo dar acceso**:
+
+**Opción A — Enviar invitación (recomendada).**
+1. Genera un **link firmado** (token hasheado, expira en 14 días, un solo uso).
 2. Envía el link al cliente. Abre `/onboarding/<slug>?token=…`, crea su cuenta
    (correo + contraseña) y `onboarding-complete` provisiona: usuario dueño,
    membership, `business_settings` y siembra inicial (mesas + categoría).
-3. El cliente ya puede iniciar sesión y configurar su negocio.
+3. El cliente ya puede iniciar sesión y configurar su negocio. Así **tú nunca
+   manejas su contraseña**.
+
+**Opción B — Crear cuenta ahora (contraseña temporal).**
+Para altas asistidas donde tú configuras el local por el cliente: ingresas su
+correo y una **contraseña temporal** (hay botón *Generar*). Se crea el tenant y,
+vía `onboarding-complete`, su cuenta de dueño de inmediato. Le compartes las
+credenciales y le pides cambiar la contraseña al ingresar.
+
+**Regenerar el link.** En la ficha del tenant (**Gestionar**) puedes
+**regenerar el link de invitación** si caducó o se perdió: emite uno nuevo e
+**invalida los anteriores** (marca los pendientes como usados).
+
+> Ambas opciones requieren la Edge Function `onboarding-complete` desplegada
+> (sección 3). En modo demo se simulan.
 
 ---
 

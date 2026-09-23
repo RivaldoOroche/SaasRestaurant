@@ -246,6 +246,23 @@ export class SupabasePlatformRepo implements PlatformRepo {
     };
   }
 
+  /** Emite un token de invitación de un solo uso y devuelve el link (token en claro
+   *  solo aquí; en la base se guarda su hash). Invalida los links pendientes previos. */
+  private async issueOnboardingLink(tenantId: string, slug: string): Promise<string> {
+    // Invalida cualquier link pendiente anterior de este tenant.
+    await this.sb
+      .from("onboarding_links")
+      .update({ used_at: new Date().toISOString() })
+      .eq("tenant_id", tenantId)
+      .is("used_at", null);
+    const token = crypto.randomUUID();
+    const tokenHash = await sha256Hex(token);
+    const expires = new Date(Date.now() + 14 * 864e5).toISOString();
+    await this.sb.from("onboarding_links").insert({ tenant_id: tenantId, token_hash: tokenHash, expires_at: expires });
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://app.wayrapos.pe";
+    return `${origin}/onboarding/${slug}?token=${token}`;
+  }
+
   async createTenant(input: NewTenantInput) {
     const slug = slugify(input.name);
     const { data, error } = await this.sb
@@ -254,15 +271,31 @@ export class SupabasePlatformRepo implements PlatformRepo {
       .select("*")
       .single();
     if (error) throw error;
-    // Store only a hash of the onboarding token; the raw token appears once, in
-    // the link. Validation hashes the presented token and compares.
-    const token = crypto.randomUUID();
-    const tokenHash = await sha256Hex(token);
-    const expires = new Date(Date.now() + 14 * 864e5).toISOString();
-    await this.sb.from("onboarding_links").insert({ tenant_id: data.id, token_hash: tokenHash, expires_at: expires });
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://app.wayrapos.pe";
-    const link = `${origin}/onboarding/${slug}?token=${token}`;
+    const link = await this.issueOnboardingLink(data.id, slug);
     return { tenant: { ...mapTenant(data), link }, link };
+  }
+
+  async createTenantWithOwner(input: NewTenantInput, credentials: { email: string; password: string }) {
+    // Reutiliza el flujo de onboarding: crea el tenant + un token, y la Edge
+    // Function `onboarding-complete` crea el usuario dueño, su membership,
+    // business_settings y la siembra inicial, marcando el token como usado.
+    const { tenant, link } = await this.createTenant(input);
+    const token = new URL(link).searchParams.get("token");
+    if (!token) throw new Error("No se pudo generar el token de alta");
+    const { data, error } = await this.sb.functions.invoke("onboarding-complete", {
+      body: { token, email: credentials.email, password: credentials.password, ownerName: input.ownerName },
+    });
+    if (error) throw new Error(error.message);
+    const r = data as { success?: boolean; error?: string };
+    if (!r.success) throw new Error(r.error ?? "No se pudo crear la cuenta del dueño");
+    return { tenant: { ...tenant, link: null }, email: credentials.email };
+  }
+
+  async regenerateLink(id: string) {
+    const { data, error } = await this.sb.from("tenants").select("slug").eq("id", id).single();
+    if (error || !data) throw error ?? new Error("Tenant no encontrado");
+    const link = await this.issueOnboardingLink(id, data.slug);
+    return { link };
   }
 
   async setTenantPlan(id: string, plan: PlanTier) {

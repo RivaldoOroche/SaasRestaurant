@@ -291,6 +291,43 @@ export class MockPlatformRepo implements PlatformRepo {
     return { tenant, link: tenant.link! };
   }
 
+  async createTenantWithOwner(input: NewTenantInput, credentials: { email: string; password: string }) {
+    const slug = slugify(input.name);
+    const tenant: Tenant = {
+      id: uid("t"),
+      name: input.name,
+      slug,
+      ownerName: input.ownerName,
+      plan: input.plan,
+      mrr: 0,
+      status: "Prueba",
+      since: "hoy",
+      branches: 1,
+      users: 1,
+      isYou: false,
+      link: null, // la cuenta ya existe: no hace falta link de invitación
+    };
+    this.tenants.unshift(tenant);
+    this.log(
+      tenant.name,
+      "Plataforma",
+      "plan",
+      "info",
+      `Tenant creado con cuenta del dueño (${credentials.email}) · plan ${input.plan}`,
+    );
+    this.emit();
+    return { tenant, email: credentials.email };
+  }
+
+  async regenerateLink(id: string) {
+    const t = this.tenants.find((x) => x.id === id);
+    if (!t) throw new Error("Tenant no encontrado");
+    t.link = makeLink(t.slug);
+    this.log(t.name, "Plataforma", "plan", "info", "Regeneró el link de invitación (los anteriores quedan inválidos)");
+    this.emit();
+    return { link: t.link };
+  }
+
   async setTenantPlan(id: string, plan: PlanTier) {
     const t = this.tenants.find((x) => x.id === id);
     if (!t) return;
