@@ -3,6 +3,10 @@ import type { Comprobante } from "../model";
 export interface SunatResult {
   accepted: boolean;
   error?: string;
+  code?: string; // código de respuesta (SUNAT/OSE) o marcador interno
+  /** true = fallo transitorio (red/servidor): conviene reintentar con backoff.
+   *  false = rechazo definitivo del comprobante: no tiene sentido reintentar. */
+  transient?: boolean;
   signedXml?: string; // XML UBL firmado (si el gateway lo devuelve)
   cdr?: string; // CDR de SUNAT (base64 del ZIP)
   pdfUrl?: string; // enlace al PDF (proveedores tipo Nubefact)

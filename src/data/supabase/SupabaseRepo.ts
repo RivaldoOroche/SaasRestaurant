@@ -29,8 +29,9 @@ import type {
   CardChargeResult,
 } from "../model";
 import type { Database, Row } from "@/types/database";
-import { stubSunatGateway, type SunatGateway } from "../sunat/gateway";
+import { stubSunatGateway, type SunatGateway, type SunatResult } from "../sunat/gateway";
 import { makeFunctionGateway } from "../sunat/functionGateway";
+import { decideEmission } from "../sunat/outbox";
 
 /**
  * Real backend repo. Tenant scoping is enforced by RLS; we still set tenant_id
@@ -575,7 +576,87 @@ export class SupabaseRepo implements Repo {
     return (data ?? []).map(mapComprobante);
   }
 
+  /**
+   * Aplica el resultado de una emisión de forma idempotente y con reintentos:
+   * - Aceptado → marca `aceptada`, guarda XML/CDR y limpia la cola.
+   * - Rechazo definitivo (no transitorio) → `rechazada`, limpia la cola.
+   * - Fallo transitorio (red/servidor) → mantiene `encola`, registra el intento
+   *   y programa el próximo con backoff exponencial; al agotar los reintentos,
+   *   `rechazada`. Reenviar un documento ya aceptado es seguro (SUNAT es
+   *   idempotente por serie-correlativo), pero evitamos hacerlo.
+   */
+  private async settleEmission(cpe: Comprobante, res: SunatResult): Promise<Comprobante> {
+    const { data: ob } = await this.sb
+      .from("sunat_outbox")
+      .select("id, attempts")
+      .eq("comprobante_id", cpe.id)
+      .maybeSingle();
+    const decision = decideEmission(res, ob?.attempts ?? 0);
+
+    if (decision.action === "accept") {
+      await this.sb.rpc("set_comprobante_result", {
+        cid: cpe.id,
+        new_status: "aceptada",
+        new_error: null,
+        new_xml: res.signedXml ?? null,
+        new_cdr: res.cdr ?? null,
+      });
+      await this.sb.from("sunat_outbox").delete().eq("comprobante_id", cpe.id);
+      return { ...cpe, status: "aceptada", error: null, signedXml: res.signedXml ?? cpe.signedXml ?? null, cdr: res.cdr ?? cpe.cdr ?? null };
+    }
+
+    if (decision.action === "reject") {
+      await this.sb.rpc("set_comprobante_result", {
+        cid: cpe.id,
+        new_status: "rechazada",
+        new_error: decision.error,
+        new_xml: res.signedXml ?? null,
+        new_cdr: null,
+      });
+      if (ob) await this.sb.from("sunat_outbox").delete().eq("id", ob.id);
+      return { ...cpe, status: "rechazada", error: decision.error };
+    }
+
+    // retry: mantiene en cola y programa el próximo intento con backoff.
+    if (ob) {
+      await this.sb
+        .from("sunat_outbox")
+        .update({ attempts: decision.attempts, next_attempt_at: decision.nextAttemptAt, last_error: decision.error })
+        .eq("id", ob.id);
+    } else {
+      await this.sb.from("sunat_outbox").insert({
+        tenant_id: this.tenantId,
+        comprobante_id: cpe.id,
+        attempts: decision.attempts,
+        next_attempt_at: decision.nextAttemptAt,
+        last_error: decision.error,
+      });
+    }
+    await this.sb.rpc("set_comprobante_result", {
+      cid: cpe.id,
+      new_status: "encola",
+      new_error: decision.error,
+      new_xml: null,
+      new_cdr: null,
+    });
+    return { ...cpe, status: "encola", error: decision.error };
+  }
+
   async emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante> {
+    // Idempotencia: si el mismo pedido ya tiene un comprobante de ese tipo no
+    // rechazado, no emitas otro (evita duplicados por doble clic / reintento).
+    if (input.orderId) {
+      const { data: existing } = await this.sb
+        .from("comprobantes")
+        .select("*")
+        .eq("order_id", input.orderId)
+        .eq("tipo", input.tipo)
+        .neq("status", "rechazada")
+        .order("issued_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existing) return mapComprobante(existing);
+    }
     const { data: folio, error: folioErr } = await this.sb.rpc("next_folio", {
       tid: this.tenantId,
       p_serie: input.tipo === "Factura" ? "F001" : "B001",
@@ -601,21 +682,7 @@ export class SupabaseRepo implements Repo {
     if (error) throw error;
     let cpe = mapComprobante(data);
     if (online) {
-      const res = await this.sunat.submit(cpe);
-      cpe = {
-        ...cpe,
-        status: res.accepted ? "aceptada" : "rechazada",
-        error: res.error ?? null,
-        signedXml: res.signedXml ?? null,
-        cdr: res.cdr ?? null,
-      };
-      await this.sb.rpc("set_comprobante_result", {
-        cid: cpe.id,
-        new_status: cpe.status,
-        new_error: cpe.error,
-        new_xml: res.signedXml ?? null,
-        new_cdr: res.cdr ?? null,
-      });
+      cpe = await this.settleEmission(cpe, await this.sunat.submit(cpe));
     } else {
       await this.sb.from("sunat_outbox").insert({ tenant_id: this.tenantId, comprobante_id: cpe.id });
     }
@@ -660,21 +727,7 @@ export class SupabaseRepo implements Repo {
     if (error) throw error;
     let cpe = mapComprobante(data);
     if (online) {
-      const res = await this.sunat.submit(cpe);
-      cpe = {
-        ...cpe,
-        status: res.accepted ? "aceptada" : "rechazada",
-        error: res.error ?? null,
-        signedXml: res.signedXml ?? null,
-        cdr: res.cdr ?? null,
-      };
-      await this.sb.rpc("set_comprobante_result", {
-        cid: cpe.id,
-        new_status: cpe.status,
-        new_error: cpe.error,
-        new_xml: res.signedXml ?? null,
-        new_cdr: res.cdr ?? null,
-      });
+      cpe = await this.settleEmission(cpe, await this.sunat.submit(cpe));
     } else {
       await this.sb.from("sunat_outbox").insert({ tenant_id: this.tenantId, comprobante_id: cpe.id });
     }
@@ -771,21 +824,22 @@ export class SupabaseRepo implements Repo {
   async syncSunat(online: boolean): Promise<number> {
     if (!online) return 0;
     const { data: queued } = await this.sb.from("comprobantes").select("*").eq("status", "encola");
+    const rows = queued ?? [];
+    if (!rows.length) return 0;
+    // Respeta el backoff: no reenvíes los que aún no toca (next_attempt_at futuro).
+    const now = new Date().toISOString();
+    const { data: obrows } = await this.sb
+      .from("sunat_outbox")
+      .select("comprobante_id, next_attempt_at")
+      .in("comprobante_id", rows.map((r) => r.id));
+    const nextMap = new Map((obrows ?? []).map((o) => [o.comprobante_id, o.next_attempt_at]));
     let sent = 0;
-    for (const row of queued ?? []) {
+    for (const row of rows) {
+      const nextAt = nextMap.get(row.id);
+      if (nextAt && nextAt > now) continue; // aún no vence el backoff
       const cpe = mapComprobante(row);
-      const res = await this.sunat.submit(cpe);
-      await this.sb.rpc("set_comprobante_result", {
-        cid: cpe.id,
-        new_status: res.accepted ? "aceptada" : "rechazada",
-        new_error: res.error ?? null,
-        new_xml: res.signedXml ?? null,
-        new_cdr: res.cdr ?? null,
-      });
-      if (res.accepted) {
-        sent++;
-        await this.sb.from("sunat_outbox").delete().eq("comprobante_id", cpe.id);
-      }
+      const settled = await this.settleEmission(cpe, await this.sunat.submit(cpe));
+      if (settled.status === "aceptada") sent++;
     }
     if (sent > 0) await this.log(`Sincronizó ${sent} comprobante(s) con SUNAT`);
     return sent;
@@ -796,14 +850,8 @@ export class SupabaseRepo implements Repo {
     const { data } = await this.sb.from("comprobantes").select("*").eq("id", id).maybeSingle();
     if (!data) return;
     const cpe = mapComprobante(data);
-    const res = await this.sunat.submit(cpe);
-    await this.sb.rpc("set_comprobante_result", {
-      cid: id,
-      new_status: res.accepted ? "aceptada" : "rechazada",
-      new_error: res.error ?? null,
-      new_xml: res.signedXml ?? null,
-      new_cdr: res.cdr ?? null,
-    });
+    if (cpe.status === "aceptada") return; // ya aceptado: idempotente, nada que reenviar
+    await this.settleEmission(cpe, await this.sunat.submit(cpe));
   }
 
   async getSettings(): Promise<BusinessSettings> {

@@ -31,27 +31,36 @@ export function makeFunctionGateway(sb: SupabaseClient<Database>, tenantId?: str
         body.motivoCodigo = "01";
       }
       const { data, error } = await sb.functions.invoke("sunat-emitir", { body });
-      if (error) return { accepted: false, error: error.message };
+      // Error de transporte (red/función caída): transitorio, conviene reintentar.
+      if (error) return { accepted: false, error: error.message, transient: true };
       const res = data as {
         accepted?: boolean;
         description?: string;
         error?: string;
+        code?: string;
         cdr?: string;
         xml?: string;
         pdfUrl?: string;
         xmlUrl?: string;
         qr?: string;
       };
-      if (res.error) return { accepted: false, error: res.error };
-      return {
-        accepted: !!res.accepted,
-        error: res.accepted ? undefined : res.description,
-        signedXml: res.xml,
-        cdr: res.cdr,
-        pdfUrl: res.pdfUrl,
-        xmlUrl: res.xmlUrl,
-        qr: res.qr,
-      };
+      // Excepción del servidor (500): transitorio.
+      if (res.error) return { accepted: false, error: res.error, transient: true };
+      if (res.accepted) {
+        return {
+          accepted: true,
+          code: res.code,
+          signedXml: res.xml,
+          cdr: res.cdr,
+          pdfUrl: res.pdfUrl,
+          xmlUrl: res.xmlUrl,
+          qr: res.qr,
+        };
+      }
+      // No aceptado: 'unknown' = respuesta no reconocida del WS (transitorio);
+      // cualquier otro código es un rechazo de negocio (definitivo).
+      const transient = res.code === "unknown" || !res.code;
+      return { accepted: false, error: res.description, code: res.code, transient, signedXml: res.xml };
     },
   };
 }
