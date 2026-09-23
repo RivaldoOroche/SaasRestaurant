@@ -44,6 +44,7 @@ export const TENANT_NAV: NavEntry[] = [
   { key: "inventario", label: "Inventario", path: "/pos/inventario", icon: "📦", roles: MANAGER_UP, section: "top" },
   { key: "clientes", label: "Clientes", path: "/pos/clientes", icon: "🧑‍🤝‍🧑", roles: TENANT_ROLES, section: "top" },
   { key: "comprobantes", label: "SUNAT", path: "/pos/sunat", icon: "🧾", roles: MANAGER_UP, section: "top" },
+  { key: "reclamaciones", label: "Reclamos", path: "/pos/reclamaciones", icon: "📕", roles: MANAGER_UP, section: "top" },
   { key: "caja", label: "Caja", path: "/pos/caja", icon: "💵", roles: MANAGER_UP, section: "top" },
   { key: "reportes", label: "Reportes", path: "/pos/reportes", icon: "📊", roles: TENANT_ROLES, section: "top" },
   { key: "sucursales", label: "Dueño", path: "/pos/sucursales", icon: "🏢", roles: OWNER_ONLY, section: "top" },

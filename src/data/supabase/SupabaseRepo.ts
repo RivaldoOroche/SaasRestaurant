@@ -26,6 +26,7 @@ import type {
   BajaResult,
   FiscalCredentialsInput,
   CardCredentialsInput,
+  Complaint,
   CardChargeInput,
   CardChargeResult,
 } from "../model";
@@ -856,9 +857,13 @@ export class SupabaseRepo implements Repo {
   }
 
   async getSettings(): Promise<BusinessSettings> {
-    const { data } = await this.sb.from("business_settings").select("*").eq("tenant_id", this.tenantId).maybeSingle();
+    const [{ data }, { data: t }] = await Promise.all([
+      this.sb.from("business_settings").select("*").eq("tenant_id", this.tenantId).maybeSingle(),
+      this.sb.from("tenants").select("slug").eq("id", this.tenantId).maybeSingle(),
+    ]);
     return {
       name: data?.name ?? "",
+      slug: t?.slug ?? undefined,
       currency: (data?.currency ?? "PEN") as BusinessSettings["currency"],
       taxRate: Number(data?.tax_rate ?? 18),
       tipPresets: data?.tip_presets ?? [10, 15, 18],
@@ -944,6 +949,43 @@ export class SupabaseRepo implements Repo {
     const r = data as { success?: boolean; chargeId?: string; error?: string };
     if (r.success) await this.log(`Cargo con tarjeta ${r.chargeId ?? ""} · S/ ${input.amount.toFixed(2)}`);
     return { success: !!r.success, chargeId: r.chargeId, error: r.error };
+  }
+
+  async getComplaints(): Promise<Complaint[]> {
+    const { data, error } = await this.sb
+      .from("complaints")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+    return (data ?? []).map((c) => ({
+      id: c.id,
+      correlativo: c.correlativo,
+      consumerName: c.consumer_name,
+      consumerDoc: c.consumer_doc,
+      consumerDocType: c.consumer_doc_type,
+      consumerEmail: c.consumer_email ?? undefined,
+      consumerPhone: c.consumer_phone ?? undefined,
+      itemType: c.item_type,
+      itemAmount: c.item_amount ?? undefined,
+      itemDescription: c.item_description ?? undefined,
+      claimType: c.claim_type,
+      detail: c.detail,
+      request: c.request ?? undefined,
+      status: c.status,
+      response: c.response ?? undefined,
+      respondedAt: c.responded_at ?? undefined,
+      createdAt: c.created_at,
+    }));
+  }
+
+  async respondComplaint(id: string, response: string): Promise<void> {
+    const { error } = await this.sb
+      .from("complaints")
+      .update({ status: "respondido", response, responded_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw error;
+    await this.log(`Respondió una hoja del Libro de Reclamaciones`);
   }
 
   async getActivityLog(): Promise<LogEntry[]> {

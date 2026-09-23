@@ -95,6 +95,30 @@ export interface Tables {
       received_at: string;
     };
   };
+  complaints: {
+    Row: {
+      id: string;
+      tenant_id: string;
+      correlativo: number;
+      consumer_name: string;
+      consumer_doc_type: string;
+      consumer_doc: string;
+      consumer_address: string | null;
+      consumer_phone: string | null;
+      consumer_email: string | null;
+      is_minor: boolean;
+      item_type: string;
+      item_amount: number | null;
+      item_description: string | null;
+      claim_type: string;
+      detail: string;
+      request: string | null;
+      status: string;
+      response: string | null;
+      responded_at: string | null;
+      created_at: string;
+    };
+  };
   fiscal_credentials: {
     Row: { tenant_id: string; provider: string; sol_pass: string | null; cert_pem: string | null; key_pem: string | null; api_token: string | null; updated_at: string };
   };
@@ -181,6 +205,8 @@ export type Database = {
         Returns: undefined;
       };
       public_menu: { Args: { p_slug: string }; Returns: unknown };
+      public_tenant_info: { Args: { p_slug: string }; Returns: unknown };
+      submit_complaint: { Args: { p_slug: string; payload: unknown }; Returns: unknown };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

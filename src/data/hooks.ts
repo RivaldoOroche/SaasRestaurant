@@ -157,6 +157,19 @@ export function useComprobantes() {
   const repo = useRepo();
   return useQuery({ queryKey: ["comprobantes"], queryFn: () => repo.getComprobantes() });
 }
+export function useComplaints() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["complaints"], queryFn: () => repo.getComplaints() });
+}
+export function useComplaintActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const respond = useMutation({
+    mutationFn: ({ id, response }: { id: string; response: string }) => repo.respondComplaint(id, response),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["complaints"] }),
+  });
+  return { respond };
+}
 
 /** Order mutations with cache invalidation. */
 export function useOrderActions(tableId: string | null) {

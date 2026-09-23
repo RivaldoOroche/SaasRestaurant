@@ -171,6 +171,7 @@ export type SunatMode = "beta" | "produccion";
 
 export interface BusinessSettings {
   name: string;
+  slug?: string; // identificador público del tenant (para carta / libro de reclamaciones)
   currency: import("@/lib/money").Currency;
   taxRate: number; // percent, e.g. 18
   tipPresets: number[];
@@ -230,6 +231,27 @@ export interface CardCredentialsInput {
   secretKey?: string; // llave secreta (Culqi) / password de API (Izipay) / token (Niubiz)
   merchantId?: string; // código de comercio (Niubiz) / código de tienda (Izipay)
   webhookSecret?: string; // secreto para verificar la firma de los webhooks
+}
+
+/** Hoja del Libro de Reclamaciones (Indecopi). */
+export interface Complaint {
+  id: string;
+  correlativo: number;
+  consumerName: string;
+  consumerDoc: string;
+  consumerDocType: string;
+  consumerEmail?: string;
+  consumerPhone?: string;
+  itemType: string; // producto | servicio
+  itemAmount?: number;
+  itemDescription?: string;
+  claimType: string; // reclamo | queja
+  detail: string;
+  request?: string;
+  status: string; // pendiente | respondido
+  response?: string;
+  respondedAt?: string;
+  createdAt: string;
 }
 
 export type MenuChangeStatus = "pendiente" | "aprobado" | "rechazado";

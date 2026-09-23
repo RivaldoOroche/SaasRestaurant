@@ -8,6 +8,9 @@ import { Login } from "@/screens/Login";
 import { Placeholder } from "@/screens/Placeholder";
 import { CartaPublica } from "@/screens/public/CartaPublica";
 import { Onboarding } from "@/screens/public/Onboarding";
+import { LibroReclamaciones } from "@/screens/public/LibroReclamaciones";
+import { Legal } from "@/screens/public/Legal";
+import { Reclamaciones } from "@/screens/pos/Reclamaciones";
 import { Pedido } from "@/screens/pos/Pedido";
 import { Mesas } from "@/screens/pos/Mesas";
 import { Cocina } from "@/screens/pos/Cocina";
@@ -58,6 +61,7 @@ const SCREENS: Record<string, ComponentType> = {
   sucursales: Sucursales,
   suscripcion: Suscripcion,
   comprobantes: Sunat,
+  reclamaciones: Reclamaciones,
   saashome: Resumen,
   tenants: Tenants,
   retencion: Retencion,
@@ -75,7 +79,7 @@ const PHASE: Record<string, string> = {
   cuentas: "Fase 2", online: "Fase 2", carta: "Fase 2", editor: "Fase 2",
   inventario: "Fase 2", clientes: "Fase 2", caja: "Fase 2", reportes: "Fase 2",
   panel: "Fase 2", ajustes: "Fase 2",
-  comprobantes: "Fase 3",
+  comprobantes: "Fase 3", reclamaciones: "Fase 2",
   saashome: "Fase 4", tenants: "Fase 4", retencion: "Fase 4", ingresos: "Fase 4",
   planes: "Fase 4", soporte: "Fase 4", bitacora: "Fase 4", cobros: "Fase 4",
   sucursales: "Fase 2", suscripcion: "Fase 4",
@@ -114,6 +118,8 @@ function Shell() {
     <Routes>
       <Route path="/carta/:slug" element={<CartaPublica />} />
       <Route path="/onboarding/:slug" element={<Onboarding />} />
+      <Route path="/libro/:slug" element={<LibroReclamaciones />} />
+      <Route path="/legal/:doc" element={<Legal />} />
       <Route path="/login" element={<Login />} />
       <Route element={<AppShell />}>
         {TENANT_NAV.map(screenRoute)}

@@ -19,6 +19,7 @@ import type {
   BajaResult,
   FiscalCredentialsInput,
   CardCredentialsInput,
+  Complaint,
   CardChargeInput,
   CardChargeResult,
 } from "../model";
@@ -131,6 +132,7 @@ function loadState(): MockState {
 export class MockRepo implements Repo {
   private state: MockState = loadState();
   private listeners = new Set<() => void>();
+  private complaints?: Complaint[]; // demo: en memoria
 
   private persist() {
     try {
@@ -699,7 +701,7 @@ export class MockRepo implements Repo {
 
   // ---- Settings + audit ----
   async getSettings() {
-    return { ...this.state.settings };
+    return { slug: "la-higuera", ...this.state.settings };
   }
   async updateSettings(patch: Partial<BusinessSettings>) {
     this.state.settings = { ...this.state.settings, ...patch };
@@ -710,6 +712,42 @@ export class MockRepo implements Repo {
     // Demo: no se persisten las credenciales secretas (solo se registra el cambio).
     this.pushLog("Ajustes", `Configuró credenciales de ${input.provider}`);
     this.persist();
+  }
+
+  async getComplaints(): Promise<Complaint[]> {
+    if (!this.complaints) {
+      this.complaints = [
+        {
+          id: "cmp-1",
+          correlativo: 1,
+          consumerName: "Rosa Delgado",
+          consumerDoc: "44556677",
+          consumerDocType: "DNI",
+          consumerEmail: "rosa@example.pe",
+          itemType: "servicio",
+          itemAmount: 128,
+          itemDescription: "Almuerzo mesa 7",
+          claimType: "reclamo",
+          detail: "La demora en la atención superó los 40 minutos.",
+          request: "Solicito una disculpa y una cortesía en mi próxima visita.",
+          status: "pendiente",
+          createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+        },
+      ];
+    }
+    return this.complaints.map((c) => ({ ...c }));
+  }
+
+  async respondComplaint(id: string, response: string) {
+    const list = await this.getComplaints();
+    const c = (this.complaints ?? list).find((x) => x.id === id);
+    if (c) {
+      c.status = "respondido";
+      c.response = response;
+      c.respondedAt = new Date().toISOString();
+      this.pushLog("Reclamaciones", `Respondió la hoja N° ${c.correlativo}`);
+      this.persist();
+    }
   }
   async setFiscalCredentials(input: FiscalCredentialsInput) {
     // Demo: no se persisten las credenciales secretas (solo se registra el cambio).

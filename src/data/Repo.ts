@@ -26,6 +26,7 @@ import type {
   CardCredentialsInput,
   CardChargeInput,
   CardChargeResult,
+  Complaint,
 } from "./model";
 
 export interface PayInput extends PayExtras {
@@ -128,6 +129,12 @@ export interface Repo {
   setFiscalCredentials(input: FiscalCredentialsInput): Promise<void>;
   /** Cobra con tarjeta usando el token del proveedor (cargo del lado del servidor). */
   chargeCard(input: CardChargeInput): Promise<CardChargeResult>;
+
+  // Libro de Reclamaciones
+  /** Hojas del Libro de Reclamaciones del tenant. */
+  getComplaints(): Promise<Complaint[]>;
+  /** Responde una hoja de reclamación (marca respondida). */
+  respondComplaint(id: string, response: string): Promise<void>;
   getActivityLog(): Promise<LogEntry[]>;
 
   /** Subscribe to changes (kitchen + orders + tables). Returns an unsubscribe fn. */
