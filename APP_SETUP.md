@@ -73,6 +73,7 @@ Despliega con la CLI de Supabase:
 supabase functions deploy sunat-emitir
 supabase functions deploy sunat-lotes
 supabase functions deploy pago-tarjeta
+supabase functions deploy pago-webhook
 supabase functions deploy onboarding-complete
 supabase functions deploy saas-cobrar
 ```
@@ -91,8 +92,13 @@ supabase secrets set \
   homologación beta puedes usar variables de entorno (ver
   `supabase/functions/sunat-emitir/README.md`): `SUNAT_RUC`, `SUNAT_SOL_USER`,
   `SUNAT_SOL_PASS`, `SUNAT_CERT_PEM`, `SUNAT_KEY_PEM`, `SUNAT_MODE`.
-- **pago-tarjeta** — cobra con la llave secreta del tenant en
-  `payment_credentials` (Culqi implementado; Izipay/Niubiz como seam).
+- **pago-tarjeta** — cobra con las credenciales del tenant en
+  `payment_credentials`, enrutando por proveedor (**Culqi / Izipay / Niubiz**)
+  en `supabase/functions/_shared/pagos/gateway.ts`.
+- **pago-webhook** — recibe los webhooks de la pasarela
+  (`?provider=culqi&tenant=<uuid>`), verifica la firma HMAC opcional con el
+  `webhook_secret` del tenant y registra el evento de forma **idempotente**
+  (`payment_events`, unique `provider,event_id`) para no procesarlo dos veces.
 - **onboarding-complete** — crea el dueño y siembra el tenant desde el link firmado.
 - **saas-cobrar** — cobra la suscripción de un tenant con la pasarela de **la
   plataforma** (secret `PLATFORM_CULQI_SECRET`); registra la factura SaaS y activa

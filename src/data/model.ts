@@ -224,6 +224,14 @@ export interface FiscalCredentialsInput {
   apiToken?: string; // token/API key del OSE/PSE
 }
 
+/** Credenciales de la pasarela de tarjeta (secretas: solo escritura). */
+export interface CardCredentialsInput {
+  provider: CardProvider;
+  secretKey?: string; // llave secreta (Culqi) / password de API (Izipay) / token (Niubiz)
+  merchantId?: string; // código de comercio (Niubiz) / código de tienda (Izipay)
+  webhookSecret?: string; // secreto para verificar la firma de los webhooks
+}
+
 export type MenuChangeStatus = "pendiente" | "aprobado" | "rechazado";
 
 export interface MenuChange {

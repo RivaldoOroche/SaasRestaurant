@@ -6,9 +6,11 @@
 //   body: { tenantId, token, amount, currency, email, description }
 //   -> { success, chargeId?, error? }
 //
-// Implementa Culqi de forma real; Izipay/Niubiz quedan como seam documentado.
+// El cargo se enruta por proveedor (Culqi / Izipay / Niubiz) en
+// _shared/pagos/gateway.ts. La confirmación asíncrona llega por `pago-webhook`.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { cobrarTarjeta } from "../_shared/pagos/gateway.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -21,24 +23,6 @@ function env(k: string, def = ""): string {
 }
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { ...cors, "Content-Type": "application/json" } });
-}
-
-async function chargeCulqi(secretKey: string, amountCents: number, currency: string, email: string, token: string, description: string) {
-  const resp = await fetch("https://api.culqi.com/v2/charges", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      amount: amountCents,
-      currency_code: currency,
-      email,
-      source_id: token,
-      description: description || "Cobro POS",
-    }),
-  });
-  const data = await resp.json().catch(() => ({}));
-  if (resp.ok && data?.id) return { success: true, chargeId: data.id as string };
-  const msg = data?.user_message || data?.merchant_message || `Culqi HTTP ${resp.status}`;
-  return { success: false, error: String(msg) };
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -56,20 +40,22 @@ export default async function handler(req: Request): Promise<Response> {
 
     const { data: creds } = await admin
       .from("payment_credentials")
-      .select("provider, secret_key")
+      .select("provider, secret_key, public_key, merchant_id, extra")
       .eq("tenant_id", tenantId)
       .maybeSingle();
-    if (!creds?.secret_key) return json({ success: false, error: "No hay credenciales de tarjeta configuradas" });
+    if (!creds) return json({ success: false, error: "No hay credenciales de tarjeta configuradas" });
 
-    const amountCents = Math.round(Number(amount) * 100);
-    const provider = String(creds.provider);
-
-    if (provider === "culqi") {
-      const res = await chargeCulqi(creds.secret_key, amountCents, currency, email, token, description);
-      return json(res);
-    }
-    // Izipay / Niubiz: seam a implementar con su API de pago.
-    return json({ success: false, error: `Cargo con ${provider} aún no implementado en el servidor` });
+    const res = await cobrarTarjeta(
+      {
+        provider: String(creds.provider),
+        secretKey: creds.secret_key ?? undefined,
+        publicKey: creds.public_key ?? undefined,
+        merchantId: creds.merchant_id ?? undefined,
+        extra: (creds.extra ?? {}) as Record<string, unknown>,
+      },
+      { amountCents: Math.round(Number(amount) * 100), currency, email, token, description },
+    );
+    return json(res);
   } catch (e) {
     return json({ success: false, error: String((e as Error).message ?? e) }, 500);
   }

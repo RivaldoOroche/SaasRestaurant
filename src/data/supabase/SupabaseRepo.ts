@@ -25,6 +25,7 @@ import type {
   ResumenDiario,
   BajaResult,
   FiscalCredentialsInput,
+  CardCredentialsInput,
   CardChargeInput,
   CardChargeResult,
 } from "../model";
@@ -900,11 +901,17 @@ export class SupabaseRepo implements Repo {
     await this.sb.from("business_settings").update(row).eq("tenant_id", this.tenantId);
   }
 
-  async setCardCredentials(provider: string, secretKey: string): Promise<void> {
-    // Escribe (no lee) la llave secreta; upsert por tenant.
-    await this.sb
-      .from("payment_credentials")
-      .upsert({ tenant_id: this.tenantId, provider, secret_key: secretKey, updated_at: new Date().toISOString() });
+  async setCardCredentials(input: CardCredentialsInput): Promise<void> {
+    // Escribe (no lee) las credenciales secretas; solo los campos provistos.
+    const row: Database["public"]["Tables"]["payment_credentials"]["Insert"] = {
+      tenant_id: this.tenantId,
+      provider: input.provider,
+      updated_at: new Date().toISOString(),
+    };
+    if (input.secretKey !== undefined) row.secret_key = input.secretKey;
+    if (input.merchantId !== undefined) row.merchant_id = input.merchantId;
+    if (input.webhookSecret !== undefined) row.webhook_secret = input.webhookSecret;
+    await this.sb.from("payment_credentials").upsert(row);
   }
 
   async setFiscalCredentials(input: FiscalCredentialsInput): Promise<void> {

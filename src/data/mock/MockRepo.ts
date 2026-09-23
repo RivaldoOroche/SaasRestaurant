@@ -18,6 +18,7 @@ import type {
   ResumenDiario,
   BajaResult,
   FiscalCredentialsInput,
+  CardCredentialsInput,
   CardChargeInput,
   CardChargeResult,
 } from "../model";
@@ -705,10 +706,9 @@ export class MockRepo implements Repo {
     this.pushLog("Ajustes", `Actualizó configuración del negocio`);
     this.persist();
   }
-  async setCardCredentials(provider: string, _secretKey: string) {
-    // Demo: no se persiste la llave secreta (solo se registra el cambio).
-    void _secretKey;
-    this.pushLog("Ajustes", `Configuró credenciales de ${provider}`);
+  async setCardCredentials(input: CardCredentialsInput) {
+    // Demo: no se persisten las credenciales secretas (solo se registra el cambio).
+    this.pushLog("Ajustes", `Configuró credenciales de ${input.provider}`);
     this.persist();
   }
   async setFiscalCredentials(input: FiscalCredentialsInput) {

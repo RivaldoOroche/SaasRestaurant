@@ -327,8 +327,7 @@ export function useTenantActions() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["settings"] }),
   });
   const setCardCredentials = useMutation({
-    mutationFn: ({ provider, secretKey }: { provider: string; secretKey: string }) =>
-      repo.setCardCredentials(provider, secretKey),
+    mutationFn: (input: Parameters<typeof repo.setCardCredentials>[0]) => repo.setCardCredentials(input),
   });
   const setFiscalCredentials = useMutation({
     mutationFn: (input: Parameters<typeof repo.setFiscalCredentials>[0]) => repo.setFiscalCredentials(input),

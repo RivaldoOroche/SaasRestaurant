@@ -23,6 +23,7 @@ import type {
   ResumenDiario,
   BajaResult,
   FiscalCredentialsInput,
+  CardCredentialsInput,
   CardChargeInput,
   CardChargeResult,
 } from "./model";
@@ -121,8 +122,8 @@ export interface Repo {
   // Settings + audit
   getSettings(): Promise<BusinessSettings>;
   updateSettings(patch: Partial<BusinessSettings>): Promise<void>;
-  /** Guarda (sin devolver) la llave secreta de la pasarela de tarjeta. */
-  setCardCredentials(provider: string, secretKey: string): Promise<void>;
+  /** Guarda (sin devolver) las credenciales secretas de la pasarela de tarjeta. */
+  setCardCredentials(input: CardCredentialsInput): Promise<void>;
   /** Guarda (sin devolver) las credenciales de facturación electrónica. */
   setFiscalCredentials(input: FiscalCredentialsInput): Promise<void>;
   /** Cobra con tarjeta usando el token del proveedor (cargo del lado del servidor). */

@@ -319,6 +319,8 @@ function FacturacionCard({ settings }: { settings: BusinessSettings }) {
 function PaymentsCard({ settings }: { settings: BusinessSettings }) {
   const { updateSettings, setCardCredentials } = useTenantActions();
   const [secret, setSecret] = useState("");
+  const [merchantId, setMerchantId] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
   const provider = settings.cardProvider ?? "ninguno";
 
   return (
@@ -372,30 +374,57 @@ function PaymentsCard({ settings }: { settings: BusinessSettings }) {
                 className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
               />
             </Field>
-            <Field label="Llave secreta (no se muestra luego)">
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={secret}
-                  onChange={(e) => setSecret(e.target.value)}
-                  placeholder="sk_test_..."
-                  className="flex-1 rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
-                />
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  disabled={!secret || setCardCredentials.isPending}
-                  onClick={() => {
-                    setCardCredentials.mutate({ provider, secretKey: secret });
-                    setSecret("");
-                  }}
-                >
-                  Guardar
-                </Button>
-              </div>
+            <Field label={provider === "niubiz" ? "Token de acceso / secreto" : provider === "izipay" ? "Password de API (secreto)" : "Llave secreta (no se muestra luego)"}>
+              <input
+                type="password"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                placeholder={provider === "culqi" ? "sk_test_..." : "••••••••"}
+                className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+              />
             </Field>
+            {(provider === "izipay" || provider === "niubiz") && (
+              <Field label={provider === "niubiz" ? "Código de comercio (merchantId)" : "Código de tienda (shopId)"}>
+                <input
+                  value={merchantId}
+                  onChange={(e) => setMerchantId(e.target.value)}
+                  placeholder={provider === "niubiz" ? "3xxxxxxx" : "xxxxxxxx"}
+                  className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+                />
+              </Field>
+            )}
+            <Field label="Secreto de webhook (opcional, para verificar firmas)">
+              <input
+                type="password"
+                value={webhookSecret}
+                onChange={(e) => setWebhookSecret(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+              />
+            </Field>
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={(!secret && !merchantId && !webhookSecret) || setCardCredentials.isPending}
+                onClick={() => {
+                  setCardCredentials.mutate({
+                    provider,
+                    secretKey: secret || undefined,
+                    merchantId: merchantId || undefined,
+                    webhookSecret: webhookSecret || undefined,
+                  });
+                  setSecret("");
+                  setMerchantId("");
+                  setWebhookSecret("");
+                }}
+              >
+                Guardar credenciales
+              </Button>
+            </div>
             <p className="text-muted text-xs">
-              La llave secreta se guarda cifrada del lado del servidor y nunca se devuelve al navegador.
+              Las credenciales secretas se guardan cifradas del lado del servidor y nunca se devuelven al navegador.
+              La confirmación de pagos llega por webhook a <code>pago-webhook</code>.
             </p>
           </div>
         )}
