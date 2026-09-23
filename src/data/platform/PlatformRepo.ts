@@ -15,6 +15,7 @@ export interface PlatformRepo {
   getSummary(): Promise<PlatformSummary>;
   getTenants(): Promise<Tenant[]>;
   getPlans(): Promise<PlanInfo[]>;
+  updatePlan(tier: PlanTier, patch: { price?: number; features?: string }): Promise<void>;
   getInvoices(): Promise<SaasInvoice[]>;
   getTickets(): Promise<SupportTicket[]>;
   getRetention(): Promise<Retention>;

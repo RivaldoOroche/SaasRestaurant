@@ -59,5 +59,10 @@ export function usePlatformActions() {
       repo.chargeTenant(id, method, token),
     onSuccess: invalidate,
   });
-  return { createTenant, setPlan, toggleSuspend, charge };
+  const updatePlan = useMutation({
+    mutationFn: ({ tier, patch }: { tier: PlanTier; patch: { price?: number; features?: string } }) =>
+      repo.updatePlan(tier, patch),
+    onSuccess: invalidate,
+  });
+  return { createTenant, setPlan, toggleSuspend, charge, updatePlan };
 }

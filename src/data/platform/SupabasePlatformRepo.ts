@@ -78,18 +78,38 @@ export class SupabasePlatformRepo implements PlatformRepo {
   }
 
   async getPlans() {
-    const tenants = await this.getTenants();
+    const [tenants, { data: planRows }] = await Promise.all([
+      this.getTenants(),
+      this.sb.from("subscription_plans").select("tier, price, features"),
+    ]);
+    const cfg = new Map((planRows ?? []).map((p) => [p.tier as PlanTier, p]));
     return (["Básico", "Pro", "Enterprise"] as PlanTier[]).map((tier) => {
       const rows = tenants.filter((t) => t.plan === tier && t.status === "Activo");
+      const p = cfg.get(tier);
       return {
         tier,
-        price: PLAN_PRICE[tier],
-        features:
-          tier === "Básico" ? "POS + 1 sucursal" : tier === "Pro" ? "POS + inventario + reportes" : "Todo + soporte",
+        price: p ? Number(p.price) : PLAN_PRICE[tier],
+        features: p?.features ?? "",
         subscribers: rows.length,
         mrr: rows.reduce((s, t) => s + t.mrr, 0),
       };
     });
+  }
+
+  private async priceOf(tier: PlanTier): Promise<number> {
+    const { data } = await this.sb.from("subscription_plans").select("price").eq("tier", tier).maybeSingle();
+    return data ? Number(data.price) : PLAN_PRICE[tier];
+  }
+
+  async updatePlan(tier: PlanTier, patch: { price?: number; features?: string }): Promise<void> {
+    await this.sb.from("subscription_plans").upsert(
+      { tier, price: patch.price, features: patch.features },
+      { onConflict: "tier" },
+    );
+    // Actualiza el MRR de los tenants activos de ese plan si cambió el precio.
+    if (patch.price !== undefined) {
+      await this.sb.from("tenants").update({ mrr: patch.price }).eq("plan", tier).eq("status", "Activo");
+    }
   }
 
   private async tenantNames(): Promise<Map<string, string>> {
@@ -151,7 +171,7 @@ export class SupabasePlatformRepo implements PlatformRepo {
 
   async setTenantPlan(id: string, plan: PlanTier) {
     const { data } = await this.sb.from("tenants").select("status").eq("id", id).maybeSingle();
-    const mrr = data?.status === "Activo" ? PLAN_PRICE[plan] : 0;
+    const mrr = data?.status === "Activo" ? await this.priceOf(plan) : 0;
     await this.sb.from("tenants").update({ plan, mrr }).eq("id", id);
   }
 
@@ -159,16 +179,14 @@ export class SupabasePlatformRepo implements PlatformRepo {
     const { data } = await this.sb.from("tenants").select("status, plan").eq("id", id).maybeSingle();
     if (!data) return;
     const suspend = data.status !== "Suspendido";
-    await this.sb
-      .from("tenants")
-      .update({ status: suspend ? "Suspendido" : "Activo", mrr: suspend ? 0 : PLAN_PRICE[data.plan] })
-      .eq("id", id);
+    const mrr = suspend ? 0 : await this.priceOf(data.plan);
+    await this.sb.from("tenants").update({ status: suspend ? "Suspendido" : "Activo", mrr }).eq("id", id);
   }
 
   async chargeTenant(id: string, method: string, token?: string): Promise<SaasCharge> {
     const { data: t, error } = await this.sb.from("tenants").select("*").eq("id", id).single();
     if (error || !t) throw error ?? new Error("Tenant no encontrado");
-    const total = PLAN_PRICE[t.plan];
+    const total = await this.priceOf(t.plan);
     const base = Math.round((total / 1.18) * 100) / 100;
     const folio = `NP-F001-${Math.floor(1000 + Math.random() * 9000)}`;
 
