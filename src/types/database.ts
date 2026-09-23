@@ -32,6 +32,9 @@ export interface Tables {
   support_tickets: {
     Row: { id: string; tenant_id: string; subject: string; priority: string; status: string } & Timestamps;
   };
+  platform_activity: {
+    Row: { id: string; actor: string; message: string; created_at: string };
+  };
   onboarding_links: {
     Row: { id: string; tenant_id: string; token_hash: string; expires_at: string; used_at: string | null } & Timestamps;
   };

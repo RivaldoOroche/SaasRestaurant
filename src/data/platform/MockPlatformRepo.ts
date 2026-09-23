@@ -1,6 +1,62 @@
 import type { PlatformRepo } from "./PlatformRepo";
-import type { Tenant, PlanTier, NewTenantInput, SaasCharge } from "./model";
+import type {
+  Tenant,
+  PlanTier,
+  NewTenantInput,
+  SaasCharge,
+  SupportTicket,
+  PlatformActivity,
+  ActivityCategory,
+  ActivityLevel,
+} from "./model";
 import { MOCK_TENANT_ID } from "@/auth/session";
+
+function isoAgo(mins: number): string {
+  return new Date(Date.now() - mins * 60_000).toISOString();
+}
+
+/** Bitácora de demo: actividad detallada y variada de varios tenants. */
+function seedActivity(): PlatformActivity[] {
+  const e = (
+    tenant: string,
+    actor: string,
+    category: ActivityCategory,
+    level: ActivityLevel,
+    message: string,
+    mins: number,
+  ): PlatformActivity => ({ id: uid("act"), tenant, actor, category, level, message, at: isoAgo(mins) });
+  return [
+    e("La Higuera", "Ana Ruiz", "venta", "info", "Cobró Mesa 7 · Yape · S/ 128.00", 3),
+    e("La Higuera", "SUNAT", "sunat", "info", "Boleta B001-1042 aceptada por SUNAT", 3),
+    e("Cevichería El Muelle", "Sistema", "inventario", "warning", "Stock bajo: Pescado fresco (2.1 kg, par 5 kg)", 6),
+    e("Sushi Nami", "Keiko Tanaka", "venta", "info", "Cobró Mesa 3 · Tarjeta · S/ 214.50", 8),
+    e("La Higuera", "Carlos Vega", "acceso", "info", "Inició sesión con PIN en Terminal 2", 11),
+    e("Tacos El Farol", "SUNAT", "sunat", "error", "Factura F001-0087 rechazada: RUC del cliente inválido", 14),
+    e("Cevichería El Muelle", "Caja", "caja", "info", "Cierre de caja turno tarde · diferencia S/ 0.00", 22),
+    e("La Higuera", "Sistema", "inventario", "info", "Descontó 4 insumos por venta de Mesa 7", 3),
+    e("Sushi Nami", "Sistema", "sistema", "error", "Impresora de cocina sin conexión (reintentando)", 27),
+    e("Brasas del Sur", "Plataforma", "pago", "error", "Cobro de suscripción rechazado (3er intento) · tarjeta vencida", 40),
+    e("Café Aurora", "Paula Vega", "carta", "info", "Publicó 3 platos nuevos en la carta", 55),
+    e("La Higuera", "Iker Solís", "caja", "warning", "Anuló Ceviche clásico de Mesa 5 · motivo: error de toma", 63),
+    e("Cevichería El Muelle", "SUNAT", "sunat", "info", "Resumen diario RC-20260923-1 enviado (18 boletas)", 70),
+    e("Tacos El Farol", "Raúl Méndez", "acceso", "warning", "3 intentos fallidos de PIN en Terminal 1", 84),
+    e("Sushi Nami", "Sistema", "inventario", "error", "Stock agotado: Salmón — 2 platos marcados 86", 96),
+    e("La Higuera", "Mónica R.", "plan", "info", "Actualizó datos del emisor (RUC / dirección)", 130),
+    e("Café Aurora", "Plataforma", "plan", "info", "Tenant creado · plan Pro (prueba 14 días)", 240),
+    e("La Higuera", "Ana Ruiz", "venta", "info", "Cobró Mesa 2 · Efectivo · S/ 64.00", 150),
+    e("Cevichería El Muelle", "Sistema", "sistema", "info", "Sincronizó 6 comprobantes en cola con SUNAT", 180),
+    e("Brasas del Sur", "Plataforma", "plan", "warning", "Suscripción suspendida por falta de pago", 320),
+  ];
+}
+
+function seedTickets(): SupportTicket[] {
+  return [
+    { id: uid("tk"), tenant: "Sushi Nami", subject: "Impresora no responde", priority: "Alta", status: "Abierto", ago: "hace 2h" },
+    { id: uid("tk"), tenant: "Cevichería El Muelle", subject: "Duda sobre reportes por mesero", priority: "Media", status: "Abierto", ago: "hace 5h" },
+    { id: uid("tk"), tenant: "Tacos El Farol", subject: "Solicitud de nueva sucursal", priority: "Baja", status: "Abierto", ago: "ayer" },
+    { id: uid("tk"), tenant: "La Higuera", subject: "Capacitación de personal", priority: "Baja", status: "Resuelto", ago: "hace 3 días" },
+  ];
+}
 
 const PLAN_PRICE: Record<PlanTier, number> = { Básico: 699, Pro: 1499, Enterprise: 4800 };
 const PLAN_FEATURES: Record<PlanTier, string> = {
@@ -47,10 +103,17 @@ export class MockPlatformRepo implements PlatformRepo {
     Pro: { price: PLAN_PRICE.Pro, features: PLAN_FEATURES.Pro },
     Enterprise: { price: PLAN_PRICE.Enterprise, features: PLAN_FEATURES.Enterprise },
   };
+  private tickets: SupportTicket[] = seedTickets();
+  private activity: PlatformActivity[] = seedActivity();
   private listeners = new Set<() => void>();
 
   private emit() {
     this.listeners.forEach((l) => l());
+  }
+
+  private log(tenant: string, actor: string, category: ActivityCategory, level: ActivityLevel, message: string) {
+    this.activity.unshift({ id: uid("act"), tenant, actor, category, level, message, at: new Date().toISOString() });
+    this.activity = this.activity.slice(0, 300);
   }
   subscribe(cb: () => void) {
     this.listeners.add(cb);
@@ -110,6 +173,7 @@ export class MockPlatformRepo implements PlatformRepo {
     for (const t of this.tenants) {
       if (t.plan === tier && t.status === "Activo") t.mrr = this.plans[tier].price;
     }
+    this.log("Plataforma", "Plataforma", "plan", "info", `Plan ${tier} actualizado (precio S/ ${this.plans[tier].price})`);
     this.emit();
   }
 
@@ -126,12 +190,19 @@ export class MockPlatformRepo implements PlatformRepo {
   }
 
   async getTickets() {
-    return [
-      { id: uid("tk"), tenant: "Sushi Nami", subject: "Impresora no responde", priority: "Alta", status: "Abierto", ago: "hace 2h" },
-      { id: uid("tk"), tenant: "Cevichería El Muelle", subject: "Duda sobre reportes por mesero", priority: "Media", status: "Abierto", ago: "hace 5h" },
-      { id: uid("tk"), tenant: "Tacos El Farol", subject: "Solicitud de nueva sucursal", priority: "Baja", status: "Abierto", ago: "ayer" },
-      { id: uid("tk"), tenant: "La Higuera", subject: "Capacitación de personal", priority: "Baja", status: "Resuelto", ago: "hace 3 días" },
-    ];
+    return this.tickets.map((t) => ({ ...t }));
+  }
+
+  async updateTicket(id: string, patch: { status?: string; priority?: string }) {
+    const t = this.tickets.find((x) => x.id === id);
+    if (!t) return;
+    Object.assign(t, patch);
+    this.log(t.tenant, "Soporte", "soporte", "info", `Ticket "${t.subject}" · ${patch.status ?? patch.priority}`);
+    this.emit();
+  }
+
+  async getActivity() {
+    return this.activity.map((a) => ({ ...a }));
   }
 
   async getRetention() {
@@ -190,6 +261,7 @@ export class MockPlatformRepo implements PlatformRepo {
       link: makeLink(slug),
     };
     this.tenants.unshift(tenant);
+    this.log(tenant.name, "Plataforma", "plan", "info", `Tenant creado · plan ${input.plan} (prueba 14 días)`);
     this.emit();
     return { tenant, link: tenant.link! };
   }
@@ -197,8 +269,10 @@ export class MockPlatformRepo implements PlatformRepo {
   async setTenantPlan(id: string, plan: PlanTier) {
     const t = this.tenants.find((x) => x.id === id);
     if (!t) return;
+    const prev = t.plan;
     t.plan = plan;
     if (t.status === "Activo") t.mrr = this.plans[plan].price;
+    this.log(t.name, "Plataforma", "plan", "info", `Cambió de plan ${prev} a ${plan}`);
     this.emit();
   }
 
@@ -208,9 +282,11 @@ export class MockPlatformRepo implements PlatformRepo {
     if (t.status === "Suspendido") {
       t.status = "Activo";
       t.mrr = this.plans[t.plan].price;
+      this.log(t.name, "Plataforma", "plan", "info", "Suscripción reactivada");
     } else {
       t.status = "Suspendido";
       t.mrr = 0;
+      this.log(t.name, "Plataforma", "plan", "warning", "Suscripción suspendida");
     }
     this.emit();
   }
@@ -224,6 +300,7 @@ export class MockPlatformRepo implements PlatformRepo {
     if (t && total > 0) {
       t.status = "Activo";
       t.mrr = this.plans[t.plan].price;
+      this.log(t.name, "Plataforma", "pago", "info", `Cobró suscripción · ${method} · S/ ${total.toFixed(2)}`);
       this.emit();
     }
     return {

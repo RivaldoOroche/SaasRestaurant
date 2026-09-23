@@ -27,6 +27,7 @@ import { Tenants } from "@/screens/saas/Tenants";
 import { Ingresos } from "@/screens/saas/Ingresos";
 import { Planes } from "@/screens/saas/Planes";
 import { Soporte } from "@/screens/saas/Soporte";
+import { Bitacora } from "@/screens/saas/Bitacora";
 
 // Chart-heavy screens are code-split so Recharts loads on demand.
 const Reportes = lazy(() => import("@/screens/pos/Reportes").then((m) => ({ default: m.Reportes })));
@@ -61,6 +62,7 @@ const SCREENS: Record<string, ComponentType> = {
   ingresos: Ingresos,
   planes: Planes,
   soporte: Soporte,
+  bitacora: Bitacora,
 };
 
 /** Which build phase each screen is delivered in (shown on placeholders). */
@@ -71,7 +73,7 @@ const PHASE: Record<string, string> = {
   panel: "Fase 2", ajustes: "Fase 2",
   comprobantes: "Fase 3",
   saashome: "Fase 4", tenants: "Fase 4", retencion: "Fase 4", ingresos: "Fase 4",
-  planes: "Fase 4", soporte: "Fase 4",
+  planes: "Fase 4", soporte: "Fase 4", bitacora: "Fase 4",
   sucursales: "Fase 2", suscripcion: "Fase 4",
 };
 

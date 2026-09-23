@@ -8,6 +8,7 @@ import type {
   NewTenantInput,
   SaasCharge,
   PlanTier,
+  PlatformActivity,
 } from "./model";
 
 /** Platform-owner (SaaS) data access. Separate from the tenant Repo. */
@@ -18,6 +19,9 @@ export interface PlatformRepo {
   updatePlan(tier: PlanTier, patch: { price?: number; features?: string }): Promise<void>;
   getInvoices(): Promise<SaasInvoice[]>;
   getTickets(): Promise<SupportTicket[]>;
+  updateTicket(id: string, patch: { status?: string; priority?: string }): Promise<void>;
+  /** Bitácora global (cross-tenant) para monitoreo del dueño del SaaS. */
+  getActivity(): Promise<PlatformActivity[]>;
   getRetention(): Promise<Retention>;
   createTenant(input: NewTenantInput): Promise<{ tenant: Tenant; link: string }>;
   setTenantPlan(id: string, plan: PlanTier): Promise<void>;

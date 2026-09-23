@@ -60,6 +60,7 @@ export const SAAS_NAV: NavEntry[] = [
   { key: "ingresos", label: "Ingresos", path: "/saas/ingresos", icon: "💰", roles: ["saas"], section: "top" },
   { key: "planes", label: "Planes", path: "/saas/planes", icon: "🧩", roles: ["saas"], section: "top" },
   { key: "soporte", label: "Soporte", path: "/saas/soporte", icon: "🎧", roles: ["saas"], section: "top" },
+  { key: "bitacora", label: "Bitácora", path: "/saas/bitacora", icon: "📋", roles: ["saas"], section: "top" },
 ];
 
 export function navForRole(role: Role): NavEntry[] {

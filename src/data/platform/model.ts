@@ -53,6 +53,30 @@ export interface SupportTicket {
   ago: string;
 }
 
+export type ActivityLevel = "info" | "warning" | "error";
+export type ActivityCategory =
+  | "venta"
+  | "sunat"
+  | "inventario"
+  | "caja"
+  | "acceso"
+  | "carta"
+  | "soporte"
+  | "plan"
+  | "pago"
+  | "sistema";
+
+/** Entrada de la bitácora global (cross-tenant) para el dueño del SaaS. */
+export interface PlatformActivity {
+  id: string;
+  tenant: string; // nombre del tenant, o "Plataforma" para eventos del SaaS
+  actor: string; // quién lo hizo (staff / Sistema / SUNAT / Caja…)
+  category: ActivityCategory;
+  level: ActivityLevel;
+  message: string;
+  at: string; // ISO — la UI formatea fecha y hora
+}
+
 export interface Retention {
   nrr: number;
   churnPct: number;

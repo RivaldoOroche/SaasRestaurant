@@ -37,6 +37,10 @@ export function useRetention() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "retention"], queryFn: () => repo.getRetention() });
 }
+export function useActivity() {
+  const repo = useP();
+  return useQuery({ queryKey: ["platform", "activity"], queryFn: () => repo.getActivity(), refetchInterval: 8000 });
+}
 
 export function usePlatformActions() {
   const repo = useP();
@@ -64,5 +68,10 @@ export function usePlatformActions() {
       repo.updatePlan(tier, patch),
     onSuccess: invalidate,
   });
-  return { createTenant, setPlan, toggleSuspend, charge, updatePlan };
+  const updateTicket = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: { status?: string; priority?: string } }) =>
+      repo.updateTicket(id, patch),
+    onSuccess: invalidate,
+  });
+  return { createTenant, setPlan, toggleSuspend, charge, updatePlan, updateTicket };
 }

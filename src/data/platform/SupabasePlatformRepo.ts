@@ -1,6 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PlatformRepo } from "./PlatformRepo";
-import type { Tenant, PlanTier, NewTenantInput, SaasCharge, PlatformSummary, Retention } from "./model";
+import type {
+  Tenant,
+  PlanTier,
+  NewTenantInput,
+  SaasCharge,
+  PlatformSummary,
+  Retention,
+  PlatformActivity,
+  ActivityCategory,
+  ActivityLevel,
+} from "./model";
 import type { Database, Row } from "@/types/database";
 import { MockPlatformRepo } from "./MockPlatformRepo";
 
@@ -24,6 +34,25 @@ function slugify(name: string): string {
       .replace(/^-+|-+$/g, "")
       .slice(0, 28) || "cliente"
   );
+}
+
+/** Deriva categoría y nivel de la bitácora a partir del texto del evento. */
+function mapActivity(id: string, tenant: string, actor: string, message: string, at: string): PlatformActivity {
+  const m = message.toLowerCase();
+  let category: ActivityCategory = "sistema";
+  if (/(cobr|venta|mesa|pag)/.test(m)) category = "venta";
+  if (/(pago|suscrip|tarjeta|cobro)/.test(m)) category = "pago";
+  if (/(sunat|comprobante|boleta|factura|resumen|baja)/.test(m)) category = "sunat";
+  if (/(inventario|insumo|stock|86)/.test(m)) category = "inventario";
+  if (/(caja|arqueo|cierre|anul)/.test(m)) category = "caja";
+  if (/(pin|sesión|sesion|acceso|ingres)/.test(m)) category = "acceso";
+  if (/(carta|plato|precio|menú|menu)/.test(m)) category = "carta";
+  if (/(plan|tenant|sucursal|personal)/.test(m)) category = "plan";
+  if (/(ticket|soporte)/.test(m)) category = "soporte";
+  let level: ActivityLevel = "info";
+  if (/(rechaz|error|fall|agotad|sin conexión|sin conexion|vencid|suspend)/.test(m)) level = "error";
+  else if (/(bajo|riesgo|intento|advert|par )/.test(m)) level = "warning";
+  return { id, tenant, actor, category, level, message, at };
 }
 
 function mapTenant(r: Row<"tenants">): Tenant {
@@ -144,6 +173,36 @@ export class SupabasePlatformRepo implements PlatformRepo {
       status: r.status,
       ago: new Date(r.created_at).toLocaleDateString("es-PE"),
     }));
+  }
+
+  async updateTicket(id: string, patch: { status?: string; priority?: string }): Promise<void> {
+    const { error } = await this.sb.from("support_tickets").update(patch).eq("id", id);
+    if (error) throw error;
+    await this.sb.from("platform_activity").insert({
+      actor: "Soporte",
+      message: `Ticket actualizado · ${patch.status ?? patch.priority ?? ""}`,
+    });
+  }
+
+  async getActivity(): Promise<PlatformActivity[]> {
+    const [{ data: logs }, { data: plat }] = await Promise.all([
+      this.sb
+        .from("activity_log")
+        .select("id, actor, message, created_at, tenant:tenants(name)")
+        .order("created_at", { ascending: false })
+        .limit(250),
+      this.sb.from("platform_activity").select("id, actor, message, created_at").order("created_at", { ascending: false }).limit(100),
+    ]);
+    const entries: PlatformActivity[] = [];
+    for (const l of logs ?? []) {
+      const rel = l.tenant as unknown as { name: string } | { name: string }[] | null;
+      const name = Array.isArray(rel) ? rel[0]?.name : rel?.name;
+      entries.push(mapActivity(l.id, name ?? "—", l.actor, l.message, l.created_at));
+    }
+    for (const p of plat ?? []) {
+      entries.push(mapActivity(p.id, "Plataforma", p.actor, p.message, p.created_at));
+    }
+    return entries.sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 300);
   }
 
   getRetention(): Promise<Retention> {
