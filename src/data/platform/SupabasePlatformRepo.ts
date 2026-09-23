@@ -12,6 +12,7 @@ import type {
   ActivityLevel,
   PlatformSettings,
 } from "./model";
+import { deriveRetentionMetrics } from "./retention";
 import type { Database, Row } from "@/types/database";
 import { MockPlatformRepo } from "./MockPlatformRepo";
 
@@ -224,8 +225,25 @@ export class SupabasePlatformRepo implements PlatformRepo {
     await this.sb.from("platform_settings").upsert(row, { onConflict: "id" });
   }
 
-  getRetention(): Promise<Retention> {
-    return this.mock.getRetention();
+  async getRetention(): Promise<Retention> {
+    const [base, tenants] = await Promise.all([this.mock.getRetention(), this.getTenants()]);
+    const m = deriveRetentionMetrics(tenants);
+    const dunning = tenants
+      .filter((t) => t.status === "Suspendido")
+      .map((t) => ({ tenant: t.name, amount: t.mrr, reason: "Cobro de suscripción fallido", tries: "3 intentos", status: "Suspendido" }));
+    const trials = tenants
+      .filter((t) => t.status === "Prueba")
+      .map((t) => ({ name: t.name, days: "en periodo de prueba", progress: 50, risk: "mid" as const }));
+    return {
+      ...base,
+      nrr: m.nrr,
+      churnPct: m.churnPct,
+      ltv: m.ltv,
+      cac: m.cac,
+      lifetimeMonths: m.lifetimeMonths,
+      dunning: dunning.length ? dunning : base.dunning,
+      trials: trials.length ? trials : base.trials,
+    };
   }
 
   async createTenant(input: NewTenantInput) {

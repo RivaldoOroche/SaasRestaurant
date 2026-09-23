@@ -11,6 +11,7 @@ import type {
   PlatformSettings,
 } from "./model";
 import { MOCK_TENANT_ID } from "@/auth/session";
+import { deriveRetentionMetrics } from "./retention";
 
 function isoAgo(mins: number): string {
   return new Date(Date.now() - mins * 60_000).toISOString();
@@ -222,13 +223,28 @@ export class MockPlatformRepo implements PlatformRepo {
   }
 
   async getRetention() {
+    const m = deriveRetentionMetrics(this.tenants);
     const mrrK = this.tenants.reduce((s, t) => s + t.mrr, 0) / 1000;
+    // Cobranza en riesgo (dunning) derivada de tenants suspendidos.
+    const dunning = this.tenants
+      .filter((t) => t.status === "Suspendido")
+      .map((t) => ({
+        tenant: t.name,
+        amount: this.plans[t.plan].price,
+        reason: "Cobro de suscripción fallido",
+        tries: "3 intentos",
+        status: "Suspendido",
+      }));
+    // Pruebas activas derivadas de tenants en estado Prueba.
+    const trials = this.tenants
+      .filter((t) => t.status === "Prueba")
+      .map((t) => ({ name: t.name, days: "en periodo de prueba", progress: 50, risk: "mid" as const }));
     return {
-      nrr: 103,
-      churnPct: 1.8,
-      ltv: 34000,
-      cac: 7400,
-      lifetimeMonths: 31,
+      nrr: m.nrr,
+      churnPct: m.churnPct,
+      ltv: m.ltv,
+      cac: m.cac,
+      lifetimeMonths: m.lifetimeMonths,
       waterfall: [
         { label: "Inicial", value: 8.5, kind: "base" as const },
         { label: "Nuevo", value: 1.4, kind: "add" as const },
@@ -237,15 +253,8 @@ export class MockPlatformRepo implements PlatformRepo {
         { label: "Perdido", value: 0.3, kind: "sub" as const },
         { label: "Final", value: mrrK, kind: "base" as const },
       ],
-      trials: [
-        { name: "Café Aurora", days: "vence en 3 días", progress: 72, risk: "low" as const },
-        { name: "Bistró Nórdico", days: "vence en 8 días", progress: 40, risk: "mid" as const },
-        { name: "Wok & Co.", days: "vence hoy", progress: 18, risk: "high" as const },
-      ],
-      dunning: [
-        { tenant: "Brasas del Sur", amount: 699, reason: "Tarjeta rechazada", tries: "3 intentos", status: "Suspendido" },
-        { tenant: "Tacos El Farol", amount: 699, reason: "Tarjeta por expirar", tries: "1 intento", status: "En riesgo" },
-      ],
+      trials: trials.length ? trials : [{ name: "—", days: "sin pruebas activas", progress: 0, risk: "low" as const }],
+      dunning,
       usage: [
         { tenant: "Cevichería El Muelle", metric: "Sucursales", cur: 11, cap: 12 },
         { tenant: "Sushi Nami", metric: "Usuarios", cur: 9, cap: 10 },

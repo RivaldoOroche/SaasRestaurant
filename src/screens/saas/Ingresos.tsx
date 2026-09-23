@@ -5,6 +5,7 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatMoney } from "@/lib/money";
+import { exportIngresosExcel } from "@/lib/exportIngresos";
 import { SaasInvoiceView } from "./Tenants";
 import type { SaasCharge } from "@/data/platform/model";
 
@@ -14,6 +15,7 @@ export function Ingresos() {
   const { data: tenants = [] } = useTenants();
   const { charge } = usePlatformActions();
   const [invoice, setInvoice] = useState<SaasCharge | null>(null);
+  const [busy, setBusy] = useState(false);
   const maxMrr = Math.max(1, ...plans.map((p) => p.mrr));
 
   async function billTenant(name: string) {
@@ -21,9 +23,26 @@ export function Ingresos() {
     if (t) setInvoice(await charge.mutateAsync({ id: t.id, method: "tarjeta" }));
   }
 
+  async function exportar() {
+    setBusy(true);
+    try {
+      await exportIngresosExcel(invoices, plans);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="p-6 max-w-5xl">
-      <ScreenHeader title="Ingresos" subtitle="MRR por plan y cobranza del mes" />
+      <ScreenHeader
+        title="Ingresos"
+        subtitle="MRR por plan y cobranza del mes"
+        actions={
+          <Button variant="secondary" size="sm" onClick={exportar} disabled={busy || invoices.length === 0}>
+            {busy ? "Generando…" : "⬇ Exportar Excel"}
+          </Button>
+        }
+      />
 
       <Card className="mb-4">
         <CardBody>
