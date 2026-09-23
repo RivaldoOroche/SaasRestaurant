@@ -146,6 +146,9 @@ export interface Tables {
       created_at: string;
     };
   };
+  role_permissions: {
+    Row: { tenant_id: string; role: AppRole; screens: string[]; updated_at: string };
+  };
   complaints: {
     Row: {
       id: string;

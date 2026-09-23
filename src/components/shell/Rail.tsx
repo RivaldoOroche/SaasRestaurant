@@ -1,6 +1,8 @@
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { navForRole } from "@/lib/roles";
+import { effectivePermissions } from "@/lib/permissions";
+import { useRolePermissions } from "@/data/hooks";
 import { useTheme } from "@/store/theme";
 import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
@@ -13,10 +15,13 @@ export function Rail() {
   const { session, lock } = useAuth();
   const { theme, toggle } = useTheme();
   const { online, toggle: toggleNet } = useConnection();
+  const { data: overrides = {} } = useRolePermissions();
   if (!session) return null;
   const isTenant = session.role !== "saas";
 
-  const entries = navForRole(session.role);
+  // Permisos efectivos del rol: filtra las pantallas del tenant (el SaaS no se filtra).
+  const allowed = effectivePermissions(session.role, overrides);
+  const entries = navForRole(session.role).filter((e) => (isTenant ? allowed.has(e.key) : true));
   const top = entries.filter((e) => e.section === "top");
   const bottom = entries.filter((e) => e.section === "bottom");
   const initials = session.staff?.initials ?? (session.role === "saas" ? "SA" : "··");

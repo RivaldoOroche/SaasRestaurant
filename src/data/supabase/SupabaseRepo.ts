@@ -1078,6 +1078,24 @@ export class SupabaseRepo implements Repo {
     await this.sb.from("waitlist").delete().eq("id", id);
   }
 
+  async getRolePermissions(): Promise<Record<string, string[]>> {
+    const { data, error } = await this.sb.from("role_permissions").select("role, screens");
+    if (error) throw error;
+    const out: Record<string, string[]> = {};
+    for (const r of data ?? []) out[r.role] = r.screens ?? [];
+    return out;
+  }
+  async setRolePermissions(role: string, screens: string[]): Promise<void> {
+    const { error } = await this.sb
+      .from("role_permissions")
+      .upsert(
+        { tenant_id: this.tenantId, role: role as Database["public"]["Tables"]["role_permissions"]["Row"]["role"], screens, updated_at: new Date().toISOString() },
+        { onConflict: "tenant_id,role" },
+      );
+    if (error) throw error;
+    await this.log(`Actualizó permisos del rol ${role}`);
+  }
+
   async getActivityLog(): Promise<LogEntry[]> {
     const { data, error } = await this.sb
       .from("activity_log")

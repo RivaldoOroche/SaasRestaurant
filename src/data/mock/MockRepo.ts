@@ -794,6 +794,16 @@ export class MockRepo implements Repo {
     this.waitlistEntries = this.waitlistEntries.filter((x) => x.id !== id);
     this.persist();
   }
+
+  private rolePerms: Record<string, string[]> = {};
+  async getRolePermissions() {
+    return { ...this.rolePerms };
+  }
+  async setRolePermissions(role: string, screens: string[]) {
+    this.rolePerms[role] = screens;
+    this.pushLog("Permisos", `Actualizó permisos del rol ${role}`);
+    this.persist();
+  }
   async setFiscalCredentials(input: FiscalCredentialsInput) {
     // Demo: no se persisten las credenciales secretas (solo se registra el cambio).
     this.pushLog("Ajustes", `Configuró credenciales de facturación (${input.provider})`);

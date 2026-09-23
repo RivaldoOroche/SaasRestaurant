@@ -147,6 +147,11 @@ export interface Repo {
   addWaitlist(input: Omit<WaitlistEntry, "id" | "status" | "createdAt">): Promise<void>;
   updateWaitlist(id: string, patch: Partial<WaitlistEntry>): Promise<void>;
   removeWaitlist(id: string): Promise<void>;
+
+  // Permisos por rol (overrides del tenant sobre los permisos por defecto)
+  /** Devuelve los overrides por rol: { admin: [...screens], mesero: [...] }. */
+  getRolePermissions(): Promise<Record<string, string[]>>;
+  setRolePermissions(role: string, screens: string[]): Promise<void>;
   getActivityLog(): Promise<LogEntry[]>;
 
   /** Subscribe to changes (kitchen + orders + tables). Returns an unsubscribe fn. */

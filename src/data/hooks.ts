@@ -161,6 +161,19 @@ export function useComplaints() {
   const repo = useRepo();
   return useQuery({ queryKey: ["complaints"], queryFn: () => repo.getComplaints() });
 }
+export function useRolePermissions() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["rolePermissions"], queryFn: () => repo.getRolePermissions() });
+}
+export function usePermissionActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const setRolePermissions = useMutation({
+    mutationFn: ({ role, screens }: { role: string; screens: string[] }) => repo.setRolePermissions(role, screens),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["rolePermissions"] }),
+  });
+  return { setRolePermissions };
+}
 export function useReservations() {
   const repo = useRepo();
   return useQuery({ queryKey: ["reservations"], queryFn: () => repo.getReservations() });

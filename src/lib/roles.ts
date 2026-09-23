@@ -50,6 +50,7 @@ export const TENANT_NAV: NavEntry[] = [
   { key: "reportes", label: "Reportes", path: "/pos/reportes", icon: "📊", roles: TENANT_ROLES, section: "top" },
   { key: "sucursales", label: "Dueño", path: "/pos/sucursales", icon: "🏢", roles: OWNER_ONLY, section: "top" },
   { key: "suscripcion", label: "Plan", path: "/pos/plan", icon: "💳", roles: OWNER_ONLY, section: "top" },
+  { key: "permisos", label: "Permisos", path: "/pos/permisos", icon: "🔐", roles: OWNER_ONLY, section: "bottom" },
   { key: "panel", label: "Panel", path: "/pos/panel", icon: "📌", roles: MANAGER_UP, section: "top" },
   { key: "ajustes", label: "Ajustes", path: "/pos/ajustes", icon: "⚙️", roles: MANAGER_UP, section: "bottom" },
 ];

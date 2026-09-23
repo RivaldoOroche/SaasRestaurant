@@ -12,6 +12,7 @@ import { LibroReclamaciones } from "@/screens/public/LibroReclamaciones";
 import { Legal } from "@/screens/public/Legal";
 import { Reclamaciones } from "@/screens/pos/Reclamaciones";
 import { Reservas } from "@/screens/pos/Reservas";
+import { Permisos } from "@/screens/pos/Permisos";
 import { ForceChangePassword } from "@/screens/auth/ForceChangePassword";
 import { Pedido } from "@/screens/pos/Pedido";
 import { Mesas } from "@/screens/pos/Mesas";
@@ -65,6 +66,7 @@ const SCREENS: Record<string, ComponentType> = {
   comprobantes: Sunat,
   reclamaciones: Reclamaciones,
   reservas: Reservas,
+  permisos: Permisos,
   saashome: Resumen,
   tenants: Tenants,
   retencion: Retencion,
@@ -82,7 +84,7 @@ const PHASE: Record<string, string> = {
   cuentas: "Fase 2", online: "Fase 2", carta: "Fase 2", editor: "Fase 2",
   inventario: "Fase 2", clientes: "Fase 2", caja: "Fase 2", reportes: "Fase 2",
   panel: "Fase 2", ajustes: "Fase 2",
-  comprobantes: "Fase 3", reclamaciones: "Fase 2", reservas: "Fase 2",
+  comprobantes: "Fase 3", reclamaciones: "Fase 2", reservas: "Fase 2", permisos: "Fase 2",
   saashome: "Fase 4", tenants: "Fase 4", retencion: "Fase 4", ingresos: "Fase 4",
   planes: "Fase 4", soporte: "Fase 4", bitacora: "Fase 4", cobros: "Fase 4",
   sucursales: "Fase 2", suscripcion: "Fase 4",
