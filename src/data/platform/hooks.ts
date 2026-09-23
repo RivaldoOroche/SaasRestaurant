@@ -94,6 +94,10 @@ export function usePlatformActions() {
     mutationFn: (patch: Parameters<typeof repo.updatePlatformSettings>[0]) => repo.updatePlatformSettings(patch),
     onSuccess: invalidate,
   });
+  const setPlatformFiscalCredentials = useMutation({
+    mutationFn: (input: Parameters<typeof repo.setPlatformFiscalCredentials>[0]) => repo.setPlatformFiscalCredentials(input),
+    onSuccess: invalidate,
+  });
   const proposeCharge = useMutation({
     mutationFn: (tenantId: string) => repo.proposeCharge(tenantId),
     onSuccess: invalidate,
@@ -126,6 +130,7 @@ export function usePlatformActions() {
     updatePlan,
     updateTicket,
     updatePlatformSettings,
+    setPlatformFiscalCredentials,
     proposeCharge,
     runDunning,
     updateChargeProposal,

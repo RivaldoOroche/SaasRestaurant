@@ -10,6 +10,7 @@ import type {
   PlanTier,
   PlatformActivity,
   PlatformSettings,
+  PlatformFiscalCredentialsInput,
   ChargeProposal,
 } from "./model";
 
@@ -27,6 +28,8 @@ export interface PlatformRepo {
   /** Datos del emisor del SaaS (tu empresa). */
   getPlatformSettings(): Promise<PlatformSettings>;
   updatePlatformSettings(patch: Partial<PlatformSettings>): Promise<void>;
+  /** Guarda (sin devolver) las credenciales secretas del emisor de la plataforma. */
+  setPlatformFiscalCredentials(input: PlatformFiscalCredentialsInput): Promise<void>;
   getRetention(): Promise<Retention>;
   createTenant(input: NewTenantInput): Promise<{ tenant: Tenant; link: string }>;
   /** Alta rápida: crea el tenant y también la cuenta del dueño con una contraseña

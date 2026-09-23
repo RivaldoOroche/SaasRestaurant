@@ -9,6 +9,7 @@ import type {
   ActivityCategory,
   ActivityLevel,
   PlatformSettings,
+  PlatformFiscalCredentialsInput,
   ChargeProposal,
 } from "./model";
 import { MOCK_TENANT_ID } from "@/auth/session";
@@ -126,6 +127,10 @@ export class MockPlatformRepo implements PlatformRepo {
     ruc: "20601234567",
     direccion: "Av. Javier Prado 1234, San Isidro, Lima",
     billingEmail: "facturacion@wayrapos.pe",
+    billingProvider: "sunat_directo",
+    sunatMode: "beta",
+    solUser: "",
+    billingEndpoint: "",
   };
   private listeners = new Set<() => void>();
 
@@ -233,6 +238,11 @@ export class MockPlatformRepo implements PlatformRepo {
   async updatePlatformSettings(patch: Partial<PlatformSettings>) {
     this.settings = { ...this.settings, ...patch };
     this.log("Plataforma", "Plataforma", "sistema", "info", "Actualizó los datos del emisor del SaaS");
+    this.emit();
+  }
+  async setPlatformFiscalCredentials(input: PlatformFiscalCredentialsInput) {
+    // Demo: no se persisten las credenciales secretas (solo se registra).
+    this.log("Plataforma", "Plataforma", "sistema", "info", `Actualizó credenciales de facturación del SaaS (${input.provider})`);
     this.emit();
   }
 

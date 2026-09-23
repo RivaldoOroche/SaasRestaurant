@@ -96,6 +96,19 @@ export interface PlatformSettings {
   ruc: string;
   direccion: string;
   billingEmail: string;
+  billingProvider?: string; // sunat_directo | nubefact | bizlinks | efact
+  sunatMode?: string; // beta | produccion
+  solUser?: string; // usuario SOL (no secreto)
+  billingEndpoint?: string; // endpoint del OSE/API (no secreto)
+}
+
+/** Credenciales secretas del emisor de la plataforma (solo escritura). */
+export interface PlatformFiscalCredentialsInput {
+  provider: string;
+  solPass?: string;
+  certPem?: string;
+  keyPem?: string;
+  apiToken?: string;
 }
 
 export interface NewTenantInput {

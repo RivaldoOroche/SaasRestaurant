@@ -36,7 +36,29 @@ export interface Tables {
     Row: { id: string; actor: string; message: string; created_at: string };
   };
   platform_settings: {
-    Row: { id: boolean; razon_social: string; ruc: string; direccion: string; billing_email: string; updated_at: string };
+    Row: {
+      id: boolean;
+      razon_social: string;
+      ruc: string;
+      direccion: string;
+      billing_email: string;
+      billing_provider: string;
+      sunat_mode: string;
+      sol_user: string | null;
+      billing_endpoint: string | null;
+      updated_at: string;
+    };
+  };
+  platform_fiscal_credentials: {
+    Row: {
+      id: boolean;
+      provider: string;
+      sol_pass: string | null;
+      cert_pem: string | null;
+      key_pem: string | null;
+      api_token: string | null;
+      updated_at: string;
+    };
   };
   subscription_charges: {
     Row: {

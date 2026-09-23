@@ -11,6 +11,7 @@ import type {
   ActivityCategory,
   ActivityLevel,
   PlatformSettings,
+  PlatformFiscalCredentialsInput,
   ChargeProposal,
   ChargeStatus,
 } from "./model";
@@ -216,6 +217,10 @@ export class SupabasePlatformRepo implements PlatformRepo {
       ruc: data?.ruc ?? "",
       direccion: data?.direccion ?? "",
       billingEmail: data?.billing_email ?? "",
+      billingProvider: data?.billing_provider ?? "sunat_directo",
+      sunatMode: data?.sunat_mode ?? "beta",
+      solUser: data?.sol_user ?? "",
+      billingEndpoint: data?.billing_endpoint ?? "",
     };
   }
   async updatePlatformSettings(patch: Partial<PlatformSettings>): Promise<void> {
@@ -224,7 +229,20 @@ export class SupabasePlatformRepo implements PlatformRepo {
     if (patch.ruc !== undefined) row.ruc = patch.ruc;
     if (patch.direccion !== undefined) row.direccion = patch.direccion;
     if (patch.billingEmail !== undefined) row.billing_email = patch.billingEmail;
+    if (patch.billingProvider !== undefined) row.billing_provider = patch.billingProvider;
+    if (patch.sunatMode !== undefined) row.sunat_mode = patch.sunatMode;
+    if (patch.solUser !== undefined) row.sol_user = patch.solUser;
+    if (patch.billingEndpoint !== undefined) row.billing_endpoint = patch.billingEndpoint;
     await this.sb.from("platform_settings").upsert(row, { onConflict: "id" });
+  }
+  async setPlatformFiscalCredentials(input: PlatformFiscalCredentialsInput): Promise<void> {
+    const row: Database["public"]["Tables"]["platform_fiscal_credentials"]["Insert"] = { id: true, provider: input.provider };
+    if (input.solPass !== undefined) row.sol_pass = input.solPass;
+    if (input.certPem !== undefined) row.cert_pem = input.certPem;
+    if (input.keyPem !== undefined) row.key_pem = input.keyPem;
+    if (input.apiToken !== undefined) row.api_token = input.apiToken;
+    row.updated_at = new Date().toISOString();
+    await this.sb.from("platform_fiscal_credentials").upsert(row, { onConflict: "id" });
   }
 
   async getRetention(): Promise<Retention> {
