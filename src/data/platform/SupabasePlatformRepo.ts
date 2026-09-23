@@ -16,6 +16,7 @@ import type {
   ChargeStatus,
   Cohort,
   RevenuePoint,
+  AccessEntry,
 } from "./model";
 import { deriveRetentionMetrics, deriveCohorts } from "./retention";
 import type { Database, Row } from "@/types/database";
@@ -211,6 +212,18 @@ export class SupabasePlatformRepo implements PlatformRepo {
       entries.push(mapActivity(p.id, "Plataforma", p.actor, p.message, p.created_at));
     }
     return entries.sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 300);
+  }
+
+  async getAccessLog(): Promise<AccessEntry[]> {
+    const { data } = await this.sb.from("access_log").select("*").order("at", { ascending: false }).limit(50);
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      email: r.email ?? "—",
+      role: r.role ?? "—",
+      event: r.event,
+      userAgent: r.user_agent ?? "",
+      at: r.at,
+    }));
   }
 
   async getPlatformSettings(): Promise<PlatformSettings> {

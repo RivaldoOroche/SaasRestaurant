@@ -117,6 +117,16 @@ export interface PlatformSettings {
   billingEndpoint?: string; // endpoint del OSE/API (no secreto)
 }
 
+/** Entrada de auditoría de accesos. */
+export interface AccessEntry {
+  id: string;
+  email: string;
+  role: string;
+  event: string;
+  userAgent: string;
+  at: string; // ISO
+}
+
 /** Credenciales secretas del emisor de la plataforma (solo escritura). */
 export interface PlatformFiscalCredentialsInput {
   provider: string;

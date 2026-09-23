@@ -14,6 +14,7 @@ import type {
   ChargeProposal,
   Cohort,
   RevenuePoint,
+  AccessEntry,
 } from "./model";
 
 /** Platform-owner (SaaS) data access. Separate from the tenant Repo. */
@@ -27,6 +28,8 @@ export interface PlatformRepo {
   updateTicket(id: string, patch: { status?: string; priority?: string }): Promise<void>;
   /** Bitácora global (cross-tenant) para monitoreo del dueño del SaaS. */
   getActivity(): Promise<PlatformActivity[]>;
+  /** Auditoría de accesos (inicios de sesión recientes). */
+  getAccessLog(): Promise<AccessEntry[]>;
   /** Datos del emisor del SaaS (tu empresa). */
   getPlatformSettings(): Promise<PlatformSettings>;
   updatePlatformSettings(patch: Partial<PlatformSettings>): Promise<void>;

@@ -53,6 +53,10 @@ export function usePlatformSettings() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "settings"], queryFn: () => repo.getPlatformSettings() });
 }
+export function useAccessLog() {
+  const repo = useP();
+  return useQuery({ queryKey: ["platform", "accessLog"], queryFn: () => repo.getAccessLog() });
+}
 export function useChargeProposals() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "charges"], queryFn: () => repo.getChargeProposals() });

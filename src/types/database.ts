@@ -149,6 +149,9 @@ export interface Tables {
   role_permissions: {
     Row: { tenant_id: string; role: AppRole; screens: string[]; updated_at: string };
   };
+  access_log: {
+    Row: { id: string; user_id: string | null; email: string | null; role: string | null; event: string; user_agent: string | null; at: string };
+  };
   complaints: {
     Row: {
       id: string;

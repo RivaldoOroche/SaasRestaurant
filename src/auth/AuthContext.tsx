@@ -19,6 +19,10 @@ export interface AuthValue {
   mustChangePassword: boolean;
   /** Cambia la contraseña y limpia la marca de cambio obligatorio. */
   changePassword: (newPassword: string) => Promise<string | null>;
+  /** true si el login quedó a la espera de un código 2FA (TOTP). */
+  pendingMfa: boolean;
+  /** Resuelve el desafío 2FA con el código del autenticador. */
+  completeMfa: (code: string) => Promise<string | null>;
 }
 
 export const AuthContext = createContext<AuthValue | null>(null);

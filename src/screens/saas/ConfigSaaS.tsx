@@ -1,9 +1,18 @@
-import { useState } from "react";
-import { usePlatformSettings, usePlatformActions } from "@/data/platform/hooks";
+import { useEffect, useState } from "react";
+import { usePlatformSettings, usePlatformActions, useAccessLog } from "@/data/platform/hooks";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
+import {
+  twoFactorAvailable,
+  listTotpFactors,
+  enrollTotp,
+  verifyEnroll,
+  unenrollTotp,
+  type EnrollResult,
+} from "@/lib/twofa";
 
 const BILLING_PROVIDERS = [
   { key: "sunat_directo", label: "SUNAT directo" },
@@ -68,7 +77,135 @@ export function ConfigSaaS() {
         solUser={s.solUser ?? ""}
         billingEndpoint={s.billingEndpoint ?? ""}
       />
+
+      <TwoFactorCard />
+      <AccessLogCard />
     </div>
+  );
+}
+
+function TwoFactorCard() {
+  const [factors, setFactors] = useState<{ id: string }[]>([]);
+  const [enroll, setEnroll] = useState<EnrollResult | null>(null);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const refresh = () => void listTotpFactors().then(setFactors);
+  useEffect(() => {
+    if (twoFactorAvailable) refresh();
+  }, []);
+
+  async function start() {
+    setErr(null);
+    setBusy(true);
+    const res = await enrollTotp();
+    setBusy(false);
+    if ("error" in res) setErr(res.error);
+    else setEnroll(res);
+  }
+  async function confirm() {
+    if (!enroll) return;
+    setErr(null);
+    setBusy(true);
+    const e = await verifyEnroll(enroll.factorId, code);
+    setBusy(false);
+    if (e) return setErr(e);
+    setEnroll(null);
+    setCode("");
+    refresh();
+  }
+  async function disable(id: string) {
+    setBusy(true);
+    await unenrollTotp(id);
+    setBusy(false);
+    refresh();
+  }
+
+  const active = factors.length > 0;
+
+  return (
+    <Card>
+      <CardBody className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold">Autenticación en dos pasos (2FA)</h3>
+            <p className="text-muted text-xs">Protege tu cuenta de plataforma con un código temporal (TOTP).</p>
+          </div>
+          <Badge tone={active ? "success" : "neutral"}>{active ? "Activo" : "Inactivo"}</Badge>
+        </div>
+
+        {!twoFactorAvailable ? (
+          <p className="text-muted text-xs">Disponible con Supabase configurado (no en modo demo).</p>
+        ) : active ? (
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => disable(factors[0].id)}>
+            Desactivar 2FA
+          </Button>
+        ) : enroll ? (
+          <div className="space-y-2">
+            <p className="text-xs text-muted">Escanea el QR con Google Authenticator / Authy y confirma con el código:</p>
+            <div className="bg-white p-2 rounded-md w-40" dangerouslySetInnerHTML={{ __html: enroll.qrSvg }} />
+            <p className="text-[11px] text-muted">
+              o ingresa la clave manualmente: <span className="font-mono">{enroll.secret}</span>
+            </p>
+            <div className="flex gap-2">
+              <input
+                inputMode="numeric"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="123456"
+                className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono tracking-widest w-32"
+              />
+              <Button size="sm" disabled={code.length < 6 || busy} onClick={confirm}>
+                Activar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button size="sm" variant="secondary" disabled={busy} onClick={start}>
+            {busy ? "Generando…" : "Activar 2FA"}
+          </Button>
+        )}
+        {err && <p className="text-warning text-xs">{err}</p>}
+      </CardBody>
+    </Card>
+  );
+}
+
+function AccessLogCard() {
+  const { data: log = [] } = useAccessLog();
+  const EVENT_LABEL: Record<string, string> = {
+    login: "Inicio de sesión",
+    logout: "Cierre de sesión",
+    "2fa_enroll": "Activó 2FA",
+    "2fa_disable": "Desactivó 2FA",
+  };
+  return (
+    <Card>
+      <CardBody>
+        <h3 className="font-semibold mb-1">Auditoría de accesos</h3>
+        <p className="text-muted text-xs mb-3">Últimos inicios de sesión y cambios de seguridad.</p>
+        {log.length === 0 ? (
+          <p className="text-muted text-sm">Sin registros aún.</p>
+        ) : (
+          <div className="divide-y divide-border-soft">
+            {log.map((a) => (
+              <div key={a.id} className="flex items-center gap-3 py-2 text-sm">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">{a.email}</p>
+                  <p className="text-muted text-xs truncate">
+                    {EVENT_LABEL[a.event] ?? a.event} · {a.role} · {a.userAgent}
+                  </p>
+                </div>
+                <span className="text-muted text-xs whitespace-nowrap">
+                  {new Date(a.at).toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 

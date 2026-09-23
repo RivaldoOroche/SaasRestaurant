@@ -8,13 +8,26 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 
 export function Login() {
-  const { loginWithPin, loginWithPassword } = useAuth();
+  const { loginWithPin, loginWithPassword, pendingMfa, completeMfa } = useAuth();
   const navigate = useNavigate();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"pin" | "password">("pin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+
+  async function submitOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const err = await completeMfa(otp);
+    if (err) {
+      setError(err);
+      return;
+    }
+    setOtp("");
+    navigate("/");
+  }
 
   async function submitPin(nextPin: string) {
     setError(null);
@@ -57,7 +70,22 @@ export function Login() {
           <p className="text-white/60 text-sm">Punto de venta · SaaS para restaurantes</p>
         </div>
 
-        {mode === "pin" ? (
+        {pendingMfa ? (
+          <form onSubmit={submitOtp} className="space-y-3">
+            <p className="text-white/70 text-sm text-center">Ingresa el código de tu app de autenticación (2FA).</p>
+            <input
+              inputMode="numeric"
+              autoFocus
+              placeholder="123456"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              className="w-full rounded-md bg-white/10 border border-white/15 px-3 py-2.5 text-center text-lg tracking-[0.3em] font-mono placeholder:text-white/40"
+            />
+            <Button type="submit" size="lg" className="w-full" disabled={otp.length < 6}>
+              Verificar
+            </Button>
+          </form>
+        ) : mode === "pin" ? (
           <>
             <div className="flex justify-center gap-3 mb-5">
               {[0, 1, 2, 3].map((i) => (

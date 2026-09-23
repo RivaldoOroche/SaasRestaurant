@@ -232,6 +232,14 @@ export class MockPlatformRepo implements PlatformRepo {
     return this.activity.map((a) => ({ ...a }));
   }
 
+  async getAccessLog() {
+    return [
+      { id: "acc-1", email: "admin@wayrapos.pe", role: "saas", event: "login", userAgent: "Chrome · macOS", at: isoAgo(12) },
+      { id: "acc-2", email: "monica@lahiguera.pe", role: "dueno", event: "login", userAgent: "Safari · iPhone", at: isoAgo(180) },
+      { id: "acc-3", email: "admin@wayrapos.pe", role: "saas", event: "2fa_enroll", userAgent: "Chrome · macOS", at: isoAgo(1440) },
+    ];
+  }
+
   async getPlatformSettings() {
     return { ...this.settings };
   }
