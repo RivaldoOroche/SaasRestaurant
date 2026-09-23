@@ -9,6 +9,7 @@ import type {
   ActivityCategory,
   ActivityLevel,
   PlatformSettings,
+  ChargeProposal,
 } from "./model";
 import { MOCK_TENANT_ID } from "@/auth/session";
 import { deriveRetentionMetrics } from "./retention";
@@ -89,6 +90,18 @@ function makeLink(slug: string): string {
   return `${origin}/onboarding/${slug}?token=${token}`;
 }
 
+/** RUC de demostración estable por tenant (11 dígitos, empieza en 20). */
+function stubRuc(t: Tenant): string {
+  if (t.isYou) return "20512345678";
+  let h = 0;
+  for (const ch of t.slug) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return "20" + String(h).padStart(9, "0").slice(0, 9);
+}
+
+function currentPeriod(): string {
+  return new Date().toISOString().slice(0, 7); // YYYY-MM
+}
+
 const SEED_TENANTS: Tenant[] = [
   { id: MOCK_TENANT_ID, name: "La Higuera", slug: "la-higuera", ownerName: "Mónica R.", plan: "Pro", mrr: 1499, status: "Activo", since: "Mar 2025", branches: 3, users: 12, isYou: true, link: null },
   { id: uid("t"), name: "Cevichería El Muelle", slug: "cevicheria-el-muelle", ownerName: "Andrés Ríos", plan: "Enterprise", mrr: 4800, status: "Activo", since: "Jun 2024", branches: 11, users: 64, isYou: false, link: null },
@@ -107,6 +120,7 @@ export class MockPlatformRepo implements PlatformRepo {
   };
   private tickets: SupportTicket[] = seedTickets();
   private activity: PlatformActivity[] = seedActivity();
+  private charges: ChargeProposal[] = [];
   private settings: PlatformSettings = {
     razonSocial: "Wayra POS S.A.C.",
     ruc: "20601234567",
@@ -376,5 +390,101 @@ export class MockPlatformRepo implements PlatformRepo {
       method,
       date: new Date().toLocaleDateString("es-PE"),
     };
+  }
+
+  // --- Cobros de suscripción con aprobación (dunning) ---
+
+  private makeProposal(t: Tenant, period: string): ChargeProposal {
+    const total = this.plans[t.plan].price;
+    const base = Math.round((total / 1.18) * 100) / 100;
+    return {
+      id: uid("chg"),
+      tenantId: t.id,
+      tenant: t.name,
+      ownerName: t.ownerName,
+      plan: t.plan,
+      base,
+      igv: Math.round((total - base) * 100) / 100,
+      total,
+      ruc: stubRuc(t),
+      razonSocial: t.name,
+      period,
+      status: "pendiente",
+      proposedAt: new Date().toISOString(),
+    };
+  }
+
+  async getChargeProposals() {
+    return this.charges.map((c) => ({ ...c }));
+  }
+
+  async proposeCharge(tenantId: string) {
+    const t = this.tenants.find((x) => x.id === tenantId);
+    if (!t) throw new Error("Tenant no encontrado");
+    const period = currentPeriod();
+    const open = this.charges.find(
+      (c) => c.tenantId === tenantId && c.period === period && (c.status === "pendiente" || c.status === "aprobada"),
+    );
+    if (open) return { ...open };
+    const prop = this.makeProposal(t, period);
+    this.charges.unshift(prop);
+    this.log(t.name, "Plataforma", "pago", "info", `Cobro de suscripción propuesto (${period}) · pendiente de aprobación`);
+    this.emit();
+    return { ...prop };
+  }
+
+  async runDunning() {
+    const period = currentPeriod();
+    // Toca cobrar a los activos (renovación) y a los suspendidos (reintento).
+    const due = this.tenants.filter((t) => t.status === "Activo" || t.status === "Suspendido");
+    let proposed = 0;
+    for (const t of due) {
+      const open = this.charges.find(
+        (c) => c.tenantId === t.id && c.period === period && (c.status === "pendiente" || c.status === "aprobada"),
+      );
+      if (open) continue;
+      // No repetir si ya se cobró este periodo.
+      const cobrada = this.charges.find((c) => c.tenantId === t.id && c.period === period && c.status === "cobrada");
+      if (cobrada) continue;
+      this.charges.unshift(this.makeProposal(t, period));
+      proposed++;
+    }
+    if (proposed > 0) {
+      this.log("Plataforma", "Plataforma", "pago", "info", `Dunning: ${proposed} cobro(s) propuesto(s) para ${period}`);
+      this.emit();
+    }
+    return { proposed };
+  }
+
+  async updateChargeProposal(id: string, patch: { ruc?: string; razonSocial?: string; note?: string }) {
+    const c = this.charges.find((x) => x.id === id);
+    if (!c) return;
+    Object.assign(c, patch);
+    this.emit();
+  }
+
+  async approveCharge(id: string, method = "tarjeta", token?: string) {
+    const c = this.charges.find((x) => x.id === id);
+    if (!c) throw new Error("Propuesta no encontrada");
+    if (c.status === "cobrada") throw new Error("Este cobro ya fue ejecutado");
+    // Validación de la factura antes de cobrar.
+    const ruc = (c.ruc ?? "").replace(/\D/g, "");
+    if (ruc.length !== 11) throw new Error("Completa un RUC válido (11 dígitos) antes de aprobar el cobro.");
+    if (!c.razonSocial?.trim()) throw new Error("Completa la razón social antes de aprobar el cobro.");
+    c.status = "aprobada";
+    const charge = await this.chargeTenant(c.tenantId, method, token);
+    c.status = "cobrada";
+    this.log(c.tenant, "Plataforma", "pago", "info", `Cobro aprobado y ejecutado · ${charge.folio} · S/ ${charge.total.toFixed(2)}`);
+    this.emit();
+    return charge;
+  }
+
+  async rejectCharge(id: string, reason: string) {
+    const c = this.charges.find((x) => x.id === id);
+    if (!c) return;
+    c.status = "rechazada";
+    c.note = reason;
+    this.log(c.tenant, "Plataforma", "pago", "warning", `Cobro rechazado · ${reason}`);
+    this.emit();
   }
 }

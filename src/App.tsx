@@ -25,6 +25,7 @@ import { Suscripcion } from "@/screens/pos/Suscripcion";
 import { Sunat } from "@/screens/pos/Sunat";
 import { Tenants } from "@/screens/saas/Tenants";
 import { Ingresos } from "@/screens/saas/Ingresos";
+import { Cobros } from "@/screens/saas/Cobros";
 import { Planes } from "@/screens/saas/Planes";
 import { Soporte } from "@/screens/saas/Soporte";
 import { Bitacora } from "@/screens/saas/Bitacora";
@@ -61,6 +62,7 @@ const SCREENS: Record<string, ComponentType> = {
   tenants: Tenants,
   retencion: Retencion,
   ingresos: Ingresos,
+  cobros: Cobros,
   planes: Planes,
   soporte: Soporte,
   bitacora: Bitacora,
@@ -75,7 +77,7 @@ const PHASE: Record<string, string> = {
   panel: "Fase 2", ajustes: "Fase 2",
   comprobantes: "Fase 3",
   saashome: "Fase 4", tenants: "Fase 4", retencion: "Fase 4", ingresos: "Fase 4",
-  planes: "Fase 4", soporte: "Fase 4", bitacora: "Fase 4",
+  planes: "Fase 4", soporte: "Fase 4", bitacora: "Fase 4", cobros: "Fase 4",
   sucursales: "Fase 2", suscripcion: "Fase 4",
 };
 

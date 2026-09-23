@@ -11,6 +11,8 @@ import type {
   ActivityCategory,
   ActivityLevel,
   PlatformSettings,
+  ChargeProposal,
+  ChargeStatus,
 } from "./model";
 import { deriveRetentionMetrics } from "./retention";
 import type { Database, Row } from "@/types/database";
@@ -351,6 +353,154 @@ export class SupabasePlatformRepo implements PlatformRepo {
       method,
       date: new Date().toLocaleDateString("es-PE"),
     };
+  }
+
+  // --- Cobros de suscripción con aprobación (dunning) ---
+
+  private period(): string {
+    return new Date().toISOString().slice(0, 7); // YYYY-MM
+  }
+
+  private async fiscalOf(tenantId: string): Promise<{ ruc?: string; razonSocial?: string }> {
+    const { data } = await this.sb
+      .from("business_settings")
+      .select("ruc, razon_social")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    return { ruc: data?.ruc ?? undefined, razonSocial: data?.razon_social ?? undefined };
+  }
+
+  async getChargeProposals(): Promise<ChargeProposal[]> {
+    const [{ data }, names] = await Promise.all([
+      this.sb.from("subscription_charges").select("*").order("proposed_at", { ascending: false }).limit(100),
+      this.tenantNames(),
+    ]);
+    const owners = new Map<string, { name: string; owner_name: string }>();
+    const { data: trows } = await this.sb.from("tenants").select("id, name, owner_name");
+    for (const t of trows ?? []) owners.set(t.id, { name: t.name, owner_name: t.owner_name });
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      tenantId: r.tenant_id,
+      tenant: names.get(r.tenant_id) ?? "",
+      ownerName: owners.get(r.tenant_id)?.owner_name ?? "",
+      plan: r.plan,
+      base: Number(r.base),
+      igv: Number(r.igv),
+      total: Number(r.total),
+      ruc: r.ruc ?? undefined,
+      razonSocial: r.razon_social ?? undefined,
+      period: r.period,
+      status: r.status as ChargeStatus,
+      note: r.note ?? undefined,
+      proposedAt: r.proposed_at,
+    }));
+  }
+
+  private async insertProposal(tenantId: string, period: string): Promise<ChargeProposal | null> {
+    const { data: t } = await this.sb.from("tenants").select("*").eq("id", tenantId).maybeSingle();
+    if (!t) return null;
+    // Idempotencia: no dupliques una propuesta abierta o ya cobrada del periodo.
+    const { data: open } = await this.sb
+      .from("subscription_charges")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("period", period)
+      .in("status", ["pendiente", "aprobada", "cobrada"])
+      .maybeSingle();
+    if (open) return null;
+    const total = await this.priceOf(t.plan);
+    const base = Math.round((total / 1.18) * 100) / 100;
+    const fiscal = await this.fiscalOf(tenantId);
+    const { data, error } = await this.sb
+      .from("subscription_charges")
+      .insert({
+        tenant_id: tenantId,
+        plan: t.plan,
+        base,
+        igv: Math.round((total - base) * 100) / 100,
+        total,
+        ruc: fiscal.ruc ?? null,
+        razon_social: fiscal.razonSocial ?? t.name,
+        period,
+        status: "pendiente",
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      tenantId,
+      tenant: t.name,
+      ownerName: t.owner_name,
+      plan: t.plan,
+      base: Number(data.base),
+      igv: Number(data.igv),
+      total: Number(data.total),
+      ruc: data.ruc ?? undefined,
+      razonSocial: data.razon_social ?? undefined,
+      period,
+      status: "pendiente",
+      proposedAt: data.proposed_at,
+    };
+  }
+
+  async proposeCharge(tenantId: string): Promise<ChargeProposal> {
+    const prop = await this.insertProposal(tenantId, this.period());
+    if (prop) return prop;
+    // Ya había una abierta: devuélvela.
+    const all = await this.getChargeProposals();
+    const existing = all.find((c) => c.tenantId === tenantId && c.period === this.period());
+    if (!existing) throw new Error("No se pudo crear la propuesta de cobro");
+    return existing;
+  }
+
+  async runDunning(): Promise<{ proposed: number }> {
+    const period = this.period();
+    const { data: tenants } = await this.sb.from("tenants").select("id, status").in("status", ["Activo", "Suspendido"]);
+    let proposed = 0;
+    for (const t of tenants ?? []) {
+      const prop = await this.insertProposal(t.id, period);
+      if (prop) proposed++;
+    }
+    if (proposed > 0) {
+      await this.sb.from("platform_activity").insert({ actor: "Plataforma", message: `Dunning: ${proposed} cobro(s) propuesto(s) para ${period}` });
+    }
+    return { proposed };
+  }
+
+  async updateChargeProposal(id: string, patch: { ruc?: string; razonSocial?: string; note?: string }): Promise<void> {
+    const row: { ruc?: string; razon_social?: string; note?: string } = {};
+    if (patch.ruc !== undefined) row.ruc = patch.ruc;
+    if (patch.razonSocial !== undefined) row.razon_social = patch.razonSocial;
+    if (patch.note !== undefined) row.note = patch.note;
+    const { error } = await this.sb.from("subscription_charges").update(row).eq("id", id);
+    if (error) throw error;
+  }
+
+  async approveCharge(id: string, method = "tarjeta", token?: string): Promise<SaasCharge> {
+    const { data: c, error } = await this.sb.from("subscription_charges").select("*").eq("id", id).single();
+    if (error || !c) throw error ?? new Error("Propuesta no encontrada");
+    if (c.status === "cobrada") throw new Error("Este cobro ya fue ejecutado");
+    const ruc = (c.ruc ?? "").replace(/\D/g, "");
+    if (ruc.length !== 11) throw new Error("Completa un RUC válido (11 dígitos) antes de aprobar el cobro.");
+    if (!c.razon_social?.trim()) throw new Error("Completa la razón social antes de aprobar el cobro.");
+    await this.sb.from("subscription_charges").update({ status: "aprobada", decided_at: new Date().toISOString() }).eq("id", id);
+    try {
+      const charge = await this.chargeTenant(c.tenant_id, method, token);
+      await this.sb.from("subscription_charges").update({ status: "cobrada" }).eq("id", id);
+      return charge;
+    } catch (e) {
+      await this.sb.from("subscription_charges").update({ status: "fallida", note: String((e as Error).message ?? e) }).eq("id", id);
+      throw e;
+    }
+  }
+
+  async rejectCharge(id: string, reason: string): Promise<void> {
+    const { error } = await this.sb
+      .from("subscription_charges")
+      .update({ status: "rechazada", note: reason, decided_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw error;
   }
 
   subscribe(cb: () => void): () => void {

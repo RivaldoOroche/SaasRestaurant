@@ -104,6 +104,26 @@ export interface NewTenantInput {
   plan: PlanTier;
 }
 
+export type ChargeStatus = "pendiente" | "aprobada" | "rechazada" | "cobrada" | "fallida";
+
+/** Propuesta de cobro de suscripción, pendiente de aprobación del dueño SaaS. */
+export interface ChargeProposal {
+  id: string;
+  tenantId: string;
+  tenant: string; // nombre del tenant
+  ownerName: string;
+  plan: PlanTier;
+  base: number;
+  igv: number;
+  total: number;
+  ruc?: string; // datos a validar antes de facturar
+  razonSocial?: string;
+  period: string; // "YYYY-MM"
+  status: ChargeStatus;
+  note?: string;
+  proposedAt: string; // ISO
+}
+
 export interface SaasCharge {
   folio: string;
   tenant: string;

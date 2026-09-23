@@ -45,6 +45,10 @@ export function usePlatformSettings() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "settings"], queryFn: () => repo.getPlatformSettings() });
 }
+export function useChargeProposals() {
+  const repo = useP();
+  return useQuery({ queryKey: ["platform", "charges"], queryFn: () => repo.getChargeProposals() });
+}
 
 export function usePlatformActions() {
   const repo = useP();
@@ -90,6 +94,28 @@ export function usePlatformActions() {
     mutationFn: (patch: Parameters<typeof repo.updatePlatformSettings>[0]) => repo.updatePlatformSettings(patch),
     onSuccess: invalidate,
   });
+  const proposeCharge = useMutation({
+    mutationFn: (tenantId: string) => repo.proposeCharge(tenantId),
+    onSuccess: invalidate,
+  });
+  const runDunning = useMutation({
+    mutationFn: () => repo.runDunning(),
+    onSuccess: invalidate,
+  });
+  const updateChargeProposal = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: { ruc?: string; razonSocial?: string; note?: string } }) =>
+      repo.updateChargeProposal(id, patch),
+    onSuccess: invalidate,
+  });
+  const approveCharge = useMutation({
+    mutationFn: ({ id, method, token }: { id: string; method?: string; token?: string }) =>
+      repo.approveCharge(id, method, token),
+    onSuccess: invalidate,
+  });
+  const rejectCharge = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => repo.rejectCharge(id, reason),
+    onSuccess: invalidate,
+  });
   return {
     createTenant,
     createTenantWithOwner,
@@ -100,5 +126,10 @@ export function usePlatformActions() {
     updatePlan,
     updateTicket,
     updatePlatformSettings,
+    proposeCharge,
+    runDunning,
+    updateChargeProposal,
+    approveCharge,
+    rejectCharge,
   };
 }

@@ -58,6 +58,7 @@ export const SAAS_NAV: NavEntry[] = [
   { key: "tenants", label: "Tenants", path: "/saas/tenants", icon: "🏬", roles: ["saas"], section: "top" },
   { key: "retencion", label: "Retención", path: "/saas/retencion", icon: "📉", roles: ["saas"], section: "top" },
   { key: "ingresos", label: "Ingresos", path: "/saas/ingresos", icon: "💰", roles: ["saas"], section: "top" },
+  { key: "cobros", label: "Cobros", path: "/saas/cobros", icon: "🧾", roles: ["saas"], section: "top" },
   { key: "planes", label: "Planes", path: "/saas/planes", icon: "🧩", roles: ["saas"], section: "top" },
   { key: "soporte", label: "Soporte", path: "/saas/soporte", icon: "🎧", roles: ["saas"], section: "top" },
   { key: "bitacora", label: "Bitácora", path: "/saas/bitacora", icon: "📋", roles: ["saas"], section: "top" },

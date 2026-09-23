@@ -38,6 +38,25 @@ export interface Tables {
   platform_settings: {
     Row: { id: boolean; razon_social: string; ruc: string; direccion: string; billing_email: string; updated_at: string };
   };
+  subscription_charges: {
+    Row: {
+      id: string;
+      tenant_id: string;
+      plan: PlanTier;
+      base: number;
+      igv: number;
+      total: number;
+      ruc: string | null;
+      razon_social: string | null;
+      period: string;
+      status: "pendiente" | "aprobada" | "rechazada" | "cobrada" | "fallida";
+      note: string | null;
+      invoice_id: string | null;
+      proposed_at: string;
+      decided_at: string | null;
+      decided_by: string | null;
+    };
+  };
   onboarding_links: {
     Row: { id: string; tenant_id: string; token_hash: string; expires_at: string; used_at: string | null } & Timestamps;
   };

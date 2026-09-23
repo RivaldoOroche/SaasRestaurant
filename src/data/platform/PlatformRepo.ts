@@ -10,6 +10,7 @@ import type {
   PlanTier,
   PlatformActivity,
   PlatformSettings,
+  ChargeProposal,
 } from "./model";
 
 /** Platform-owner (SaaS) data access. Separate from the tenant Repo. */
@@ -39,7 +40,24 @@ export interface PlatformRepo {
   setTenantPlan(id: string, plan: PlanTier): Promise<void>;
   toggleSuspend(id: string): Promise<void>;
   /** Cobra la suscripción del tenant. Con method "tarjeta" y un token de la
-   *  pasarela de la plataforma, ejecuta el cargo real vía Edge Function. */
+   *  pasarela de la plataforma, ejecuta el cargo real vía Edge Function.
+   *  Se usa desde la aprobación de un cobro (no cobra sin validar). */
   chargeTenant(id: string, method: string, token?: string): Promise<SaasCharge>;
+
+  // --- Cobros de suscripción con aprobación (dunning) ---
+  /** Propuestas de cobro (pendientes de aprobar + históricas recientes). */
+  getChargeProposals(): Promise<ChargeProposal[]>;
+  /** Genera una propuesta de cobro para un tenant (no cobra todavía). */
+  proposeCharge(tenantId: string): Promise<ChargeProposal>;
+  /** Corre el dunning: propone cobros para los tenants a los que toca facturar.
+   *  Devuelve cuántas propuestas nuevas se generaron. */
+  runDunning(): Promise<{ proposed: number }>;
+  /** Edita los datos a facturar de una propuesta antes de aprobarla. */
+  updateChargeProposal(id: string, patch: { ruc?: string; razonSocial?: string; note?: string }): Promise<void>;
+  /** Aprueba y EJECUTA el cobro (valida los datos de la factura primero). */
+  approveCharge(id: string, method?: string, token?: string): Promise<SaasCharge>;
+  /** Rechaza una propuesta de cobro (no se factura). */
+  rejectCharge(id: string, reason: string): Promise<void>;
+
   subscribe(cb: () => void): () => void;
 }

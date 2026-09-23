@@ -80,16 +80,22 @@ export function Tenants() {
 }
 
 function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
-  const { setPlan, toggleSuspend, charge, regenerateLink } = usePlatformActions();
+  const { setPlan, toggleSuspend, charge, regenerateLink, proposeCharge } = usePlatformActions();
   const { enterTenant } = useAuth();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<SaasCharge | null>(null);
   const [cobrar, setCobrar] = useState(false);
+  const [prepared, setPrepared] = useState(false);
   const [link, setLink] = useState<string | null>(tenant.link);
 
   async function regenerate() {
     const res = await regenerateLink.mutateAsync(tenant.id);
     setLink(res.link);
+  }
+
+  async function prepararCobro() {
+    await proposeCharge.mutateAsync(tenant.id);
+    setPrepared(true);
   }
 
   function enter() {
@@ -160,13 +166,30 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
           <Button className="w-full" onClick={enter}>
             Entrar como cliente
           </Button>
+          {prepared ? (
+            <div className="rounded-md bg-success/10 text-success px-3 py-2 text-sm text-center">
+              Cobro propuesto ✓ — apruébalo en <b>Cobros</b> tras validar los datos.
+              <button className="ml-2 underline" onClick={() => navigate("/saas/cobros")}>
+                Ir a Cobros
+              </button>
+            </div>
+          ) : (
+            <Button
+              className="w-full"
+              variant="secondary"
+              disabled={proposeCharge.isPending}
+              onClick={prepararCobro}
+            >
+              {proposeCharge.isPending ? "Preparando…" : "Preparar cobro (pasa a aprobación)"}
+            </Button>
+          )}
           <Button
             className="w-full"
-            variant="secondary"
+            variant="ghost"
             disabled={charge.isPending}
             onClick={() => (PLATFORM_CARD ? setCobrar(true) : cobrarDirecto())}
           >
-            Cobrar suscripción / emitir factura
+            Cobro manual inmediato (override)
           </Button>
           <Button className="w-full" variant="ghost" onClick={() => toggleSuspend.mutate(tenant.id)}>
             {tenant.status === "Suspendido" ? "Reactivar" : "Suspender"}
