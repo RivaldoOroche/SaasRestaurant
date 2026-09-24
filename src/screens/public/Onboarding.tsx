@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
+import { WayraMark } from "@/components/brand/Logo";
 import { supabase, isBackendConfigured } from "@/lib/supabase";
 
 /** Página pública de alta de un tenant desde el link firmado. */
@@ -58,9 +59,7 @@ export function Onboarding() {
     <div className="min-h-screen bg-bg text-ink grid place-items-center p-6">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <div className="mx-auto mb-3 h-12 w-12 rounded-xl bg-accent-cta grid place-items-center text-xl font-bold text-white">
-            W
-          </div>
+          <WayraMark size={52} className="mx-auto mb-3" />
           <h1 className="text-2xl font-bold">Activa tu Wayra POS</h1>
           <p className="text-muted text-sm mt-1">{bonito}</p>
         </div>

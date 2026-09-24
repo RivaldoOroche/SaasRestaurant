@@ -4,6 +4,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { homePathForRole } from "@/lib/roles";
 import { MOCK_USERS } from "@/auth/session";
 import { isBackendConfigured } from "@/lib/supabase";
+import { WayraMark } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 
@@ -63,10 +64,10 @@ export function Login() {
     <div className="h-full w-full grid place-items-center bg-shell text-white p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
-          <div className="mx-auto mb-3 h-14 w-14 rounded-xl bg-accent-cta grid place-items-center text-2xl font-bold">
-            W
-          </div>
-          <h1 className="text-2xl font-bold">Wayra POS</h1>
+          <WayraMark size={60} className="mx-auto mb-3" />
+          <h1 className="text-2xl font-bold">
+            Wayra <span className="text-accent">POS</span>
+          </h1>
           <p className="text-white/60 text-sm">Punto de venta · SaaS para restaurantes</p>
         </div>
 

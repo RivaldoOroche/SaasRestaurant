@@ -4,6 +4,7 @@ import { navForRole } from "@/lib/roles";
 import { effectivePermissions } from "@/lib/permissions";
 import { useRolePermissions } from "@/data/hooks";
 import { useT } from "@/i18n";
+import { WayraMark } from "@/components/brand/Logo";
 import { useTheme } from "@/store/theme";
 import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
@@ -35,9 +36,7 @@ export function Rail() {
         "mob:order-2 mob:w-full mob:h-[60px] mob:flex-row mob:py-1 mob:px-1.5 mob:border-t mob:border-border",
       )}
     >
-      <div className="mb-2 h-10 w-10 rounded-lg bg-accent-cta grid place-items-center font-bold text-white mob:hidden">
-        W
-      </div>
+      <WayraMark size={40} className="mb-2 mob:hidden" />
 
       <div className="flex-1 flex flex-col items-center gap-1 overflow-y-auto w-full mob:flex-row mob:overflow-x-auto mob:overflow-y-hidden">
         {top.map((e) => (
