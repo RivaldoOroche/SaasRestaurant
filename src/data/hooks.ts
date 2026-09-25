@@ -1,6 +1,13 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { getRepo } from "./index";
+import {
+  pushSupported,
+  pushConfigured,
+  subscribeToPush,
+  unsubscribeFromPush,
+  isPushSubscribed,
+} from "@/lib/push";
 import { useAuth } from "@/auth/AuthContext";
 import { useBranchStore } from "@/store/branch";
 import type { DraftLine } from "./model";
@@ -422,4 +429,52 @@ export function useTenantActions() {
     setMenuAvailable,
     setRecipe,
   };
+}
+
+// --- Notificaciones push (Web Push) ---
+export function usePushNotifications() {
+  const repo = useRepo();
+  const [subscribed, setSubscribed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const supported = pushSupported();
+  const configured = pushConfigured();
+
+  useEffect(() => {
+    let alive = true;
+    isPushSubscribed().then((v) => alive && setSubscribed(v));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const enable = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await subscribeToPush();
+      await repo.savePushSubscription(data);
+      setSubscribed(true);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [repo]);
+
+  const disable = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const endpoint = await unsubscribeFromPush();
+      if (endpoint) await repo.removePushSubscription(endpoint);
+      setSubscribed(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [repo]);
+
+  return { supported, configured, subscribed, busy, error, enable, disable };
 }

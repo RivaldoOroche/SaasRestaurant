@@ -161,6 +161,12 @@ export interface Repo {
   setRolePermissions(role: string, screens: string[]): Promise<void>;
   getActivityLog(): Promise<LogEntry[]>;
 
+  // Notificaciones push (Web Push)
+  /** Guarda la suscripción push del navegador del usuario actual. */
+  savePushSubscription(data: { endpoint: string; p256dh: string; auth: string }): Promise<void>;
+  /** Elimina una suscripción push por su endpoint. */
+  removePushSubscription(endpoint: string): Promise<void>;
+
   /** Subscribe to changes (kitchen + orders + tables). Returns an unsubscribe fn. */
   subscribe(cb: () => void): () => void;
 }

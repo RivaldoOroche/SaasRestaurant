@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSettings, useTenantActions } from "@/data/hooks";
+import { useSettings, useTenantActions, usePushNotifications } from "@/data/hooks";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -86,6 +86,8 @@ export function Ajustes() {
             </Field>
           </CardBody>
         </Card>
+
+        <NotificacionesCard />
 
         <Card>
           <CardBody className="space-y-3">
@@ -447,6 +449,40 @@ function PaymentsCard({ settings }: { settings: BusinessSettings }) {
             </p>
           </div>
         )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function NotificacionesCard() {
+  const { supported, configured, subscribed, busy, error, enable, disable } = usePushNotifications();
+  return (
+    <Card>
+      <CardBody className="space-y-3">
+        <div>
+          <h3 className="font-semibold">Notificaciones push</h3>
+          <p className="text-muted text-xs">
+            Recibe avisos en este dispositivo (comanda lista, cobro aprobado, alertas de SUNAT), incluso con la app
+            cerrada.
+          </p>
+        </div>
+        {!supported ? (
+          <p className="text-muted text-sm">Este navegador no soporta notificaciones push.</p>
+        ) : !configured ? (
+          <p className="text-muted text-sm">
+            Las notificaciones push aún no están configuradas para esta instalación (falta la clave VAPID pública).
+          </p>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm">
+              {subscribed ? "Activadas en este dispositivo." : "Desactivadas en este dispositivo."}
+            </span>
+            <Button size="sm" variant={subscribed ? "secondary" : "primary"} disabled={busy} onClick={subscribed ? disable : enable}>
+              {busy ? "…" : subscribed ? "Desactivar" : "Activar"}
+            </Button>
+          </div>
+        )}
+        {error && <p className="text-warning text-xs">{error}</p>}
       </CardBody>
     </Card>
   );

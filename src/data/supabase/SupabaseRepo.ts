@@ -1141,6 +1141,28 @@ export class SupabaseRepo implements Repo {
     }));
   }
 
+  async savePushSubscription(data: { endpoint: string; p256dh: string; auth: string }): Promise<void> {
+    const { data: u } = await this.sb.auth.getUser();
+    const uid = u.user?.id;
+    if (!uid) throw new Error("No hay sesión activa.");
+    const { error } = await this.sb.from("push_subscriptions").upsert(
+      {
+        tenant_id: this.tenantId,
+        user_id: uid,
+        endpoint: data.endpoint,
+        p256dh: data.p256dh,
+        auth: data.auth,
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 200) : null,
+      },
+      { onConflict: "endpoint" },
+    );
+    if (error) throw error;
+  }
+  async removePushSubscription(endpoint: string): Promise<void> {
+    const { error } = await this.sb.from("push_subscriptions").delete().eq("endpoint", endpoint);
+    if (error) throw error;
+  }
+
   private async log(message: string): Promise<void> {
     await this.sb.from("activity_log").insert({ tenant_id: this.tenantId, actor: "POS", message });
   }

@@ -833,4 +833,12 @@ export class MockRepo implements Repo {
   async getActivityLog() {
     return [...this.state.log];
   }
+
+  private pushEndpoints = new Set<string>();
+  async savePushSubscription(data: { endpoint: string; p256dh: string; auth: string }) {
+    this.pushEndpoints.add(data.endpoint);
+  }
+  async removePushSubscription(endpoint: string) {
+    this.pushEndpoints.delete(endpoint);
+  }
 }

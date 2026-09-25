@@ -152,6 +152,18 @@ export interface Tables {
   access_log: {
     Row: { id: string; user_id: string | null; email: string | null; role: string | null; event: string; user_agent: string | null; at: string };
   };
+  push_subscriptions: {
+    Row: {
+      id: string;
+      tenant_id: string | null;
+      user_id: string;
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+      user_agent: string | null;
+      created_at: string;
+    };
+  };
   config_audit: {
     Row: {
       id: string;
