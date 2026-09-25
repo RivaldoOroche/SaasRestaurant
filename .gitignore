@@ -11,3 +11,7 @@ dist-ssr
 coverage
 .vite
 supabase/.temp
+
+# Playwright
+test-results/
+playwright-report/
