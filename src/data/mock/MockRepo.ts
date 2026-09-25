@@ -26,7 +26,14 @@ import type {
   MyPlanRequest,
   CardChargeInput,
   CardChargeResult,
+  DeliveryZone,
+  DeliveryDriver,
+  DeliveryOrder,
+  DeliveryStatus,
+  DeliveryTracking,
+  NewDeliveryInput,
 } from "../model";
+import { deliveryTotals, isAggregator, isFinal, kitchenLabel, transitionPatch, validateNewDelivery } from "@/lib/delivery";
 import { stubSunatGateway } from "../sunat/gateway";
 import type { Branch, BranchSales, StaffMember, StaffRole } from "../model";
 import {
@@ -67,6 +74,10 @@ interface MockState {
   branches: Branch[];
   staff: MockStaff[];
   recipes: Record<string, RecipeLine[]>;
+  deliveryZones: DeliveryZone[];
+  drivers: DeliveryDriver[];
+  deliveries: DeliveryOrder[];
+  deliverySeq: number;
 }
 
 function initialsOf(name: string): string {
@@ -107,13 +118,7 @@ function demoArtifacts(cpe: Comprobante): void {
   cpe.cdr = btoa(`CDR demo | ${cpe.folio} | ACEPTADO POR SUNAT (beta) | ${cpe.issuedAt}`);
 }
 
-function loadState(): MockState {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as MockState;
-  } catch {
-    /* ignore */
-  }
+function freshState(): MockState {
   return {
     tables: seedTables(),
     orders: [],
@@ -128,9 +133,88 @@ function loadState(): MockState {
     branches: BRANCHES.map((b) => ({ ...b })),
     staff: seedStaff(),
     recipes: JSON.parse(JSON.stringify(RECIPES)) as Record<string, RecipeLine[]>,
+    ...seedDelivery(),
   };
 }
 
+function loadState(): MockState {
+  try {
+    const raw = localStorage.getItem(KEY);
+    // Merge: un estado guardado por una versión anterior recibe los campos nuevos.
+    if (raw) return { ...freshState(), ...(JSON.parse(raw) as Partial<MockState>) };
+  } catch {
+    /* ignore */
+  }
+  // Se guarda de inmediato: si no, los datos de ejemplo (ids, tokens de
+  // seguimiento) serían distintos en cada carga y los enlaces no funcionarían.
+  const fresh = freshState();
+  try {
+    localStorage.setItem(KEY, JSON.stringify(fresh));
+  } catch {
+    /* ignore */
+  }
+  return fresh;
+}
+
+const minsAgo = (m: number) => new Date(Date.now() - m * 60000).toISOString();
+const randToken = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("");
+
+/** Demo: zonas, repartidores y un tablero de delivery con pedidos en cada estado. */
+function seedDelivery(): Pick<MockState, "deliveryZones" | "drivers" | "deliveries" | "deliverySeq"> {
+  const zones: DeliveryZone[] = [
+    { id: "dz-mira", name: "Miraflores", fee: 5, etaMin: 35, active: true },
+    { id: "dz-sisi", name: "San Isidro", fee: 6, etaMin: 40, active: true },
+    { id: "dz-barr", name: "Barranco", fee: 7, etaMin: 45, active: true },
+    { id: "dz-surc", name: "Surco", fee: 10, etaMin: 60, active: false },
+  ];
+  const drivers: DeliveryDriver[] = [
+    { id: "dr-jose", name: "José Huamán", phone: "987111222", vehicle: "moto", active: true },
+    { id: "dr-lucia", name: "Lucía Paredes", phone: "986333444", vehicle: "bici", active: true },
+    { id: "dr-pedro", name: "Pedro Ríos", phone: "985555666", vehicle: "auto", active: false },
+  ];
+  const mk = (
+    n: number,
+    o: Partial<DeliveryOrder> & Pick<DeliveryOrder, "channel" | "customerName" | "status" | "items" | "payMethod">,
+    ago: number,
+  ): DeliveryOrder => {
+    const zone = o.zoneId ? zones.find((z) => z.id === o.zoneId) : undefined;
+    const t = deliveryTotals(o.items, isAggregator(o.channel) ? 0 : zone?.fee ?? 0);
+    return {
+      id: `dl-${n}`,
+      code: `D-${n}`,
+      trackingToken: randToken(),
+      customerPhone: "",
+      address: "",
+      reference: "",
+      zoneId: null,
+      zoneName: zone?.name ?? "",
+      cashFor: null,
+      driverId: null,
+      driverName: null,
+      notes: "",
+      cancelReason: null,
+      etaMin: zone?.etaMin ?? 30,
+      branchId: null,
+      createdAt: minsAgo(ago),
+      acceptedAt: null,
+      readyAt: null,
+      dispatchedAt: null,
+      deliveredAt: null,
+      cancelledAt: null,
+      ...t,
+      ...o,
+    };
+  };
+  const deliveries: DeliveryOrder[] = [
+    mk(1005, { channel: "whatsapp", customerName: "Rosa Quispe", customerPhone: "987654321", address: "Av. Larco 345, dpto 802", reference: "Frente al parque", zoneId: "dz-mira", status: "recibido", payMethod: "efectivo", cashFor: 100, items: [{ name: "Lomo saltado", qty: 2, price: 42 }] }, 3),
+    mk(1004, { channel: "telefono", customerName: "Jorge Salas", customerPhone: "986222111", address: "Calle Los Pinos 120", zoneId: "dz-sisi", status: "preparando", payMethod: "yape", acceptedAt: minsAgo(12), items: [{ name: "Ceviche clásico", qty: 1, price: 38 }, { name: "Chicha morada 1L", qty: 1, price: 12 }] }, 14),
+    mk(1003, { channel: "rappi", customerName: "Rappi · pedido 88213", status: "listo", payMethod: "pagado_app", acceptedAt: minsAgo(25), readyAt: minsAgo(4), items: [{ name: "Ají de gallina", qty: 1, price: 32 }] }, 27),
+    mk(1002, { channel: "web", customerName: "Valeria Chang", customerPhone: "985777888", address: "Jr. Batallón Ayacucho 210", zoneId: "dz-barr", status: "en_camino", payMethod: "tarjeta", driverId: "dr-jose", driverName: "José Huamán", acceptedAt: minsAgo(44), readyAt: minsAgo(20), dispatchedAt: minsAgo(15), items: [{ name: "Arroz con mariscos", qty: 2, price: 45 }] }, 50),
+    mk(1001, { channel: "whatsapp", customerName: "Luis Paredes", customerPhone: "984999000", address: "Av. Pardo 500", zoneId: "dz-mira", status: "entregado", payMethod: "plin", driverId: "dr-lucia", driverName: "Lucía Paredes", acceptedAt: minsAgo(95), readyAt: minsAgo(75), dispatchedAt: minsAgo(70), deliveredAt: minsAgo(52), items: [{ name: "Causa limeña", qty: 2, price: 24 }] }, 100),
+  ];
+  return { deliveryZones: zones, drivers, deliveries, deliverySeq: 1006 };
+}
 
 /** In-browser repo used for demo / offline UI work. */
 export class MockRepo implements Repo {
@@ -840,5 +924,138 @@ export class MockRepo implements Repo {
   }
   async removePushSubscription(endpoint: string) {
     this.pushEndpoints.delete(endpoint);
+  }
+
+  // ---- Delivery ----
+  async getDeliveryZones() {
+    return this.state.deliveryZones.map((z) => ({ ...z }));
+  }
+  async saveDeliveryZone(zone: Omit<DeliveryZone, "id"> & { id?: string }) {
+    const i = this.state.deliveryZones.findIndex((z) => z.id === zone.id);
+    if (i >= 0) this.state.deliveryZones[i] = { ...this.state.deliveryZones[i], ...zone, id: zone.id! };
+    else this.state.deliveryZones.push({ ...zone, id: uid("dz") });
+    this.pushLog("Delivery", `Guardó la zona ${zone.name}`);
+    this.persist();
+  }
+  async removeDeliveryZone(id: string) {
+    this.state.deliveryZones = this.state.deliveryZones.filter((z) => z.id !== id);
+    this.persist();
+  }
+  async getDrivers() {
+    return this.state.drivers.map((d) => ({ ...d }));
+  }
+  async saveDriver(driver: Omit<DeliveryDriver, "id"> & { id?: string }) {
+    const i = this.state.drivers.findIndex((d) => d.id === driver.id);
+    if (i >= 0) this.state.drivers[i] = { ...this.state.drivers[i], ...driver, id: driver.id! };
+    else this.state.drivers.push({ ...driver, id: uid("dr") });
+    this.pushLog("Delivery", `Guardó al repartidor ${driver.name}`);
+    this.persist();
+  }
+  async removeDriver(id: string) {
+    this.state.drivers = this.state.drivers.filter((d) => d.id !== id);
+    this.persist();
+  }
+
+  async getDeliveryOrders() {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    return this.state.deliveries
+      .filter((d) => !isFinal(d.status) || new Date(d.createdAt) >= startOfDay)
+      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+      .map((d) => ({ ...d, items: d.items.map((i) => ({ ...i })) }));
+  }
+
+  async createDeliveryOrder(input: NewDeliveryInput): Promise<DeliveryOrder> {
+    const err = validateNewDelivery(input, this.state.deliveryZones);
+    if (err) throw new Error(err);
+    const agg = isAggregator(input.channel);
+    const zone = agg ? undefined : this.state.deliveryZones.find((z) => z.id === input.zoneId);
+    const totals = deliveryTotals(input.items, zone?.fee ?? 0);
+    const n = this.state.deliverySeq++;
+    const order: DeliveryOrder = {
+      id: uid("dl"),
+      code: `D-${n}`,
+      trackingToken: randToken(),
+      channel: input.channel,
+      customerName: input.customerName.trim(),
+      customerPhone: input.customerPhone.replace(/\D/g, "").slice(-9),
+      address: input.address.trim(),
+      reference: input.reference.trim(),
+      zoneId: zone?.id ?? null,
+      zoneName: zone?.name ?? "",
+      items: input.items.map((i) => ({ ...i })),
+      ...totals,
+      payMethod: input.payMethod,
+      cashFor: input.payMethod === "efectivo" ? input.cashFor : null,
+      status: "recibido",
+      driverId: null,
+      driverName: null,
+      notes: input.notes.trim(),
+      cancelReason: null,
+      etaMin: zone?.etaMin ?? 30,
+      branchId: input.branchId ?? null,
+      createdAt: new Date().toISOString(),
+      acceptedAt: null,
+      readyAt: null,
+      dispatchedAt: null,
+      deliveredAt: null,
+      cancelledAt: null,
+    };
+    this.state.deliveries.push(order);
+    this.pushLog("Delivery", `Nuevo pedido ${order.code} (${order.channel}) · S/ ${order.total.toFixed(2)}`);
+    this.persist();
+    return { ...order };
+  }
+
+  async setDeliveryStatus(id: string, to: DeliveryStatus, opts: { driverId?: string | null; cancelReason?: string } = {}) {
+    const d = this.state.deliveries.find((x) => x.id === id);
+    if (!d) throw new Error("Pedido no encontrado.");
+    const patch = transitionPatch(d, to, opts, new Date().toISOString());
+    if (patch.driverId) {
+      const driver = this.state.drivers.find((x) => x.id === patch.driverId);
+      if (!driver?.active) throw new Error("Ese repartidor no está disponible.");
+      patch.driverName = driver.name;
+    }
+    Object.assign(d, patch);
+
+    const label = kitchenLabel(d.code);
+    if (to === "preparando") {
+      this.state.tickets.push({
+        id: uid("k"),
+        orderId: null,
+        tableLabel: label,
+        col: "nuevos",
+        enteredAt: Date.now(),
+        note: d.notes,
+        done: false,
+        lines: d.items.map((i) => ({ qty: i.qty, name: i.name })),
+        branchId: d.branchId,
+      });
+    }
+    if (to === "cancelado") {
+      // Que cocina no siga preparando un pedido cancelado.
+      this.state.tickets = this.state.tickets.filter((t) => t.tableLabel !== label);
+    }
+    this.pushLog("Delivery", `${d.code} → ${to}${to === "cancelado" ? ` (${d.cancelReason})` : ""}`);
+    this.persist();
+  }
+
+  /** Vista pública para el enlace de seguimiento (sin dirección ni teléfono). */
+  getDeliveryTracking(token: string): DeliveryTracking | null {
+    const d = this.state.deliveries.find((x) => x.trackingToken === token);
+    if (!d || token.length < 16) return null;
+    return {
+      tenantName: this.state.settings.name,
+      code: d.code,
+      status: d.status,
+      etaMin: d.etaMin,
+      driverName: d.status === "en_camino" || d.status === "entregado" ? d.driverName?.split(" ")[0] ?? null : null,
+      createdAt: d.createdAt,
+      acceptedAt: d.acceptedAt,
+      readyAt: d.readyAt,
+      dispatchedAt: d.dispatchedAt,
+      deliveredAt: d.deliveredAt,
+      cancelledAt: d.cancelledAt,
+    };
   }
 }

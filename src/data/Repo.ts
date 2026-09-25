@@ -31,6 +31,11 @@ import type {
   WaitlistEntry,
   Subscription,
   MyPlanRequest,
+  DeliveryZone,
+  DeliveryDriver,
+  DeliveryOrder,
+  DeliveryStatus,
+  NewDeliveryInput,
 } from "./model";
 
 export interface PayInput extends PayExtras {
@@ -160,6 +165,25 @@ export interface Repo {
   getRolePermissions(): Promise<Record<string, string[]>>;
   setRolePermissions(role: string, screens: string[]): Promise<void>;
   getActivityLog(): Promise<LogEntry[]>;
+
+  // Delivery
+  getDeliveryZones(): Promise<DeliveryZone[]>;
+  /** Crea (sin id) o actualiza una zona de reparto. Solo gerencia. */
+  saveDeliveryZone(zone: Omit<DeliveryZone, "id"> & { id?: string }): Promise<void>;
+  removeDeliveryZone(id: string): Promise<void>;
+  getDrivers(): Promise<DeliveryDriver[]>;
+  saveDriver(driver: Omit<DeliveryDriver, "id"> & { id?: string }): Promise<void>;
+  removeDriver(id: string): Promise<void>;
+  /** Pedidos activos + los terminados de hoy (más recientes primero). */
+  getDeliveryOrders(): Promise<DeliveryOrder[]>;
+  createDeliveryOrder(input: NewDeliveryInput): Promise<DeliveryOrder>;
+  /** Avanza/cancela un pedido aplicando las reglas de lib/delivery. Al aceptarlo
+   *  (→ preparando) envía la comanda al KDS; al cancelarlo la retira. */
+  setDeliveryStatus(
+    id: string,
+    to: DeliveryStatus,
+    opts?: { driverId?: string | null; cancelReason?: string },
+  ): Promise<void>;
 
   // Notificaciones push (Web Push)
   /** Guarda la suscripción push del navegador del usuario actual. */

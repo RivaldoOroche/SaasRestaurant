@@ -79,9 +79,12 @@ supabase functions deploy onboarding-complete
 supabase functions deploy saas-cobrar
 supabase functions deploy notificar
 supabase functions deploy cron-tareas
+supabase functions deploy push-enviar   # notificaciones push (requiere secrets VAPID_*)
+supabase functions deploy contacto      # formulario de la landing
 ```
 
-- [ ] Las 8 funciones desplegadas sin error.
+- [ ] Las 10 funciones desplegadas sin error.
+- [ ] Push: secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (ver `supabase/functions/push-enviar/README.md`).
 - [ ] Configurar la **URL de webhook** de la pasarela apuntando a
       `…/functions/v1/pago-webhook?provider=<culqi|izipay|niubiz>&tenant=<uuid>`.
 
@@ -96,7 +99,11 @@ Project → **Settings → Environment Variables**:
 - [ ] `VITE_SUNAT_MODE=beta` (o `produccion`)
 - [ ] `VITE_PLATFORM_CARD_PK` (llave **pública** de tu pasarela SaaS, si cobras con tarjeta)
 - [ ] `VITE_ERROR_WEBHOOK` (opcional, para el beacon de errores)
-- [ ] Framework **Vite**, build `npm run build`, output `dist`. `vercel.json` ya trae el rewrite SPA.
+- [ ] `VITE_VAPID_PUBLIC_KEY` (clave **pública** VAPID, para notificaciones push)
+- [ ] Framework **Vite**, build `npm run build`, output `dist`. `vercel.json` ya trae el rewrite SPA
+      y los headers de la PWA (`sw.js` sin caché, MIME del manifest, assets inmutables).
+- [ ] **PWA**: abrir el dominio en Chrome (Android) → debe ofrecer «Instalar»; en iPhone,
+      Safari → Compartir → «Agregar a inicio». Requiere **HTTPS** (Vercel ya lo da).
 - [ ] **Redeploy** y confirmar que carga con datos reales (no demo).
 
 ---
@@ -160,3 +167,15 @@ Elegir **una** opción (`OBSERVABILITY.md §6`):
 
 Pendiente fuera de alcance (crecimiento futuro): app móvil dedicada de meseros
 e integraciones de delivery (Rappi/PedidosYa).
+
+---
+
+## Delivery (sin pasos extra de backend)
+
+Las tablas y la función pública de seguimiento vienen en la migración `0029_delivery.sql`
+(incluida en `setup_all.sql`). Antes de tomar pedidos, en **Delivery → Zonas y repartidores**:
+
+- [ ] Crear las **zonas de reparto** con su costo de envío y tiempo estimado.
+- [ ] Registrar a los **repartidores** (celular válido) y activar a los que estén de turno.
+- [ ] Probar un pedido de punta a punta: crear → aceptar (aparece en Cocina con 🛵) →
+      listo → despachar → abrir el enlace de seguimiento desde un celular → entregado.

@@ -52,6 +52,32 @@ describe("RLS — credenciales secretas de SOLO ESCRITURA (sin SELECT)", () => {
   }
 });
 
+describe("RLS — delivery", () => {
+  for (const t of ["delivery_orders", "delivery_zones", "delivery_drivers"]) {
+    it(`${t} tiene RLS habilitado`, () => expect(hasRLS(t)).toBe(true));
+  }
+  it("zonas y repartidores solo los modifica gerencia (can_manage)", () => {
+    for (const t of ["delivery_zones", "delivery_drivers"]) {
+      const writes = policiesFor(t).filter((p) => /for\s+(insert|update|delete)/i.test(p));
+      expect(writes.length).toBe(3);
+      for (const p of writes) expect(p).toMatch(/app\.can_manage/);
+    }
+  });
+  it("los pedidos no se pueden borrar (se cancelan con motivo)", () => {
+    const deletes = policiesFor("delivery_orders").filter((p) => /for\s+(delete|all)/i.test(p));
+    expect(deletes).toEqual([]);
+  });
+  it("el seguimiento público no expone dirección, teléfono ni montos", () => {
+    const fn = SQL.match(/function public\.public_delivery_status[\s\S]*?\$\$;/i)?.[0] ?? "";
+    expect(fn).not.toBe("");
+    const selected = fn.slice(fn.indexOf("jsonb_build_object"), fn.indexOf("from delivery_orders"));
+    for (const secret of ["address", "customer_phone", "customer_name", "reference", "total", "cash_for", "tracking_token"]) {
+      expect(selected).not.toMatch(new RegExp(`\\bd\\.${secret}\\b`));
+    }
+    expect(fn).toMatch(/length\(p_token\)\s*>=\s*16/);
+  });
+});
+
 describe("RLS — auditorías protegidas y de solo lectura para el cliente", () => {
   it("config_audit tiene RLS y no permite INSERT/UPDATE/DELETE por el cliente", () => {
     expect(hasRLS("config_audit")).toBe(true);

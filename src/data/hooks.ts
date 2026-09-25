@@ -10,7 +10,7 @@ import {
 } from "@/lib/push";
 import { useAuth } from "@/auth/AuthContext";
 import { useBranchStore } from "@/store/branch";
-import type { DraftLine } from "./model";
+import type { DraftLine, NewDeliveryInput, DeliveryStatus, DeliveryZone, DeliveryDriver } from "./model";
 import type { PayInput } from "./Repo";
 
 export function useRepo() {
@@ -27,6 +27,7 @@ export function useRepoSubscription() {
       qc.invalidateQueries({ queryKey: ["tables"] });
       qc.invalidateQueries({ queryKey: ["order"] });
       qc.invalidateQueries({ queryKey: ["kitchen"] });
+      qc.invalidateQueries({ queryKey: ["delivery"] });
     });
   }, [repo, qc]);
 }
@@ -477,4 +478,52 @@ export function usePushNotifications() {
   }, [repo]);
 
   return { supported, configured, subscribed, busy, error, enable, disable };
+}
+
+// --- Delivery ---
+export function useDeliveryOrders() {
+  const repo = useRepo();
+  // Realtime invalida al instante con Supabase; el sondeo cubre el modo demo
+  // (otras pestañas) y reconexiones.
+  const branchId = useBranchStore((s) => s.branchId);
+  return useQuery({
+    queryKey: ["delivery", "orders"],
+    queryFn: () => repo.getDeliveryOrders(),
+    refetchInterval: 15_000,
+    // Cada sucursal ve y despacha sus propios pedidos (los sin sucursal, en todas).
+    select: (list) => list.filter((o) => !branchId || !o.branchId || o.branchId === branchId),
+  });
+}
+export function useDeliveryZones() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["delivery", "zones"], queryFn: () => repo.getDeliveryZones() });
+}
+export function useDrivers() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["delivery", "drivers"], queryFn: () => repo.getDrivers() });
+}
+export function useDeliveryActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const branchId = useBranchStore((s) => s.branchId);
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ["delivery"] });
+    qc.invalidateQueries({ queryKey: ["kitchen"] });
+  };
+  return {
+    create: useMutation({
+      mutationFn: (input: NewDeliveryInput) => repo.createDeliveryOrder({ ...input, branchId: input.branchId ?? branchId }),
+      onSuccess: refresh,
+    }),
+    setStatus: useMutation({
+      mutationFn: (v: { id: string; to: DeliveryStatus; driverId?: string | null; cancelReason?: string }) =>
+        repo.setDeliveryStatus(v.id, v.to, { driverId: v.driverId, cancelReason: v.cancelReason }),
+      onSuccess: refresh,
+      onError: refresh, // p. ej. otro usuario ya lo movió: refresca el tablero
+    }),
+    saveZone: useMutation({ mutationFn: (z: Omit<DeliveryZone, "id"> & { id?: string }) => repo.saveDeliveryZone(z), onSuccess: refresh }),
+    removeZone: useMutation({ mutationFn: (id: string) => repo.removeDeliveryZone(id), onSuccess: refresh }),
+    saveDriver: useMutation({ mutationFn: (d: Omit<DeliveryDriver, "id"> & { id?: string }) => repo.saveDriver(d), onSuccess: refresh }),
+    removeDriver: useMutation({ mutationFn: (id: string) => repo.removeDriver(id), onSuccess: refresh }),
+  };
 }

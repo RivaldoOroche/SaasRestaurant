@@ -33,8 +33,17 @@ import type {
   MyPlanRequest,
   CardChargeInput,
   CardChargeResult,
+  DeliveryZone,
+  DeliveryDriver,
+  DeliveryOrder,
+  DeliveryStatus,
+  DeliveryChannel,
+  DeliveryPay,
+  DriverVehicle,
+  NewDeliveryInput,
 } from "../model";
 import type { Database, Row, PlanTier } from "@/types/database";
+import { deliveryTotals, isAggregator, kitchenLabel, transitionPatch, validateNewDelivery } from "@/lib/delivery";
 import { stubSunatGateway, type SunatGateway, type SunatResult } from "../sunat/gateway";
 import { makeFunctionGateway } from "../sunat/functionGateway";
 import { decideEmission } from "../sunat/outbox";
@@ -1163,6 +1172,174 @@ export class SupabaseRepo implements Repo {
     if (error) throw error;
   }
 
+  // ---- Delivery ----
+  async getDeliveryZones(): Promise<DeliveryZone[]> {
+    const { data, error } = await this.sb.from("delivery_zones").select("*").order("name");
+    if (error) throw error;
+    return (data ?? []).map((z) => ({ id: z.id, name: z.name, fee: Number(z.fee), etaMin: z.eta_min, active: z.active }));
+  }
+  async saveDeliveryZone(zone: Omit<DeliveryZone, "id"> & { id?: string }): Promise<void> {
+    const row = { tenant_id: this.tenantId, name: zone.name, fee: zone.fee, eta_min: zone.etaMin, active: zone.active };
+    const { error } = zone.id
+      ? await this.sb.from("delivery_zones").update(row).eq("id", zone.id)
+      : await this.sb.from("delivery_zones").insert(row);
+    if (error) throw error;
+  }
+  async removeDeliveryZone(id: string): Promise<void> {
+    const { error } = await this.sb.from("delivery_zones").delete().eq("id", id);
+    if (error) throw error;
+  }
+  async getDrivers(): Promise<DeliveryDriver[]> {
+    const { data, error } = await this.sb.from("delivery_drivers").select("*").order("name");
+    if (error) throw error;
+    return (data ?? []).map((d) => ({
+      id: d.id,
+      name: d.name,
+      phone: d.phone,
+      vehicle: d.vehicle as DriverVehicle,
+      active: d.active,
+    }));
+  }
+  async saveDriver(driver: Omit<DeliveryDriver, "id"> & { id?: string }): Promise<void> {
+    const row = { tenant_id: this.tenantId, name: driver.name, phone: driver.phone, vehicle: driver.vehicle, active: driver.active };
+    const { error } = driver.id
+      ? await this.sb.from("delivery_drivers").update(row).eq("id", driver.id)
+      : await this.sb.from("delivery_drivers").insert(row);
+    if (error) throw error;
+  }
+  async removeDriver(id: string): Promise<void> {
+    const { error } = await this.sb.from("delivery_drivers").delete().eq("id", id);
+    if (error) throw error;
+  }
+
+  private mapDelivery(r: Row<"delivery_orders">, drivers: Map<string, string>): DeliveryOrder {
+    return {
+      id: r.id,
+      code: r.code,
+      trackingToken: r.tracking_token,
+      channel: r.channel as DeliveryChannel,
+      customerName: r.customer_name,
+      customerPhone: r.customer_phone,
+      address: r.address,
+      reference: r.reference,
+      zoneId: r.zone_id,
+      zoneName: r.zone_name,
+      items: (r.items ?? []).map((i) => ({ name: i.name, qty: Number(i.qty), price: Number(i.price) })),
+      subtotal: Number(r.subtotal),
+      fee: Number(r.fee),
+      total: Number(r.total),
+      payMethod: r.pay_method as DeliveryPay,
+      cashFor: r.cash_for == null ? null : Number(r.cash_for),
+      status: r.status,
+      driverId: r.driver_id,
+      driverName: r.driver_id ? drivers.get(r.driver_id) ?? null : null,
+      notes: r.notes,
+      cancelReason: r.cancel_reason,
+      etaMin: r.eta_min,
+      branchId: r.branch_id,
+      createdAt: r.created_at,
+      acceptedAt: r.accepted_at,
+      readyAt: r.ready_at,
+      dispatchedAt: r.dispatched_at,
+      deliveredAt: r.delivered_at,
+      cancelledAt: r.cancelled_at,
+    };
+  }
+
+  async getDeliveryOrders(): Promise<DeliveryOrder[]> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const [{ data, error }, drivers] = await Promise.all([
+      this.sb
+        .from("delivery_orders")
+        .select("*")
+        // Activos (de cualquier día) + todo lo de hoy.
+        .or(`status.in.(recibido,preparando,listo,en_camino),created_at.gte."${startOfDay.toISOString()}"`)
+        .order("created_at", { ascending: false })
+        .limit(300),
+      this.getDrivers(),
+    ]);
+    if (error) throw error;
+    const names = new Map(drivers.map((d) => [d.id, d.name]));
+    return (data ?? []).map((r) => this.mapDelivery(r, names));
+  }
+
+  async createDeliveryOrder(input: NewDeliveryInput): Promise<DeliveryOrder> {
+    const zones = await this.getDeliveryZones();
+    const err = validateNewDelivery(input, zones);
+    if (err) throw new Error(err);
+    const zone = isAggregator(input.channel) ? undefined : zones.find((z) => z.id === input.zoneId);
+    const totals = deliveryTotals(input.items, zone?.fee ?? 0);
+    const { data, error } = await this.sb
+      .from("delivery_orders")
+      .insert({
+        tenant_id: this.tenantId,
+        branch_id: input.branchId ?? null,
+        channel: input.channel,
+        customer_name: input.customerName.trim(),
+        customer_phone: input.customerPhone.replace(/\D/g, "").slice(-9),
+        address: input.address.trim(),
+        reference: input.reference.trim(),
+        zone_id: zone?.id ?? null,
+        zone_name: zone?.name ?? "",
+        items: input.items,
+        subtotal: totals.subtotal,
+        fee: totals.fee,
+        total: totals.total,
+        pay_method: input.payMethod,
+        cash_for: input.payMethod === "efectivo" ? input.cashFor : null,
+        notes: input.notes.trim(),
+        eta_min: zone?.etaMin ?? 30,
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+    await this.log(`Nuevo delivery ${data.code} (${data.channel}) · S/ ${Number(data.total).toFixed(2)}`);
+    return this.mapDelivery(data, new Map());
+  }
+
+  async setDeliveryStatus(
+    id: string,
+    to: DeliveryStatus,
+    opts: { driverId?: string | null; cancelReason?: string } = {},
+  ): Promise<void> {
+    const { data: r, error } = await this.sb.from("delivery_orders").select("*").eq("id", id).single();
+    if (error) throw error;
+    const current = this.mapDelivery(r, new Map());
+    const patch = transitionPatch(current, to, opts, new Date().toISOString());
+    if (patch.driverId) {
+      const { data: drv } = await this.sb.from("delivery_drivers").select("active").eq("id", patch.driverId).maybeSingle();
+      if (!drv?.active) throw new Error("Ese repartidor no está disponible.");
+    }
+    const row: Database["public"]["Tables"]["delivery_orders"]["Update"] = { status: to };
+    if (patch.acceptedAt) row.accepted_at = patch.acceptedAt;
+    if (patch.readyAt) row.ready_at = patch.readyAt;
+    if (patch.dispatchedAt) row.dispatched_at = patch.dispatchedAt;
+    if (patch.deliveredAt) row.delivered_at = patch.deliveredAt;
+    if (patch.cancelledAt) row.cancelled_at = patch.cancelledAt;
+    if (patch.cancelReason) row.cancel_reason = patch.cancelReason;
+    if (patch.driverId !== undefined) row.driver_id = patch.driverId;
+    // Guarda contra carreras: solo actualiza si nadie lo movió mientras tanto.
+    const upd = await this.sb.from("delivery_orders").update(row).eq("id", id).eq("status", current.status).select("id");
+    if (upd.error) throw upd.error;
+    if (!upd.data?.length) throw new Error("Otro usuario ya actualizó este pedido. Refresca el tablero.");
+
+    const label = kitchenLabel(current.code);
+    if (to === "preparando") {
+      const { data: ticket, error: tErr } = await this.sb
+        .from("kitchen_tickets")
+        .insert({ tenant_id: this.tenantId, order_id: null, table_label: label, col: "nuevos", note: current.notes, branch_id: current.branchId })
+        .select("id")
+        .single();
+      if (tErr) throw tErr;
+      await this.sb.from("ticket_lines").insert(current.items.map((i) => ({ ticket_id: ticket.id, qty: i.qty, name: i.name })));
+    }
+    if (to === "cancelado") {
+      await this.sb.from("kitchen_tickets").delete().eq("table_label", label).neq("col", "entregado");
+    }
+    await this.log(`${current.code} → ${to}${patch.cancelReason ? ` (${patch.cancelReason})` : ""}`);
+  }
+
   private async log(message: string): Promise<void> {
     await this.sb.from("activity_log").insert({ tenant_id: this.tenantId, actor: "POS", message });
   }
@@ -1173,6 +1350,7 @@ export class SupabaseRepo implements Repo {
       .on("postgres_changes", { event: "*", schema: "public", table: "kitchen_tickets" }, cb)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, cb)
       .on("postgres_changes", { event: "*", schema: "public", table: "restaurant_tables" }, cb)
+      .on("postgres_changes", { event: "*", schema: "public", table: "delivery_orders" }, cb)
       .subscribe();
     return () => {
       void this.sb.removeChannel(channel);

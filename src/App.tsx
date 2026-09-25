@@ -12,6 +12,8 @@ import { LibroReclamaciones } from "@/screens/public/LibroReclamaciones";
 import { Legal } from "@/screens/public/Legal";
 import { Estado } from "@/screens/public/Estado";
 import { Ayuda } from "@/screens/pos/Ayuda";
+import { Delivery } from "@/screens/pos/Delivery";
+import { Seguimiento } from "@/screens/public/Seguimiento";
 import { Reclamaciones } from "@/screens/pos/Reclamaciones";
 import { Reservas } from "@/screens/pos/Reservas";
 import { Permisos } from "@/screens/pos/Permisos";
@@ -59,6 +61,7 @@ const SCREENS: Record<string, ComponentType> = {
   carta: Carta,
   editor: Editor,
   online: OnlineOrders,
+  delivery: Delivery,
   ajustes: Ajustes,
   reportes: Reportes,
   caja: Caja,
@@ -90,7 +93,7 @@ const PHASE: Record<string, string> = {
   comprobantes: "Fase 3", reclamaciones: "Fase 2", reservas: "Fase 2", permisos: "Fase 2",
   saashome: "Fase 4", tenants: "Fase 4", retencion: "Fase 4", ingresos: "Fase 4",
   planes: "Fase 4", soporte: "Fase 4", bitacora: "Fase 4", cobros: "Fase 4",
-  sucursales: "Fase 2", suscripcion: "Fase 4", ayuda: "Fase 5",
+  sucursales: "Fase 2", suscripcion: "Fase 4", ayuda: "Fase 5", delivery: "Fase 6",
 };
 
 function screenRoute(e: NavEntry) {
@@ -133,6 +136,7 @@ function Shell() {
       <Route path="/libro/:slug" element={<LibroReclamaciones />} />
       <Route path="/legal/:doc" element={<Legal />} />
       <Route path="/estado" element={<Estado />} />
+      <Route path="/seguimiento/:token" element={<Seguimiento />} />
       <Route path="/login" element={<Login />} />
       <Route element={<AppShell />}>
         {TENANT_NAV.map(screenRoute)}

@@ -152,6 +152,45 @@ export interface Tables {
   access_log: {
     Row: { id: string; user_id: string | null; email: string | null; role: string | null; event: string; user_agent: string | null; at: string };
   };
+  delivery_zones: {
+    Row: { id: string; tenant_id: string; name: string; fee: number; eta_min: number; active: boolean; created_at: string };
+  };
+  delivery_drivers: {
+    Row: { id: string; tenant_id: string; name: string; phone: string; vehicle: string; active: boolean; created_at: string };
+  };
+  delivery_orders: {
+    Row: {
+      id: string;
+      tenant_id: string;
+      branch_id: string | null;
+      code: string;
+      tracking_token: string;
+      channel: string;
+      customer_name: string;
+      customer_phone: string;
+      address: string;
+      reference: string;
+      zone_id: string | null;
+      zone_name: string;
+      items: { name: string; qty: number; price: number }[];
+      subtotal: number;
+      fee: number;
+      total: number;
+      pay_method: string;
+      cash_for: number | null;
+      status: "recibido" | "preparando" | "listo" | "en_camino" | "entregado" | "cancelado";
+      driver_id: string | null;
+      notes: string;
+      cancel_reason: string | null;
+      eta_min: number;
+      created_at: string;
+      accepted_at: string | null;
+      ready_at: string | null;
+      dispatched_at: string | null;
+      delivered_at: string | null;
+      cancelled_at: string | null;
+    };
+  };
   push_subscriptions: {
     Row: {
       id: string;
@@ -302,6 +341,7 @@ export type Database = {
       public_menu: { Args: { p_slug: string }; Returns: unknown };
       public_tenant_info: { Args: { p_slug: string }; Returns: unknown };
       submit_complaint: { Args: { p_slug: string; payload: unknown }; Returns: unknown };
+      public_delivery_status: { Args: { p_token: string }; Returns: unknown };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

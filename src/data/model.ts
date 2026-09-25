@@ -309,6 +309,97 @@ export interface OnlineOrder {
   status: string;
 }
 
+// ---- Delivery ----
+export type DeliveryStatus = "recibido" | "preparando" | "listo" | "en_camino" | "entregado" | "cancelado";
+/** Canales propios (el restaurante reparte) y agregadores (reparte la app). */
+export type DeliveryChannel = "telefono" | "whatsapp" | "web" | "rappi" | "pedidosya";
+export type DeliveryPay = "efectivo" | "yape" | "plin" | "tarjeta" | "pagado_app";
+export type DriverVehicle = "moto" | "bici" | "auto";
+
+export interface DeliveryZone {
+  id: string;
+  name: string;
+  fee: number; // costo de envío
+  etaMin: number; // minutos estimados de entrega (incluye preparación)
+  active: boolean;
+}
+
+export interface DeliveryDriver {
+  id: string;
+  name: string;
+  phone: string;
+  vehicle: DriverVehicle;
+  active: boolean;
+}
+
+export interface DeliveryItem {
+  name: string;
+  qty: number;
+  price: number; // precio unitario
+}
+
+export interface DeliveryOrder {
+  id: string;
+  code: string; // visible para el cliente, p. ej. D-1042
+  trackingToken: string; // secreto no adivinable para el enlace de seguimiento
+  channel: DeliveryChannel;
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  reference: string;
+  zoneId: string | null;
+  zoneName: string;
+  items: DeliveryItem[];
+  subtotal: number;
+  fee: number;
+  total: number;
+  payMethod: DeliveryPay;
+  cashFor: number | null; // "paga con" (efectivo) para llevar el vuelto
+  status: DeliveryStatus;
+  driverId: string | null;
+  driverName: string | null;
+  notes: string;
+  cancelReason: string | null;
+  etaMin: number;
+  branchId: string | null;
+  createdAt: string; // ISO
+  acceptedAt: string | null;
+  readyAt: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+  cancelledAt: string | null;
+}
+
+export interface NewDeliveryInput {
+  channel: DeliveryChannel;
+  customerName: string;
+  customerPhone: string;
+  address: string;
+  reference: string;
+  zoneId: string | null;
+  items: DeliveryItem[];
+  payMethod: DeliveryPay;
+  cashFor: number | null;
+  notes: string;
+  /** Sucursal que prepara y despacha (la activa al crearlo). */
+  branchId?: string | null;
+}
+
+/** Vista pública del pedido para el cliente (sin dirección ni teléfono). */
+export interface DeliveryTracking {
+  tenantName: string;
+  code: string;
+  status: DeliveryStatus;
+  etaMin: number;
+  driverName: string | null; // solo el primer nombre
+  createdAt: string;
+  acceptedAt: string | null;
+  readyAt: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+  cancelledAt: string | null;
+}
+
 /** Payment options passed into payOrder (loyalty, discount, tip). */
 export interface PayExtras {
   customerId?: string | null;
