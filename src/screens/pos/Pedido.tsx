@@ -16,6 +16,7 @@ import { usePos } from "@/store/pos";
 import { formatMoney, round2 } from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { useT } from "@/i18n";
 import { cn } from "@/lib/cn";
 import type { MenuItem, DraftLine, Order } from "@/data/model";
 import { ModifierModal } from "./ModifierModal";
@@ -28,6 +29,7 @@ type Filter = "veg" | "spicy" | "gf";
 
 export function Pedido() {
   const navigate = useNavigate();
+  const t = useT();
   const activeTableId = usePos((s) => s.activeTableId);
   const { data: tables } = useTables();
   const { data: order } = useOpenOrder(activeTableId);
@@ -37,9 +39,9 @@ export function Pedido() {
   if (!activeTableId || !activeTable) {
     return (
       <div className="p-6 max-w-3xl">
-        <h1 className="text-2xl font-bold mb-2">Pedido</h1>
-        <p className="text-muted mb-6">Elige una mesa para empezar a tomar el pedido.</p>
-        <Button onClick={() => navigate("/pos/mesas")}>Ir a Mesas →</Button>
+        <h1 className="text-2xl font-bold mb-2">{t("pedido.title")}</h1>
+        <p className="text-muted mb-6">{t("pedido.chooseTable")}</p>
+        <Button onClick={() => navigate("/pos/mesas")}>{t("pedido.goTables")}</Button>
       </div>
     );
   }
@@ -60,6 +62,7 @@ function PedidoActive({
   zone: string;
   seats: number;
 }) {
+  const t = useT();
   const { data: categories = [] } = useCategories();
   const { data: items = [] } = useMenuItems();
   const { data: extras = [] } = useExtras();
@@ -171,18 +174,18 @@ function PedidoActive({
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar en toda la carta…"
+            placeholder={t("pedido.search")}
             className="flex-1 rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
           />
           <div className="flex gap-2">
             <FilterChip on={filters.has("veg")} onClick={() => toggleFilter("veg")}>
-              Vegetariano
+              {t("pedido.filterVeg")}
             </FilterChip>
             <FilterChip on={filters.has("spicy")} onClick={() => toggleFilter("spicy")}>
-              Picante
+              {t("pedido.filterSpicy")}
             </FilterChip>
             <FilterChip on={filters.has("gf")} onClick={() => toggleFilter("gf")}>
-              Sin gluten
+              {t("pedido.filterGf")}
             </FilterChip>
           </div>
         </div>
@@ -197,7 +200,7 @@ function PedidoActive({
             />
           ))}
           {shown.length === 0 && (
-            <p className="text-muted text-sm col-span-full py-8 text-center">Sin resultados.</p>
+            <p className="text-muted text-sm col-span-full py-8 text-center">{t("pedido.noResults")}</p>
           )}
         </div>
       </section>
@@ -210,15 +213,15 @@ function PedidoActive({
               M{tableLabel}
             </div>
             <div className="flex-1">
-              <p className="font-semibold leading-tight">Pedido · Mesa {tableLabel}</p>
+              <p className="font-semibold leading-tight">{t("pedido.orderTable")} {tableLabel}</p>
               <p className="text-muted text-xs">
-                {seats} comensales · {zone}
+                {seats} {t("pedido.guests")} · {zone}
               </p>
             </div>
             {order && (
               <button
                 onClick={() => setTransferOpen(true)}
-                title="Transferir / unir mesa"
+                title={t("pedido.transfer")}
                 className="h-9 w-9 rounded-md bg-chip-bg border border-border grid place-items-center hover:border-accent/50"
               >
                 ⇄
@@ -231,8 +234,8 @@ function PedidoActive({
           {lines.length === 0 ? (
             <div className="text-center text-muted py-12">
               <div className="text-3xl mb-2">🧾</div>
-              <p className="font-medium text-ink">Ticket vacío</p>
-              <p className="text-xs mt-1">Toca un platillo para elegir modificadores, o + para agregarlo directo.</p>
+              <p className="font-medium text-ink">{t("pedido.emptyTicket")}</p>
+              <p className="text-xs mt-1">{t("pedido.emptyHint")}</p>
             </div>
           ) : (
             <ul className="space-y-2">
@@ -255,7 +258,7 @@ function PedidoActive({
                       onClick={() => setVoiding(l)}
                       className="ml-auto text-xs text-muted hover:text-warning"
                     >
-                      ✕ anular
+                      {t("pedido.void")}
                     </button>
                   </div>
                 </li>
@@ -265,10 +268,10 @@ function PedidoActive({
         </div>
 
         <div className="p-4 border-t border-border space-y-1.5">
-          <Row label="Subtotal" value={formatMoney(subtotal)} />
+          <Row label={t("pedido.subtotal")} value={formatMoney(subtotal)} />
           <Row label={`IGV (${Math.round(taxRate * 100)}%)`} value={formatMoney(igv)} />
           <div className="flex justify-between items-center pt-1">
-            <span className="font-bold">Total</span>
+            <span className="font-bold">{t("pedido.total")}</span>
             <span className="font-mono font-bold text-lg">{formatMoney(total)}</span>
           </div>
           <div className="flex gap-2 pt-2">
@@ -278,14 +281,14 @@ function PedidoActive({
               disabled={!canSend}
               onClick={() => order && actions.sendToKitchen.mutate(order.id)}
             >
-              Enviar a cocina
+              {t("pedido.sendKitchen")}
             </Button>
             <Button
               className="flex-1"
               disabled={!canSend}
               onClick={() => order && setCobro({ order, amount: total })}
             >
-              Cobrar
+              {t("pedido.charge")}
             </Button>
           </div>
         </div>
@@ -329,6 +332,7 @@ function PedidoActive({
 }
 
 function MenuCard({ item, onCard, onAdd }: { item: MenuItem; onCard: () => void; onAdd: () => void }) {
+  const t = useT();
   return (
     <div
       className={cn(
@@ -341,7 +345,7 @@ function MenuCard({ item, onCard, onAdd }: { item: MenuItem; onCard: () => void;
         <span className="text-2xl">{item.emoji}</span>
         <div className="flex gap-1">
           {item.badge && <Badge tone="accent">{item.badge}</Badge>}
-          {!item.available && <Badge tone="warning">Agotado</Badge>}
+          {!item.available && <Badge tone="warning">{t("pedido.soldOut")}</Badge>}
         </div>
       </div>
       <p className="font-semibold text-sm leading-tight">{item.name}</p>

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useKitchenTickets, useKitchenActions } from "@/data/hooks";
+import { useT } from "@/i18n";
 import { cn } from "@/lib/cn";
 import type { KitchenTicket, KdsColumn } from "@/data/model";
 
-const COLUMNS: Array<{ key: KdsColumn; name: string }> = [
-  { key: "nuevos", name: "Nuevos" },
-  { key: "preparacion", name: "En preparación" },
-  { key: "listos", name: "Listos para pasar" },
+const COLUMNS: Array<{ key: KdsColumn; labelKey: string }> = [
+  { key: "nuevos", labelKey: "kds.col.nuevos" },
+  { key: "preparacion", labelKey: "kds.col.prep" },
+  { key: "listos", labelKey: "kds.col.listos" },
 ];
 
 const WARN_SEC = 300; // amber
@@ -28,6 +29,7 @@ function fmt(sec: number) {
 
 export function Cocina() {
   useTick();
+  const t = useT();
   const { data: tickets = [] } = useKitchenTickets();
   const { advance } = useKitchenActions();
 
@@ -39,13 +41,13 @@ export function Cocina() {
     <div className="h-full flex flex-col bg-shell text-white/90">
       <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
         <div>
-          <h1 className="text-xl font-bold text-white">Cocina · KDS</h1>
-          <p className="text-white/50 text-sm">Toca una comanda para avanzarla de columna</p>
+          <h1 className="text-xl font-bold text-white">{t("kds.title")}</h1>
+          <p className="text-white/50 text-sm">{t("kds.subtitle")}</p>
         </div>
         <div className="flex gap-4 text-sm">
-          <Stat label="Activos" value={tickets.length} />
-          <Stat label="Retraso" value={delayed} tone={delayed ? "warn" : undefined} />
-          <Stat label="Listos" value={ready} />
+          <Stat label={t("kds.active")} value={tickets.length} />
+          <Stat label={t("kds.delay")} value={delayed} tone={delayed ? "warn" : undefined} />
+          <Stat label={t("kds.ready")} value={ready} />
         </div>
       </div>
 
@@ -55,7 +57,7 @@ export function Cocina() {
           return (
             <div key={col.key} className="flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-2 px-1">
-                <h2 className="font-semibold text-white/80">{col.name}</h2>
+                <h2 className="font-semibold text-white/80">{t(col.labelKey)}</h2>
                 <span className="text-xs text-white/40">{colTickets.length}</span>
               </div>
               <div className="flex-1 overflow-y-auto space-y-2 pr-1">
@@ -63,7 +65,7 @@ export function Cocina() {
                   <TicketCard key={t.id} ticket={t} now={now} onAdvance={() => advance.mutate(t.id)} />
                 ))}
                 {colTickets.length === 0 && (
-                  <p className="text-white/30 text-xs text-center py-8">Sin comandas</p>
+                  <p className="text-white/30 text-xs text-center py-8">{t("kds.empty")}</p>
                 )}
               </div>
             </div>
@@ -75,6 +77,7 @@ export function Cocina() {
 }
 
 function TicketCard({ ticket, now, onAdvance }: { ticket: KitchenTicket; now: number; onAdvance: () => void }) {
+  const t = useT();
   const sec = ticket.done ? 0 : Math.floor((now - ticket.enteredAt) / 1000);
   const delayed = sec >= DELAY_SEC;
   const warn = sec >= WARN_SEC && sec < DELAY_SEC;
@@ -95,7 +98,7 @@ function TicketCard({ ticket, now, onAdvance }: { ticket: KitchenTicket; now: nu
             delayed ? "text-accent-light" : warn ? "text-warning" : "text-white/60",
           )}
         >
-          {ticket.col === "listos" ? "✓ listo" : fmt(sec)}
+          {ticket.col === "listos" ? t("kds.done") : fmt(sec)}
         </span>
       </div>
       <ul className="space-y-0.5">

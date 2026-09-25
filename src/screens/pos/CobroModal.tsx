@@ -10,19 +10,18 @@ import { Qr } from "@/components/Qr";
 import { tokenizeCard } from "@/lib/cardToken";
 import { printThermal } from "@/lib/printThermal";
 import { isBackendConfigured } from "@/lib/supabase";
+import { useT } from "@/i18n";
 import { ComprobanteDoc } from "./ComprobanteDoc";
 import type { Order, Comprobante, ComprobanteTipo } from "@/data/model";
 
 type Stage = "cuenta" | "pago" | "doc";
 const DISCOUNTS = [0, 0.1, 0.15, 1];
 const TIPS = [0, 0.1, 0.15, 0.18];
-const METHODS = [
-  { key: "efectivo", label: "Efectivo" },
-  { key: "yape", label: "Yape" },
-  { key: "plin", label: "Plin" },
-  { key: "tarjeta", label: "Tarjeta" },
-  { key: "transferencia", label: "Transferencia" },
-];
+const METHOD_KEYS = ["efectivo", "yape", "plin", "tarjeta", "transferencia"] as const;
+// Yape y Plin son marcas: no se traducen.
+function methodLabel(tr: (k: string) => string, key: string): string {
+  return key === "yape" ? "Yape" : key === "plin" ? "Plin" : tr(`pay.${key}`);
+}
 
 export function CobroModal({
   open,
@@ -39,6 +38,7 @@ export function CobroModal({
   taxRate: number;
   onPaid: () => void;
 }) {
+  const t = useT();
   const actions = useOrderActions(order.tableId);
   const { data: customers = [] } = useCustomers();
   const { data: settings } = useSettings();
@@ -155,14 +155,14 @@ export function CobroModal({
     }
   }
 
-  const methodLabel = METHODS.find((m) => m.key === method)?.label ?? method;
+  const methodName = methodLabel(t, method);
 
   return (
     <Modal open={open} onClose={close} labelledBy="cobro-title">
       <div className="p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 id="cobro-title" className="text-xl font-bold">
-            {stage === "doc" ? "Comprobante" : "Cobrar · Mesa " + order.tableLabel}
+            {stage === "doc" ? t("cobro.titleDoc") : t("cobro.titlePay") + " " + order.tableLabel}
           </h2>
           <span className="font-mono text-lg font-bold text-accent">{formatMoney(result.due)}</span>
         </div>
@@ -170,40 +170,40 @@ export function CobroModal({
         {stage === "cuenta" && (
           <div className="space-y-4">
             <div className="rounded-lg bg-surface-alt border border-border-soft p-3 space-y-1">
-              <Row label="Subtotal" value={formatMoney(result.subtotal)} />
+              <Row label={t("cobro.subtotal")} value={formatMoney(result.subtotal)} />
               <Row label={`IGV (${Math.round(taxRate * 100)}%)`} value={formatMoney(result.igv)} />
-              {result.discAmt > 0 && <Row label="Descuento" value={"− " + formatMoney(result.discAmt)} />}
-              {result.tipAmt > 0 && <Row label="Propina" value={formatMoney(result.tipAmt)} />}
+              {result.discAmt > 0 && <Row label={t("cobro.discount")} value={"− " + formatMoney(result.discAmt)} />}
+              {result.tipAmt > 0 && <Row label={t("cobro.tip")} value={formatMoney(result.tipAmt)} />}
               {result.redeemApplied > 0 && (
-                <Row label="Puntos canjeados" value={"− " + formatMoney(result.redeemApplied)} />
+                <Row label={t("cobro.pointsRedeemed")} value={"− " + formatMoney(result.redeemApplied)} />
               )}
               <div className="flex justify-between pt-1 font-bold">
-                <span>{result.redeemApplied > 0 ? "A cobrar" : "Total"}</span>
+                <span>{result.redeemApplied > 0 ? t("cobro.toCharge") : t("cobro.total")}</span>
                 <span className="font-mono">{formatMoney(result.due)}</span>
               </div>
             </div>
 
-            <Field label="Descuento">
+            <Field label={t("cobro.discount")}>
               <div className="flex gap-2">
                 {DISCOUNTS.map((d) => (
                   <Pill key={d} active={discountPct === d} onClick={() => setDiscountPct(d)}>
-                    {d === 1 ? "Cortesía" : `${Math.round(d * 100)}%`}
+                    {d === 1 ? t("cobro.courtesy") : `${Math.round(d * 100)}%`}
                   </Pill>
                 ))}
               </div>
             </Field>
 
-            <Field label="Propina">
+            <Field label={t("cobro.tip")}>
               <div className="flex gap-2">
-                {TIPS.map((t) => (
-                  <Pill key={t} active={tipPct === t} onClick={() => setTipPct(t)}>
-                    {Math.round(t * 100)}%
+                {TIPS.map((tp) => (
+                  <Pill key={tp} active={tipPct === tp} onClick={() => setTipPct(tp)}>
+                    {Math.round(tp * 100)}%
                   </Pill>
                 ))}
               </div>
             </Field>
 
-            <Field label="Dividir cuenta">
+            <Field label={t("cobro.split")}>
               <div className="flex items-center gap-3">
                 <Stepper value={splitN} onDec={() => setSplitN(Math.max(1, splitN - 1))} onInc={() => setSplitN(Math.min(order.seats || 8, splitN + 1))} />
                 {splitN > 1 && (
@@ -214,7 +214,7 @@ export function CobroModal({
               </div>
             </Field>
 
-            <Field label="Lealtad">
+            <Field label={t("cobro.loyalty")}>
               <select
                 value={custId ?? ""}
                 onChange={(e) => {
@@ -223,7 +223,7 @@ export function CobroModal({
                 }}
                 className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm mb-2"
               >
-                <option value="">Sin cliente</option>
+                <option value="">{t("cobro.noCustomer")}</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name} · {c.points} pts
@@ -234,7 +234,7 @@ export function CobroModal({
                 <div className="flex flex-wrap gap-2">
                   {[0, 50, 100].filter((v) => v <= redeemMax).map((v) => (
                     <Pill key={v} active={redeem === v} onClick={() => setRedeem(v)}>
-                      {v === 0 ? "No canjear" : `${v} pts`}
+                      {v === 0 ? t("cobro.noRedeem") : `${v} pts`}
                     </Pill>
                   ))}
                   {redeemMax > 0 && (
@@ -246,11 +246,11 @@ export function CobroModal({
               )}
             </Field>
 
-            <Field label="Método de pago">
+            <Field label={t("cobro.method")}>
               <div className="flex gap-2">
-                {METHODS.map((m) => (
-                  <Pill key={m.key} active={method === m.key} onClick={() => setMethod(m.key)}>
-                    {m.label}
+                {METHOD_KEYS.map((k) => (
+                  <Pill key={k} active={method === k} onClick={() => setMethod(k)}>
+                    {methodLabel(t, k)}
                   </Pill>
                 ))}
               </div>
@@ -258,9 +258,9 @@ export function CobroModal({
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="ghost" onClick={close}>
-                Cancelar
+                {t("common.cancel")}
               </Button>
-              <Button onClick={() => setStage("pago")}>Registrar pago</Button>
+              <Button onClick={() => setStage("pago")}>{t("cobro.registerPay")}</Button>
             </div>
           </div>
         )}
@@ -291,13 +291,13 @@ export function CobroModal({
             ) : (
               <div className="text-center py-4">
                 <div className="text-4xl mb-2">{method === "efectivo" ? "💵" : "💳"}</div>
-                <p className="font-semibold">Cobrar {formatMoney(result.due)}</p>
-                <p className="text-muted text-sm">Método: {methodLabel}</p>
+                <p className="font-semibold">{t("pedido.charge")} {formatMoney(result.due)}</p>
+                <p className="text-muted text-sm">{t("cobro.method")}: {methodName}</p>
                 {method === "tarjeta" && settings?.cardProvider && settings.cardProvider !== "ninguno" && (
                   <p className="text-muted text-xs mt-1">Procesado con {settings.cardProvider}</p>
                 )}
                 {result.pointsEarned > 0 && (
-                  <p className="text-muted text-xs mt-1">Acumulará {result.pointsEarned} pts</p>
+                  <p className="text-muted text-xs mt-1">{t("cobro.willEarn")} {result.pointsEarned} pts</p>
                 )}
               </div>
             )}
@@ -307,7 +307,7 @@ export function CobroModal({
                 <input
                   value={card.number}
                   onChange={(e) => setCard({ ...card, number: e.target.value })}
-                  placeholder="Número de tarjeta"
+                  placeholder={t("cobro.cardNumber")}
                   inputMode="numeric"
                   className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
                 />
@@ -337,28 +337,28 @@ export function CobroModal({
                 <input
                   value={card.email}
                   onChange={(e) => setCard({ ...card, email: e.target.value })}
-                  placeholder="Correo del cliente"
+                  placeholder={t("cobro.customerEmail")}
                   inputMode="email"
                   className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
                 />
                 {cardErr && <p className="text-warning text-xs">{cardErr}</p>}
                 <p className="text-muted text-[11px]">
-                  La tarjeta se tokeniza con {settings!.cardProvider}; no pasa por nuestros servidores.
+                  {t("cobro.tokenizeNote")} {settings!.cardProvider}; {t("cobro.notOurServers")}
                 </p>
               </div>
             )}
 
             <div className="flex justify-between gap-2">
               <Button variant="ghost" onClick={() => setStage("cuenta")}>
-                ← Volver
+                {t("cobro.back")}
               </Button>
               {cardConfigured ? (
                 <Button onClick={payCard} disabled={cardBusy || actions.payOrder.isPending}>
-                  {cardBusy ? "Procesando…" : `Cobrar ${formatMoney(result.due)}`}
+                  {cardBusy ? t("cobro.processing") : `${t("pedido.charge")} ${formatMoney(result.due)}`}
                 </Button>
               ) : (
                 <Button onClick={pay} disabled={actions.payOrder.isPending}>
-                  {method === "yape" || method === "plin" ? "Confirmar pago recibido" : "Confirmar pago y emitir"}
+                  {method === "yape" || method === "plin" ? t("cobro.confirmReceived") : t("cobro.confirmEmit")}
                 </Button>
               )}
             </div>
@@ -371,11 +371,11 @@ export function CobroModal({
             {!emitted && (
               <div className="mb-4 no-print space-y-3">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-muted mb-1.5">Tipo de comprobante</p>
+                  <p className="text-xs uppercase tracking-wide text-muted mb-1.5">{t("cobro.docType")}</p>
                   <div className="flex gap-2">
-                    {(["Boleta", "Factura"] as const).map((t) => (
-                      <Pill key={t} active={docTipo === t} onClick={() => setDocTipo(t)}>
-                        {t}
+                    {(["Boleta", "Factura"] as const).map((dt) => (
+                      <Pill key={dt} active={docTipo === dt} onClick={() => setDocTipo(dt)}>
+                        {dt}
                       </Pill>
                     ))}
                   </div>
@@ -391,15 +391,13 @@ export function CobroModal({
                     <input
                       value={razon}
                       onChange={(e) => setRazon(e.target.value)}
-                      placeholder="Razón social"
+                      placeholder={t("cobro.razonSocial")}
                       className="rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
                     />
                   </div>
                 )}
                 {!online && (
-                  <p className="text-warning text-xs">
-                    Sin conexión — el comprobante quedará en cola y se enviará a SUNAT al reconectar.
-                  </p>
+                  <p className="text-warning text-xs">{t("cobro.offlineNote")}</p>
                 )}
               </div>
             )}
@@ -431,12 +429,12 @@ export function CobroModal({
             <div className="flex justify-between gap-2 mt-4 no-print">
               {!emitted ? (
                 <Button onClick={emitComprobante} disabled={sunat.emit.isPending}>
-                  Emitir {docTipo}
+                  {t("cobro.emit")} {docTipo}
                 </Button>
               ) : (
                 <div className="flex gap-2">
                   <Button variant="secondary" onClick={() => window.print()}>
-                    🖨 Imprimir
+                    {t("cobro.print")}
                   </Button>
                   <Button variant="secondary" onClick={printThermal}>
                     🧾 80mm
@@ -449,7 +447,7 @@ export function CobroModal({
                   onPaid();
                 }}
               >
-                {emitted ? "Listo" : "Cerrar sin emitir"}
+                {emitted ? t("cobro.done") : t("cobro.closeNoEmit")}
               </Button>
             </div>
           </div>

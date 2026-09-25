@@ -8,14 +8,15 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { useT } from "@/i18n";
 import { cn } from "@/lib/cn";
 import type { RestaurantTable, TableStatus } from "@/data/model";
 
-const STATUS_LABEL: Record<TableStatus, string> = {
-  libre: "Libre",
-  ocupada: "Ocupada",
-  cuenta: "Pidió cuenta",
-  reservada: "Reservada",
+const STATUS_KEY: Record<TableStatus, string> = {
+  libre: "mesa.libre",
+  ocupada: "mesa.ocupada",
+  cuenta: "mesa.cuenta",
+  reservada: "mesa.reservada",
 };
 
 const STATUS_CLASS: Record<TableStatus, string> = {
@@ -26,6 +27,7 @@ const STATUS_CLASS: Record<TableStatus, string> = {
 };
 
 export function Mesas() {
+  const t = useT();
   const { data: tables = [] } = useTables();
   const navigate = useNavigate();
   const setActiveTable = usePos((s) => s.setActiveTable);
@@ -58,7 +60,7 @@ export function Mesas() {
             <Legend />
             {canManage && (
               <Button size="sm" variant="secondary" onClick={() => setConfig(true)}>
-                ⚙ Configurar mesas
+                {t("mesa.configure")}
               </Button>
             )}
           </div>
@@ -67,15 +69,15 @@ export function Mesas() {
 
       {tables.length === 0 ? (
         <Card className="p-10 text-center text-muted">
-          Esta sucursal aún no tiene mesas.
+          {t("mesa.empty")}
           {canManage ? (
             <div className="mt-3">
               <Button size="sm" onClick={() => setConfig(true)}>
-                Configurar mesas
+                {t("mesa.configureBtn")}
               </Button>
             </div>
           ) : (
-            " Pide a un administrador que las configure."
+            t("mesa.emptyAdmin")
           )}
         </Card>
       ) : (
@@ -84,21 +86,21 @@ export function Mesas() {
             <section key={zone}>
               <h2 className="text-sm font-semibold text-muted mb-2">{zone}</h2>
               <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                {zoneTables.map((t) => (
+                {zoneTables.map((tbl) => (
                   <button
-                    key={t.id}
-                    onClick={() => openTable(t)}
-                    disabled={t.status === "reservada"}
+                    key={tbl.id}
+                    onClick={() => openTable(tbl)}
+                    disabled={tbl.status === "reservada"}
                     className={cn(
                       "rounded-lg border p-3 text-left transition-transform hover:-translate-y-0.5 disabled:hover:translate-y-0 disabled:cursor-not-allowed",
-                      STATUS_CLASS[t.status],
+                      STATUS_CLASS[tbl.status],
                     )}
                   >
                     <div className="flex items-baseline justify-between">
-                      <span className="text-lg font-bold text-ink">{t.number}</span>
-                      <span className="text-xs">{t.seats}p</span>
+                      <span className="text-lg font-bold text-ink">{tbl.number}</span>
+                      <span className="text-xs">{tbl.seats}p</span>
                     </div>
-                    <p className="text-xs mt-1">{STATUS_LABEL[t.status]}</p>
+                    <p className="text-xs mt-1">{t(STATUS_KEY[tbl.status])}</p>
                   </button>
                 ))}
               </div>
@@ -113,6 +115,7 @@ export function Mesas() {
 }
 
 function TableConfigModal({ tables, onClose }: { tables: RestaurantTable[]; onClose: () => void }) {
+  const t = useT();
   const { addTable, updateTable, removeTable } = useTableActions();
   const branchId = useBranchStore((s) => s.branchId);
   const [zone, setZone] = useState("");
@@ -188,31 +191,31 @@ function TableConfigModal({ tables, onClose }: { tables: RestaurantTable[]; onCl
 
         {/* Lista editable */}
         <div className="max-h-80 overflow-y-auto divide-y divide-border-soft">
-          {tables.length === 0 && <p className="text-muted text-sm py-4 text-center">Aún no hay mesas.</p>}
-          {tables.map((t) => (
-            <div key={t.id} className="flex items-center gap-2 py-2">
-              <span className="w-10 font-mono font-bold">{t.number}</span>
+          {tables.length === 0 && <p className="text-muted text-sm py-4 text-center">{t("mesa.empty")}</p>}
+          {tables.map((tbl) => (
+            <div key={tbl.id} className="flex items-center gap-2 py-2">
+              <span className="w-10 font-mono font-bold">{tbl.number}</span>
               <input
-                defaultValue={t.zone}
-                onBlur={(e) => e.target.value !== t.zone && updateTable.mutate({ id: t.id, patch: { zone: e.target.value } })}
+                defaultValue={tbl.zone}
+                onBlur={(e) => e.target.value !== tbl.zone && updateTable.mutate({ id: tbl.id, patch: { zone: e.target.value } })}
                 className="flex-1 rounded-md bg-chip-bg border border-border px-2 py-1 text-sm"
               />
               <input
                 type="number"
                 min={1}
-                defaultValue={t.seats}
-                onBlur={(e) => Number(e.target.value) !== t.seats && updateTable.mutate({ id: t.id, patch: { seats: Math.max(1, Number(e.target.value) || 1) } })}
+                defaultValue={tbl.seats}
+                onBlur={(e) => Number(e.target.value) !== tbl.seats && updateTable.mutate({ id: tbl.id, patch: { seats: Math.max(1, Number(e.target.value) || 1) } })}
                 className="w-16 rounded-md bg-chip-bg border border-border px-2 py-1 text-sm font-mono"
               />
-              <span className={cn("text-xs px-2 py-0.5 rounded", STATUS_CLASS[t.status])}>{STATUS_LABEL[t.status]}</span>
+              <span className={cn("text-xs px-2 py-0.5 rounded", STATUS_CLASS[tbl.status])}>{t(STATUS_KEY[tbl.status])}</span>
               <button
                 onClick={() => {
                   setErr(null);
-                  removeTable.mutate(t.id, { onError: (e) => setErr((e as Error).message) });
+                  removeTable.mutate(tbl.id, { onError: (e) => setErr((e as Error).message) });
                 }}
-                disabled={t.status !== "libre"}
+                disabled={tbl.status !== "libre"}
                 className="text-warning text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                title={t.status !== "libre" ? "Solo se pueden eliminar mesas libres" : "Eliminar"}
+                title={tbl.status !== "libre" ? "Solo se pueden eliminar mesas libres" : "Eliminar"}
               >
                 ✕
               </button>
@@ -229,12 +232,13 @@ function TableConfigModal({ tables, onClose }: { tables: RestaurantTable[]; onCl
 }
 
 function Legend() {
+  const t = useT();
   return (
     <div className="flex flex-wrap gap-3 text-xs">
-      {(Object.keys(STATUS_LABEL) as TableStatus[]).map((s) => (
+      {(Object.keys(STATUS_KEY) as TableStatus[]).map((s) => (
         <span key={s} className="flex items-center gap-1.5">
           <span className={cn("h-2.5 w-2.5 rounded-full border", STATUS_CLASS[s])} />
-          {STATUS_LABEL[s]}
+          {t(STATUS_KEY[s])}
         </span>
       ))}
     </div>
