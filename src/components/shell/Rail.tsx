@@ -31,6 +31,7 @@ export function Rail() {
 
   return (
     <nav
+      aria-label="Navegación principal"
       className={cn(
         "flex flex-col items-center gap-1 bg-shell text-white/80 w-[76px] shrink-0 py-3",
         "mob:order-2 mob:w-full mob:h-[60px] mob:flex-row mob:py-1 mob:px-1.5 mob:border-t mob:border-border",
@@ -52,24 +53,27 @@ export function Rail() {
           <button
             onClick={toggleNet}
             title={online ? "En línea (SUNAT)" : "Sin conexión"}
-            className="h-[38px] w-[38px] rounded-md grid place-items-center hover:bg-white/10"
+            aria-label={online ? "Conexión: en línea. Cambiar a sin conexión" : "Conexión: sin conexión. Cambiar a en línea"}
+            className="h-[38px] w-[38px] rounded-md grid place-items-center hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
           >
-            {online ? "📶" : "📴"}
+            <span aria-hidden="true">{online ? "📶" : "📴"}</span>
           </button>
         )}
         <button
           onClick={toggle}
           title="Cambiar tema"
-          className="h-[38px] w-[38px] rounded-md grid place-items-center hover:bg-white/10"
+          aria-label={theme === "dark" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+          className="h-[38px] w-[38px] rounded-md grid place-items-center hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
         >
-          {theme === "dark" ? "☀️" : "🌙"}
+          <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
         </button>
         <button
           onClick={lock}
           title="Cerrar sesión"
-          className="flex flex-col items-center justify-center rounded-md hover:bg-white/10 px-1 py-1"
+          aria-label="Cerrar sesión"
+          className="flex flex-col items-center justify-center rounded-md hover:bg-white/10 px-1 py-1 focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none"
         >
-          <span className="h-9 w-9 rounded-md bg-accent grid place-items-center text-xs font-bold text-white">
+          <span className="h-9 w-9 rounded-md bg-accent grid place-items-center text-xs font-bold text-white" aria-hidden="true">
             {initials}
           </span>
           <span className="text-[10px] mt-0.5 mob:hidden">salir</span>
@@ -83,16 +87,26 @@ function RailButton({ to, icon, label }: { to: string; icon: string; label: stri
   return (
     <NavLink
       to={to}
+      aria-label={label}
       className={({ isActive }) =>
         cn(
           "flex flex-col items-center justify-center rounded-md w-[60px] min-h-[52px] gap-0.5 text-[10px] transition-colors",
           "mob:w-[58px] mob:min-h-[48px] mob:flex-none",
+          "focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none",
           isActive ? "bg-accent text-white" : "hover:bg-white/10 text-white/70",
         )
       }
     >
-      <span className="text-lg leading-none">{icon}</span>
-      <span className="leading-tight text-center">{label}</span>
+      {({ isActive }) => (
+        <>
+          <span className="text-lg leading-none" aria-hidden="true">
+            {icon}
+          </span>
+          <span className="leading-tight text-center" aria-current={isActive ? "page" : undefined}>
+            {label}
+          </span>
+        </>
+      )}
     </NavLink>
   );
 }

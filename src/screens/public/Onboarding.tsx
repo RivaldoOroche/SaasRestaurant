@@ -121,9 +121,9 @@ export function Onboarding() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <p className="text-xs uppercase tracking-wide text-muted mb-1.5">{label}</p>
+    <label className="block">
+      <span className="block text-xs uppercase tracking-wide text-muted mb-1.5">{label}</span>
       {children}
-    </div>
+    </label>
   );
 }

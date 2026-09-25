@@ -47,6 +47,18 @@
   }
 }
 
+/* Accesibilidad: respeta la preferencia de menos movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Print: only .print-area shows, in black-on-white. Ported from the prototype. */
 @media print {
   html,

@@ -24,8 +24,14 @@ export function AppShell() {
 
   return (
     <div className="flex h-full w-full bg-bg text-ink mob:flex-col">
+      <a
+        href="#contenido"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-white focus:shadow-lg"
+      >
+        Saltar al contenido
+      </a>
       <Rail />
-      <main className="flex-1 min-h-0 min-w-0 flex flex-col mob:order-1">
+      <main id="contenido" className="flex-1 min-h-0 min-w-0 flex flex-col mob:order-1">
         {session && session.role !== "saas" && <BranchBar />}
         {session && session.role !== "saas" && !online && (
           <div className="bg-warning/15 text-warning px-4 py-1.5 text-sm text-center no-print">
