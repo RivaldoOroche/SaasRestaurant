@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { useRepoSubscription, useSunatActions } from "@/data/hooks";
 import { usePlatformSubscription } from "@/data/platform/hooks";
 import { useConnection } from "@/store/connection";
+import { Tour } from "@/components/tour/Tour";
 
 export function AppShell() {
   const { session, exitTenant } = useAuth();
@@ -53,6 +54,7 @@ export function AppShell() {
           <Outlet />
         </div>
       </main>
+      <Tour />
     </div>
   );
 }

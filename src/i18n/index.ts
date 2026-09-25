@@ -35,6 +35,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   "nav.soporte": { es: "Soporte", en: "Support" },
   "nav.bitacora": { es: "Bitácora", en: "Activity log" },
   "nav.configsaas": { es: "Config", en: "Config" },
+  "nav.ayuda": { es: "Ayuda", en: "Help" },
   // Comunes
   "common.language": { es: "Idioma", en: "Language" },
   "common.currency": { es: "Moneda", en: "Currency" },

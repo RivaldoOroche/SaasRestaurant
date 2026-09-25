@@ -53,6 +53,7 @@ export const TENANT_NAV: NavEntry[] = [
   { key: "permisos", label: "Permisos", path: "/pos/permisos", icon: "🔐", roles: OWNER_ONLY, section: "bottom" },
   { key: "panel", label: "Panel", path: "/pos/panel", icon: "📌", roles: MANAGER_UP, section: "top" },
   { key: "ajustes", label: "Ajustes", path: "/pos/ajustes", icon: "⚙️", roles: MANAGER_UP, section: "bottom" },
+  { key: "ayuda", label: "Ayuda", path: "/pos/ayuda", icon: "❓", roles: TENANT_ROLES, section: "bottom" },
 ];
 
 /** SaaS platform console navigation (saas role only). */
@@ -66,6 +67,7 @@ export const SAAS_NAV: NavEntry[] = [
   { key: "soporte", label: "Soporte", path: "/saas/soporte", icon: "🎧", roles: ["saas"], section: "top" },
   { key: "bitacora", label: "Bitácora", path: "/saas/bitacora", icon: "📋", roles: ["saas"], section: "top" },
   { key: "configsaas", label: "Config", path: "/saas/config", icon: "⚙️", roles: ["saas"], section: "bottom" },
+  { key: "ayuda", label: "Ayuda", path: "/saas/ayuda", icon: "❓", roles: ["saas"], section: "bottom" },
 ];
 
 export function navForRole(role: Role): NavEntry[] {
