@@ -128,6 +128,58 @@ export interface PlanRequest {
   requestedAt: string;
 }
 
+/** Etiquetas legibles para la auditoría de configuración. */
+export const AUDIT_TABLE_LABELS: Record<string, string> = {
+  business_settings: "Configuración del negocio",
+  payment_credentials: "Credenciales de pago",
+  fiscal_credentials: "Credenciales fiscales (SUNAT)",
+  role_permissions: "Permisos por rol",
+  platform_settings: "Emisor de la plataforma",
+  platform_fiscal_credentials: "Credenciales fiscales de la plataforma",
+};
+export const AUDIT_OP_LABELS: Record<string, string> = {
+  INSERT: "Creado",
+  UPDATE: "Modificado",
+  DELETE: "Eliminado",
+};
+export const AUDIT_FIELD_LABELS: Record<string, string> = {
+  tax_rate: "IGV / impuesto",
+  currency: "Moneda",
+  ruc: "RUC",
+  razon_social: "Razón social",
+  billing_provider: "Proveedor de facturación",
+  sunat_mode: "Modo SUNAT",
+  sol_user: "Usuario SOL",
+  billing_endpoint: "Endpoint de facturación",
+  card_provider: "Proveedor de tarjeta",
+  card_public_key: "Llave pública de tarjeta",
+  secret_key: "Llave secreta",
+  webhook_secret: "Secreto de webhook",
+  public_key: "Llave pública",
+  merchant_id: "Merchant ID",
+  sol_pass: "Clave SOL",
+  cert_pem: "Certificado",
+  key_pem: "Llave privada",
+  api_token: "Token de API",
+  screens: "Pantallas permitidas",
+  yape_number: "Número Yape",
+  plin_number: "Número Plin",
+  address: "Dirección",
+  direccion: "Dirección",
+  billing_email: "Correo de facturación",
+};
+
+/** Entrada de auditoría de cambios de configuración sensibles. */
+export interface ConfigAuditEntry {
+  id: string;
+  tenant: string; // nombre del tenant, o "Plataforma"
+  table: string; // tabla afectada (etiqueta legible)
+  op: string; // "Creado" | "Modificado" | "Eliminado"
+  email: string; // quién lo hizo
+  keys: string[]; // campos modificados (secretos aparecen enmascarados)
+  at: string; // ISO
+}
+
 /** Entrada de auditoría de accesos. */
 export interface AccessEntry {
   id: string;

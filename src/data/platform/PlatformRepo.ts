@@ -15,6 +15,7 @@ import type {
   Cohort,
   RevenuePoint,
   AccessEntry,
+  ConfigAuditEntry,
   PlanRequest,
 } from "./model";
 
@@ -31,6 +32,8 @@ export interface PlatformRepo {
   getActivity(): Promise<PlatformActivity[]>;
   /** Auditoría de accesos (inicios de sesión recientes). */
   getAccessLog(): Promise<AccessEntry[]>;
+  /** Auditoría de cambios sensibles de configuración (cross-tenant). */
+  getConfigAudit(): Promise<ConfigAuditEntry[]>;
   /** Solicitudes de cambio de plan pendientes de los tenants. */
   getPlanRequests(): Promise<PlanRequest[]>;
   /** Aprueba (aplica el nuevo plan) o rechaza una solicitud de cambio de plan. */

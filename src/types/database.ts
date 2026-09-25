@@ -152,6 +152,19 @@ export interface Tables {
   access_log: {
     Row: { id: string; user_id: string | null; email: string | null; role: string | null; event: string; user_agent: string | null; at: string };
   };
+  config_audit: {
+    Row: {
+      id: string;
+      tenant_id: string | null;
+      table_name: string;
+      op: string;
+      changed_by: string | null;
+      changed_email: string | null;
+      changed_keys: string[];
+      diff: Record<string, { old: unknown; new: unknown }>;
+      at: string;
+    };
+  };
   plan_change_requests: {
     Row: {
       id: string;

@@ -241,6 +241,23 @@ export class MockPlatformRepo implements PlatformRepo {
     ];
   }
 
+  async getConfigAudit() {
+    return [
+      {
+        id: "cfg-1", tenant: "La Higuera", table: "Configuración del negocio", op: "Modificado",
+        email: "monica@lahiguera.pe", keys: ["IGV / impuesto", "Proveedor de facturación"], at: isoAgo(45),
+      },
+      {
+        id: "cfg-2", tenant: "Plataforma", table: "Emisor de la plataforma", op: "Modificado",
+        email: "admin@wayrapos.pe", keys: ["RUC", "Razón social"], at: isoAgo(320),
+      },
+      {
+        id: "cfg-3", tenant: "La Higuera", table: "Credenciales fiscales (SUNAT)", op: "Modificado",
+        email: "monica@lahiguera.pe", keys: ["Clave SOL", "Certificado"], at: isoAgo(1500),
+      },
+    ];
+  }
+
   private planRequests: PlanRequest[] = [];
   async getPlanRequests() {
     return this.planRequests.filter((r) => r.status === "pendiente").map((r) => ({ ...r }));

@@ -57,6 +57,10 @@ export function useAccessLog() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "accessLog"], queryFn: () => repo.getAccessLog() });
 }
+export function useConfigAudit() {
+  const repo = useP();
+  return useQuery({ queryKey: ["platform", "configAudit"], queryFn: () => repo.getConfigAudit() });
+}
 export function usePlanRequests() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "planRequests"], queryFn: () => repo.getPlanRequests() });

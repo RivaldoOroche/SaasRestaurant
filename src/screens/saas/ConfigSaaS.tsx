@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { usePlatformSettings, usePlatformActions, useAccessLog } from "@/data/platform/hooks";
+import { usePlatformSettings, usePlatformActions, useAccessLog, useConfigAudit } from "@/data/platform/hooks";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -80,6 +80,7 @@ export function ConfigSaaS() {
 
       <TwoFactorCard />
       <AccessLogCard />
+      <ConfigAuditCard />
     </div>
   );
 }
@@ -199,6 +200,43 @@ function AccessLogCard() {
                 </div>
                 <span className="text-muted text-xs whitespace-nowrap">
                   {new Date(a.at).toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
+
+function ConfigAuditCard() {
+  const { data: log = [] } = useConfigAudit();
+  return (
+    <Card>
+      <CardBody>
+        <h3 className="font-semibold mb-1">Auditoría de configuración</h3>
+        <p className="text-muted text-xs mb-3">
+          Cambios sensibles de configuración (datos fiscales, credenciales, permisos). Los secretos se registran
+          enmascarados: se guarda qué cambió, nunca el valor.
+        </p>
+        {log.length === 0 ? (
+          <p className="text-muted text-sm">Sin cambios registrados aún.</p>
+        ) : (
+          <div className="divide-y divide-border-soft">
+            {log.map((c) => (
+              <div key={c.id} className="flex items-start gap-3 py-2 text-sm">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate">
+                    {c.table} · <span className="text-muted font-normal">{c.op}</span>
+                  </p>
+                  <p className="text-muted text-xs">
+                    {c.tenant} · {c.email}
+                    {c.keys.length > 0 && <> · {c.keys.join(", ")}</>}
+                  </p>
+                </div>
+                <span className="text-muted text-xs whitespace-nowrap">
+                  {new Date(c.at).toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
                 </span>
               </div>
             ))}

@@ -17,8 +17,10 @@ import type {
   Cohort,
   RevenuePoint,
   AccessEntry,
+  ConfigAuditEntry,
   PlanRequest,
 } from "./model";
+import { AUDIT_TABLE_LABELS, AUDIT_OP_LABELS, AUDIT_FIELD_LABELS } from "./model";
 import { deriveRetentionMetrics, deriveCohorts } from "./retention";
 import type { Database, Row } from "@/types/database";
 import { MockPlatformRepo } from "./MockPlatformRepo";
@@ -223,6 +225,22 @@ export class SupabasePlatformRepo implements PlatformRepo {
       role: r.role ?? "—",
       event: r.event,
       userAgent: r.user_agent ?? "",
+      at: r.at,
+    }));
+  }
+
+  async getConfigAudit(): Promise<ConfigAuditEntry[]> {
+    const [{ data }, names] = await Promise.all([
+      this.sb.from("config_audit").select("*").order("at", { ascending: false }).limit(100),
+      this.tenantNames(),
+    ]);
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      tenant: r.tenant_id ? names.get(r.tenant_id) ?? "—" : "Plataforma",
+      table: AUDIT_TABLE_LABELS[r.table_name] ?? r.table_name,
+      op: AUDIT_OP_LABELS[r.op] ?? r.op,
+      email: r.changed_email ?? "—",
+      keys: (r.changed_keys ?? []).map((k) => AUDIT_FIELD_LABELS[k] ?? k),
       at: r.at,
     }));
   }
