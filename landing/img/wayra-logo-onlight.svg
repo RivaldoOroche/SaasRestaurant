@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 200" width="880" height="200" role="img" aria-label="Wayra POS">
+  <defs>
+    <linearGradient id="wg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a99fe2"/>
+      <stop offset="1" stop-color="#7a6cd0"/>
+    </linearGradient>
+  </defs>
+  <!-- mark -->
+  <g transform="translate(16,20) scale(0.3125)">
+    <rect width="512" height="512" rx="116" fill="url(#wg)"/>
+    <g stroke="#ffffff" stroke-linecap="round" fill="none">
+      <path d="M84 206 h58" stroke-width="18" opacity=".38"/>
+      <path d="M72 300 h44" stroke-width="18" opacity=".28"/>
+      <path d="M150 172 L212 348 L256 250 L300 348 L362 172" stroke-width="48" stroke-linejoin="round"/>
+    </g>
+  </g>
+  <!-- wordmark -->
+  <text x="210" y="118" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="90" font-weight="800" letter-spacing="-2" fill="#171a21">Wayra</text>
+  <text x="558" y="118" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="90" font-weight="800" letter-spacing="-1" fill="#7a6cd0">POS</text>
+  <text x="212" y="158" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="23" font-weight="600" letter-spacing="6" fill="#5b6072">PUNTO DE VENTA · RESTAURANTES</text>
+</svg>

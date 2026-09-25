@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Política de Cookies — Wayra POS</title>
+  <meta name="description" content="Qué cookies usa Wayra POS y cómo gestionar tu consentimiento." />
+  <link rel="canonical" href="https://www.wayrapos.pe/cookies.html" />
+  <meta name="robots" content="index, follow" />
+  <link rel="icon" type="image/svg+xml" href="/img/wayra-mark.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <a class="skip" href="#c">Saltar al contenido</a>
+  <header><div class="container nav">
+    <a class="brand" href="/"><img src="/img/wayra-mark.svg" alt="" width="36" height="36" /><span>Wayra <span class="pos">POS</span></span></a>
+    <nav class="nav-links" aria-label="Principal" style="display:flex;position:static;flex-direction:row;border:0;padding:0">
+      <a href="/">Inicio</a><a href="/privacidad.html">Privacidad</a><a href="/terminos.html">Términos</a>
+    </nav>
+  </div></header>
+  <main id="c" class="legal">
+    <h1>Política de Cookies</h1>
+    <p class="updated">Última actualización: 24 de septiembre de 2026</p>
+    <p>Una cookie es un pequeño archivo que un sitio guarda en tu dispositivo. En Wayra POS usamos el mínimo necesario y solicitamos tu consentimiento para las que no son esenciales.</p>
+
+    <h2>1. Tipos de cookies que usamos</h2>
+    <table style="width:100%;border-collapse:collapse;margin:12px 0">
+      <thead><tr>
+        <th style="text-align:left;border-bottom:2px solid #e6e5ef;padding:8px">Categoría</th>
+        <th style="text-align:left;border-bottom:2px solid #e6e5ef;padding:8px">Finalidad</th>
+        <th style="text-align:left;border-bottom:2px solid #e6e5ef;padding:8px">Consentimiento</th>
+      </tr></thead>
+      <tbody>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>Esenciales</b></td><td style="padding:8px;border-bottom:1px solid #eee">Funcionamiento del sitio y recordar tu preferencia de cookies.</td><td style="padding:8px;border-bottom:1px solid #eee">No requiere (necesarias)</td></tr>
+        <tr><td style="padding:8px;border-bottom:1px solid #eee"><b>Analítica</b></td><td style="padding:8px;border-bottom:1px solid #eee">Medir el uso del sitio de forma agregada para mejorarlo (IP anonimizada).</td><td style="padding:8px;border-bottom:1px solid #eee">Requiere tu consentimiento</td></tr>
+      </tbody>
+    </table>
+    <p>No usamos cookies de publicidad ni compartimos datos con redes publicitarias.</p>
+
+    <h2>2. Gestionar tu consentimiento</h2>
+    <p>Puedes aceptar o rechazar las cookies no esenciales desde el banner al ingresar, o en cualquier momento con el botón <button type="button" id="openPrefs" style="background:none;border:0;color:#5a4fb0;text-decoration:underline;cursor:pointer;font:inherit">Preferencias de cookies</button> (también disponible en el pie de página del inicio). Además, puedes borrar las cookies desde la configuración de tu navegador.</p>
+
+    <h2>3. Cookies de terceros</h2>
+    <p>Si aceptas la analítica, se puede cargar Google Analytics con IP anonimizada. Consulta la política de privacidad del proveedor para más detalle.</p>
+  </main>
+  <footer><div class="container"><div class="legal-bar"><span>© <span id="year">2026</span> Wayra POS S.A.C. · RUC 20601234567</span><span><a href="/">Volver al inicio</a></span></div></div></footer>
+  <script>
+    document.getElementById('year').textContent=new Date().getFullYear();
+    document.getElementById('openPrefs').addEventListener('click',function(){
+      try{ localStorage.removeItem('wayra-consent'); }catch(e){}
+      location.href='/#contacto';
+    });
+  </script>
+</body>
+</html>
