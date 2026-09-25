@@ -19,6 +19,30 @@
     color: var(--ink);
     font-family: "Inter", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    /* PWA: sin "jalar para recargar" ni rebote que interrumpa un pedido. */
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Notch / isla dinámica / esquinas redondeadas (viewport-fit=cover).
+     El borde inferior lo maneja la barra de pestañas móvil. */
+  #root {
+    padding-top: env(safe-area-inset-top);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  /* Toques rápidos: quita el retardo de doble-toque para zoom en botones. */
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+  /* iOS hace zoom al enfocar campos con letra < 16px: se evita en móvil. */
+  @media (max-width: 860px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
   }
   input,
   button,

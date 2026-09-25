@@ -36,6 +36,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   "nav.bitacora": { es: "Bitácora", en: "Activity log" },
   "nav.configsaas": { es: "Config", en: "Config" },
   "nav.ayuda": { es: "Ayuda", en: "Help" },
+  "nav.more": { es: "Más", en: "More" },
   // Comunes
   "common.language": { es: "Idioma", en: "Language" },
   "common.currency": { es: "Moneda", en: "Currency" },
@@ -48,6 +49,26 @@ const DICT: Record<string, Record<Lang, string>> = {
   "common.close": { es: "Cerrar", en: "Close" },
   "login.title": { es: "Ingresa a Wayra POS", en: "Sign in to Wayra POS" },
   "login.pin": { es: "Ingresa tu PIN", en: "Enter your PIN" },
+  // PWA (instalación y actualizaciones)
+  "pwa.region": { es: "Avisos de la aplicación", en: "App notices" },
+  "pwa.updateReady": { es: "Hay una nueva versión de Wayra POS.", en: "A new version of Wayra POS is available." },
+  "pwa.update": { es: "Actualizar", en: "Update" },
+  "pwa.installTitle": { es: "Instala Wayra POS", en: "Install Wayra POS" },
+  "pwa.installBody": {
+    es: "Ábrela desde tu pantalla de inicio, a pantalla completa y más rápida.",
+    en: "Open it from your home screen, full screen and faster.",
+  },
+  "pwa.iosSteps": {
+    es: "En Safari toca Compartir (⬆︎) y luego «Agregar a inicio».",
+    en: "In Safari tap Share (⬆︎) and then “Add to Home Screen”.",
+  },
+  "pwa.browserMenu": {
+    es: "Usa el menú del navegador → «Instalar aplicación».",
+    en: "Use the browser menu → “Install app”.",
+  },
+  "pwa.alreadyInstalled": { es: "Ya está instalada en este dispositivo.", en: "Already installed on this device." },
+  "pwa.install": { es: "Instalar", en: "Install" },
+  "pwa.notNow": { es: "Ahora no", en: "Not now" },
   // Cocina (KDS)
   "kds.title": { es: "Cocina · KDS", en: "Kitchen · KDS" },
   "kds.subtitle": { es: "Toca una comanda para avanzarla de columna", en: "Tap a ticket to advance it a column" },

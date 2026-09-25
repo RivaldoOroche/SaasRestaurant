@@ -10,12 +10,15 @@ export function Modal({
   children,
   className,
   labelledBy,
+  placement = "center",
 }: {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
   className?: string;
   labelledBy?: string;
+  /** "bottom": hoja anclada abajo (menús en móvil). */
+  placement?: "center" | "bottom";
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -73,7 +76,10 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 no-print"
+      className={cn(
+        "fixed inset-0 z-50 grid bg-black/60 no-print",
+        placement === "bottom" ? "items-end justify-items-center" : "place-items-center p-4",
+      )}
       onClick={onClose}
       role="presentation"
     >
@@ -85,7 +91,8 @@ export function Modal({
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "w-full max-w-lg max-h-[88vh] overflow-auto rounded-xl border border-border bg-surface shadow-lg outline-none",
+          "w-full max-w-lg max-h-[88vh] overflow-auto border border-border bg-surface shadow-lg outline-none",
+          placement === "bottom" ? "rounded-t-2xl border-b-0" : "rounded-xl",
           className,
         )}
       >

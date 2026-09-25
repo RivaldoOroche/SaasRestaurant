@@ -1,13 +1,25 @@
 // Service worker mínimo para Wayra POS: instala el app shell y sirve la app
 // offline. No cachea peticiones a terceros (Supabase, SUNAT, fuentes) ni nada
 // que no sea GET del mismo origen, para no interferir con datos en vivo.
-const CACHE = "wayra-v1";
-const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
+const CACHE = "wayra-v2";
+const APP_SHELL = [
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/icon.svg",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/apple-touch-icon.png",
+];
 
+// La versión nueva NO se activa sola: espera a que la app lo pida (botón
+// "Actualizar"), para no cambiar los assets en medio de un pedido o cobro.
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(APP_SHELL)).then(() => self.skipWaiting()),
-  );
+  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_SHELL)));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {

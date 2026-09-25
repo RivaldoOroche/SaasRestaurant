@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Outlet } from "react-router-dom";
-import { Rail } from "./Rail";
+import { Rail, MobileTabBar } from "./Rail";
 import { BranchBar } from "./BranchBar";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
@@ -8,6 +8,7 @@ import { useRepoSubscription, useSunatActions } from "@/data/hooks";
 import { usePlatformSubscription } from "@/data/platform/hooks";
 import { useConnection } from "@/store/connection";
 import { Tour } from "@/components/tour/Tour";
+import { PwaPrompts } from "@/components/pwa/PwaPrompts";
 
 export function AppShell() {
   const { session, exitTenant } = useAuth();
@@ -54,7 +55,9 @@ export function AppShell() {
           <Outlet />
         </div>
       </main>
+      <MobileTabBar />
       <Tour />
+      <PwaPrompts />
     </div>
   );
 }

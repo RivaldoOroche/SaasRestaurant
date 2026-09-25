@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import { initObservability } from "./lib/observability";
+import { initPwa } from "./lib/pwa";
 import "./styles/index.css";
 
 initObservability();
@@ -19,11 +20,5 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 
-// PWA: registra el service worker en producción (offline básico + instalable).
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      /* sin SW: la app sigue funcionando online */
-    });
-  });
-}
+// PWA: service worker (offline + actualizaciones) e instalación "Agregar a inicio".
+initPwa();

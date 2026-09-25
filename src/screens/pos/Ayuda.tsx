@@ -5,6 +5,7 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useTour } from "@/store/tour";
 import { useAuth } from "@/auth/AuthContext";
+import { InstallAppCard } from "@/components/pwa/PwaPrompts";
 
 interface Faq {
   q: string;
@@ -64,6 +65,10 @@ export function Ayuda() {
           </label>
         </CardBody>
       </Card>
+
+      <div className="mb-3">
+        <InstallAppCard />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
         <QuickLink to="/estado" icon="🟢" title="Estado del sistema" desc="¿Todo funciona? Revisa el estado en vivo de SUNAT, pagos y la app." />
