@@ -40,7 +40,6 @@ export function Tour() {
       setI(0);
       start();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.userEmail, role]);
 
   useEffect(() => {

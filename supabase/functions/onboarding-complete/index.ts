@@ -97,7 +97,7 @@ export default async function handler(req: Request): Promise<Response> {
          <p>Desde <b>Ajustes</b> puedes configurar tu emisor (RUC/SUNAT), pagos, mesas y carta.</p>
          <p>— El equipo de Wayra POS</p>`,
       );
-    } catch (_) {
+    } catch {
       // ignorar fallos de correo
     }
 
