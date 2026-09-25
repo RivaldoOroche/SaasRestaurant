@@ -44,6 +44,30 @@ const DICT: Record<string, Record<Lang, string>> = {
   "common.offline": { es: "Sin conexión", en: "Offline" },
   "login.title": { es: "Ingresa a Wayra POS", en: "Sign in to Wayra POS" },
   "login.pin": { es: "Ingresa tu PIN", en: "Enter your PIN" },
+  // Carta pública (vista del cliente vía QR)
+  "carta.subtitle": { es: "Carta digital", en: "Digital menu" },
+  "carta.loading": { es: "Cargando carta…", en: "Loading menu…" },
+  "carta.notFound": { es: "No encontramos esta carta. Verifica el enlace.", en: "We couldn't find this menu. Check the link." },
+  "carta.veg": { es: "Veg", en: "Veggie" },
+  "carta.spicy": { es: "Picante", en: "Spicy" },
+  "carta.gf": { es: "Sin gluten", en: "Gluten-free" },
+  "carta.pricesNote": { es: "Precios incluyen IGV. Carta referencial.", en: "Prices include VAT (IGV). Reference menu." },
+  "carta.poweredBy": { es: "Con tecnología de", en: "Powered by" },
+  "carta.langToggle": { es: "English", en: "Español" },
+  // Comprobante (etiquetas bilingües de cortesía; el documento legal es en español)
+  "comp.customer": { es: "Cliente", en: "Customer" },
+  "comp.issueDate": { es: "Fecha emisión", en: "Issue date" },
+  "comp.time": { es: "Hora", en: "Time" },
+  "comp.currency": { es: "Moneda", en: "Currency" },
+  "comp.qty": { es: "Cant.", en: "Qty" },
+  "comp.description": { es: "Descripción", en: "Description" },
+  "comp.unitPrice": { es: "P. Unit.", en: "Unit price" },
+  "comp.amount": { es: "Importe", en: "Amount" },
+  "comp.discount": { es: "Descuento", en: "Discount" },
+  "comp.taxable": { es: "Op. Gravada", en: "Taxable amount" },
+  "comp.total": { es: "IMPORTE TOTAL", en: "TOTAL" },
+  "comp.modifies": { es: "Documento que modifica", en: "Modified document" },
+  "comp.reason": { es: "Motivo", en: "Reason" },
 };
 
 const KEY = "nubepos-lang";

@@ -1,6 +1,7 @@
 import { numeroALetras } from "@/lib/numeroALetras";
 import { formatMoney, type Currency } from "@/lib/money";
 import { Qr } from "@/components/Qr";
+import { useLang, translate } from "@/i18n";
 import type { ComprobanteTipo, OrderLine, SunatStatus } from "@/data/model";
 
 export interface ComprobanteDocProps {
@@ -53,6 +54,11 @@ export function ComprobanteDoc({
   currency = "PEN",
   status,
 }: ComprobanteDocProps & { status?: SunatStatus }) {
+  // El comprobante legal es en español (requisito SUNAT). Para clientela
+  // extranjera se añaden etiquetas de cortesía en inglés cuando el idioma es EN.
+  const lang = useLang((s) => s.lang);
+  const bl = (key: string) => (lang === "en" ? `${translate(key, "es")} / ${translate(key, "en")}` : translate(key, "es"));
+
   const esNC = tipo === "NotaCredito";
   const titulo = esNC
     ? "NOTA DE CRÉDITO ELECTRÓNICA"
@@ -93,21 +99,21 @@ export function ComprobanteDoc({
       {/* Cliente + fecha */}
       <div className="grid grid-cols-2 gap-2 py-3 text-[11.5px] border-b border-dashed border-[#c9ccd8]">
         <div>
-          <p><span className="text-[#666]">Cliente:</span> {cliente.nombre}</p>
+          <p><span className="text-[#666]">{bl("comp.customer")}:</span> {cliente.nombre}</p>
           <p><span className="text-[#666]">{cliente.docLabel}:</span> {cliente.docNum}</p>
         </div>
         <div className="text-right">
-          <p><span className="text-[#666]">Fecha emisión:</span> {fecha}</p>
-          <p><span className="text-[#666]">Hora:</span> {hora}</p>
-          <p><span className="text-[#666]">Moneda:</span> {currency === "PEN" ? "SOLES (PEN)" : currency}</p>
+          <p><span className="text-[#666]">{bl("comp.issueDate")}:</span> {fecha}</p>
+          <p><span className="text-[#666]">{bl("comp.time")}:</span> {hora}</p>
+          <p><span className="text-[#666]">{bl("comp.currency")}:</span> {currency === "PEN" ? "SOLES (PEN)" : currency}</p>
         </div>
       </div>
 
       {/* Documento que modifica (notas de crédito) */}
       {esNC && (
         <div className="py-2 text-[11.5px] border-b border-dashed border-[#c9ccd8]">
-          <p><span className="text-[#666]">Documento que modifica:</span> {refFolio || "—"}</p>
-          <p><span className="text-[#666]">Motivo:</span> {motivo || "Anulación de la operación"}</p>
+          <p><span className="text-[#666]">{bl("comp.modifies")}:</span> {refFolio || "—"}</p>
+          <p><span className="text-[#666]">{bl("comp.reason")}:</span> {motivo || "Anulación de la operación"}</p>
         </div>
       )}
 
@@ -115,10 +121,10 @@ export function ComprobanteDoc({
       <table className="w-full mt-2 text-[11.5px]">
         <thead>
           <tr className="text-[#666] border-b border-[#e0e2ea]">
-            <th className="text-left py-1 font-semibold w-10">Cant.</th>
-            <th className="text-left py-1 font-semibold">Descripción</th>
-            <th className="text-right py-1 font-semibold w-20">P. Unit.</th>
-            <th className="text-right py-1 font-semibold w-24">Importe</th>
+            <th className="text-left py-1 font-semibold w-10">{bl("comp.qty")}</th>
+            <th className="text-left py-1 font-semibold">{bl("comp.description")}</th>
+            <th className="text-right py-1 font-semibold w-20">{bl("comp.unitPrice")}</th>
+            <th className="text-right py-1 font-semibold w-24">{bl("comp.amount")}</th>
           </tr>
         </thead>
         <tbody className="font-mono">
@@ -140,12 +146,12 @@ export function ComprobanteDoc({
       <div className="flex justify-end mt-3">
         <div className="w-64 space-y-1 font-mono text-[12px]">
           {discount > 0 && (
-            <Row label="Descuento" value={"− " + formatMoney(discount, currency)} />
+            <Row label={bl("comp.discount")} value={"− " + formatMoney(discount, currency)} />
           )}
-          <Row label="Op. Gravada" value={formatMoney(subtotal, currency)} />
+          <Row label={bl("comp.taxable")} value={formatMoney(subtotal, currency)} />
           <Row label={`I.G.V. (${Math.round(taxRate * 100)}%)`} value={formatMoney(igv, currency)} />
           <div className="flex justify-between border-t border-[#1a1c2b] pt-1 font-bold text-[13px]">
-            <span>IMPORTE TOTAL</span>
+            <span>{bl("comp.total")}</span>
             <span>{formatMoney(total, currency)}</span>
           </div>
         </div>

@@ -2,21 +2,24 @@ import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getPublicMenu } from "@/data/publicMenu";
 import { Badge } from "@/components/ui/Badge";
+import { useT, useLang } from "@/i18n";
 
 export function CartaPublica() {
   const { slug = "" } = useParams();
+  const t = useT();
+  const { lang, setLang } = useLang();
   const { data, isLoading } = useQuery({
     queryKey: ["publicMenu", slug],
     queryFn: () => getPublicMenu(slug),
   });
 
   if (isLoading) {
-    return <div className="min-h-screen grid place-items-center bg-bg text-muted">Cargando carta…</div>;
+    return <div className="min-h-screen grid place-items-center bg-bg text-muted">{t("carta.loading")}</div>;
   }
   if (!data) {
     return (
       <div className="min-h-screen grid place-items-center bg-bg text-muted p-6 text-center">
-        No encontramos esta carta. Verifica el enlace.
+        {t("carta.notFound")}
       </div>
     );
   }
@@ -24,12 +27,19 @@ export function CartaPublica() {
   return (
     <div className="min-h-screen bg-bg text-ink">
       {/* Cabecera de marca */}
-      <header className="bg-shell text-white px-5 py-8 text-center">
+      <header className="relative bg-shell text-white px-5 py-8 text-center">
+        <button
+          onClick={() => setLang(lang === "es" ? "en" : "es")}
+          className="absolute top-3 right-3 rounded-md border border-white/25 px-2.5 py-1 text-xs font-semibold hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
+          aria-label={lang === "es" ? "Switch to English" : "Cambiar a español"}
+        >
+          {t("carta.langToggle")}
+        </button>
         <div className="mx-auto mb-3 h-12 w-12 rounded-xl bg-accent-cta grid place-items-center text-xl font-bold">
           {data.tenantName.charAt(0)}
         </div>
         <h1 className="text-2xl font-bold">{data.tenantName}</h1>
-        <p className="text-white/60 text-sm mt-1">Carta digital</p>
+        <p className="text-white/60 text-sm mt-1">{t("carta.subtitle")}</p>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6 space-y-8">
@@ -50,9 +60,9 @@ export function CartaPublica() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-semibold">{it.name}</p>
                         {it.badge && <Badge tone="accent">{it.badge}</Badge>}
-                        {it.veg && <Badge tone="success">Veg</Badge>}
-                        {it.spicy && <Badge tone="warning">Picante</Badge>}
-                        {it.gf && <Badge tone="neutral">Sin gluten</Badge>}
+                        {it.veg && <Badge tone="success">{t("carta.veg")}</Badge>}
+                        {it.spicy && <Badge tone="warning">{t("carta.spicy")}</Badge>}
+                        {it.gf && <Badge tone="neutral">{t("carta.gf")}</Badge>}
                       </div>
                       {it.description && <p className="text-muted text-sm mt-0.5">{it.description}</p>}
                     </div>
@@ -67,9 +77,9 @@ export function CartaPublica() {
         })}
 
         <footer className="text-center text-muted text-xs pt-4 pb-8">
-          Precios en {data.currencySym === "S/" ? "soles" : "moneda local"}, incluyen IGV. · Carta referencial.
+          {t("carta.pricesNote")}
           <br />
-          Powered by <span className="text-accent font-semibold">Wayra POS</span>
+          {t("carta.poweredBy")} <span className="text-accent font-semibold">Wayra POS</span>
         </footer>
       </main>
     </div>
