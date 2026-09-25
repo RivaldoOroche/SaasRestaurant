@@ -29,10 +29,12 @@ import type {
   Complaint,
   Reservation,
   WaitlistEntry,
+  Subscription,
+  MyPlanRequest,
   CardChargeInput,
   CardChargeResult,
 } from "../model";
-import type { Database, Row } from "@/types/database";
+import type { Database, Row, PlanTier } from "@/types/database";
 import { stubSunatGateway, type SunatGateway, type SunatResult } from "../sunat/gateway";
 import { makeFunctionGateway } from "../sunat/functionGateway";
 import { decideEmission } from "../sunat/outbox";
@@ -1076,6 +1078,34 @@ export class SupabaseRepo implements Repo {
   }
   async removeWaitlist(id: string): Promise<void> {
     await this.sb.from("waitlist").delete().eq("id", id);
+  }
+
+  async getSubscription(): Promise<Subscription> {
+    const [{ data: t }, { data: plans }] = await Promise.all([
+      this.sb.from("tenants").select("plan, mrr, status").eq("id", this.tenantId).maybeSingle(),
+      this.sb.from("subscription_plans").select("tier, price"),
+    ]);
+    const price = (plans ?? []).find((p) => p.tier === t?.plan)?.price;
+    return { plan: t?.plan ?? "Pro", price: Number(price ?? t?.mrr ?? 0), status: t?.status ?? "Activo" };
+  }
+  async getMyPlanRequest(): Promise<MyPlanRequest | null> {
+    const { data } = await this.sb
+      .from("plan_change_requests")
+      .select("to_plan, status")
+      .eq("tenant_id", this.tenantId)
+      .eq("status", "pendiente")
+      .maybeSingle();
+    return data ? { toPlan: data.to_plan, status: data.status } : null;
+  }
+  async requestPlanChange(toPlan: string): Promise<void> {
+    const { data: t } = await this.sb.from("tenants").select("plan").eq("id", this.tenantId).maybeSingle();
+    const { error } = await this.sb.from("plan_change_requests").insert({
+      tenant_id: this.tenantId,
+      from_plan: (t?.plan ?? "Pro") as PlanTier,
+      to_plan: toPlan as PlanTier,
+    });
+    if (error) throw error;
+    await this.log(`Solicitó cambio de plan a ${toPlan}`);
   }
 
   async getRolePermissions(): Promise<Record<string, string[]>> {

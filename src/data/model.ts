@@ -233,6 +233,17 @@ export interface CardCredentialsInput {
   webhookSecret?: string; // secreto para verificar la firma de los webhooks
 }
 
+/** Suscripción del tenant a Wayra POS (su vista como cliente). */
+export interface Subscription {
+  plan: string;
+  price: number;
+  status: string;
+}
+export interface MyPlanRequest {
+  toPlan: string;
+  status: string;
+}
+
 export type ReservationStatus = "pendiente" | "confirmada" | "sentada" | "cancelada";
 export interface Reservation {
   id: string;

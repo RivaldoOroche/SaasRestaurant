@@ -15,6 +15,7 @@ import type {
   Cohort,
   RevenuePoint,
   AccessEntry,
+  PlanRequest,
 } from "./model";
 
 /** Platform-owner (SaaS) data access. Separate from the tenant Repo. */
@@ -30,6 +31,10 @@ export interface PlatformRepo {
   getActivity(): Promise<PlatformActivity[]>;
   /** Auditoría de accesos (inicios de sesión recientes). */
   getAccessLog(): Promise<AccessEntry[]>;
+  /** Solicitudes de cambio de plan pendientes de los tenants. */
+  getPlanRequests(): Promise<PlanRequest[]>;
+  /** Aprueba (aplica el nuevo plan) o rechaza una solicitud de cambio de plan. */
+  decidePlanRequest(id: string, approve: boolean): Promise<void>;
   /** Datos del emisor del SaaS (tu empresa). */
   getPlatformSettings(): Promise<PlatformSettings>;
   updatePlatformSettings(patch: Partial<PlatformSettings>): Promise<void>;

@@ -22,6 +22,8 @@ import type {
   Complaint,
   Reservation,
   WaitlistEntry,
+  Subscription,
+  MyPlanRequest,
   CardChargeInput,
   CardChargeResult,
 } from "../model";
@@ -792,6 +794,19 @@ export class MockRepo implements Repo {
   }
   async removeWaitlist(id: string) {
     this.waitlistEntries = this.waitlistEntries.filter((x) => x.id !== id);
+    this.persist();
+  }
+
+  private myPlanRequest: MyPlanRequest | null = null;
+  async getSubscription(): Promise<Subscription> {
+    return { plan: "Pro", price: 1499, status: "Activo" };
+  }
+  async getMyPlanRequest() {
+    return this.myPlanRequest ? { ...this.myPlanRequest } : null;
+  }
+  async requestPlanChange(toPlan: string) {
+    this.myPlanRequest = { toPlan, status: "pendiente" };
+    this.pushLog("Plan", `Solicitó cambio de plan a ${toPlan}`);
     this.persist();
   }
 

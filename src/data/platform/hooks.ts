@@ -57,6 +57,10 @@ export function useAccessLog() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "accessLog"], queryFn: () => repo.getAccessLog() });
 }
+export function usePlanRequests() {
+  const repo = useP();
+  return useQuery({ queryKey: ["platform", "planRequests"], queryFn: () => repo.getPlanRequests() });
+}
 export function useChargeProposals() {
   const repo = useP();
   return useQuery({ queryKey: ["platform", "charges"], queryFn: () => repo.getChargeProposals() });
@@ -132,6 +136,10 @@ export function usePlatformActions() {
     mutationFn: ({ id, reason }: { id: string; reason: string }) => repo.rejectCharge(id, reason),
     onSuccess: invalidate,
   });
+  const decidePlanRequest = useMutation({
+    mutationFn: ({ id, approve }: { id: string; approve: boolean }) => repo.decidePlanRequest(id, approve),
+    onSuccess: invalidate,
+  });
   return {
     createTenant,
     createTenantWithOwner,
@@ -148,5 +156,6 @@ export function usePlatformActions() {
     updateChargeProposal,
     approveCharge,
     rejectCharge,
+    decidePlanRequest,
   };
 }

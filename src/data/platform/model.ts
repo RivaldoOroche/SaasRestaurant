@@ -117,6 +117,17 @@ export interface PlatformSettings {
   billingEndpoint?: string; // endpoint del OSE/API (no secreto)
 }
 
+/** Solicitud de cambio de plan hecha por un tenant (autoservicio). */
+export interface PlanRequest {
+  id: string;
+  tenantId: string;
+  tenant: string;
+  fromPlan: PlanTier;
+  toPlan: PlanTier;
+  status: string;
+  requestedAt: string;
+}
+
 /** Entrada de auditoría de accesos. */
 export interface AccessEntry {
   id: string;

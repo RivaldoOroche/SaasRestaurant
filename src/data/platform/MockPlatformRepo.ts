@@ -11,6 +11,7 @@ import type {
   PlatformSettings,
   PlatformFiscalCredentialsInput,
   ChargeProposal,
+  PlanRequest,
 } from "./model";
 import { MOCK_TENANT_ID } from "@/auth/session";
 import { deriveRetentionMetrics, deriveCohorts } from "./retention";
@@ -238,6 +239,19 @@ export class MockPlatformRepo implements PlatformRepo {
       { id: "acc-2", email: "monica@lahiguera.pe", role: "dueno", event: "login", userAgent: "Safari · iPhone", at: isoAgo(180) },
       { id: "acc-3", email: "admin@wayrapos.pe", role: "saas", event: "2fa_enroll", userAgent: "Chrome · macOS", at: isoAgo(1440) },
     ];
+  }
+
+  private planRequests: PlanRequest[] = [];
+  async getPlanRequests() {
+    return this.planRequests.filter((r) => r.status === "pendiente").map((r) => ({ ...r }));
+  }
+  async decidePlanRequest(id: string, approve: boolean) {
+    const r = this.planRequests.find((x) => x.id === id);
+    if (!r) return;
+    r.status = approve ? "aprobada" : "rechazada";
+    if (approve) await this.setTenantPlan(r.tenantId, r.toPlan);
+    this.log(r.tenant, "Plataforma", "plan", "info", `Solicitud de cambio a ${r.toPlan} ${approve ? "aprobada" : "rechazada"}`);
+    this.emit();
   }
 
   async getPlatformSettings() {

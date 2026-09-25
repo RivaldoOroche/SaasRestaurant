@@ -29,6 +29,8 @@ import type {
   Complaint,
   Reservation,
   WaitlistEntry,
+  Subscription,
+  MyPlanRequest,
 } from "./model";
 
 export interface PayInput extends PayExtras {
@@ -147,6 +149,11 @@ export interface Repo {
   addWaitlist(input: Omit<WaitlistEntry, "id" | "status" | "createdAt">): Promise<void>;
   updateWaitlist(id: string, patch: Partial<WaitlistEntry>): Promise<void>;
   removeWaitlist(id: string): Promise<void>;
+
+  // Suscripción (autoservicio del tenant)
+  getSubscription(): Promise<Subscription>;
+  getMyPlanRequest(): Promise<MyPlanRequest | null>;
+  requestPlanChange(toPlan: string): Promise<void>;
 
   // Permisos por rol (overrides del tenant sobre los permisos por defecto)
   /** Devuelve los overrides por rol: { admin: [...screens], mesero: [...] }. */

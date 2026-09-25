@@ -17,6 +17,7 @@ import type {
   Cohort,
   RevenuePoint,
   AccessEntry,
+  PlanRequest,
 } from "./model";
 import { deriveRetentionMetrics, deriveCohorts } from "./retention";
 import type { Database, Row } from "@/types/database";
@@ -224,6 +225,35 @@ export class SupabasePlatformRepo implements PlatformRepo {
       userAgent: r.user_agent ?? "",
       at: r.at,
     }));
+  }
+
+  async getPlanRequests(): Promise<PlanRequest[]> {
+    const [{ data }, names] = await Promise.all([
+      this.sb.from("plan_change_requests").select("*").eq("status", "pendiente").order("requested_at", { ascending: false }),
+      this.tenantNames(),
+    ]);
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      tenantId: r.tenant_id,
+      tenant: names.get(r.tenant_id) ?? "",
+      fromPlan: r.from_plan,
+      toPlan: r.to_plan,
+      status: r.status,
+      requestedAt: r.requested_at,
+    }));
+  }
+  async decidePlanRequest(id: string, approve: boolean): Promise<void> {
+    const { data: r } = await this.sb.from("plan_change_requests").select("tenant_id, to_plan").eq("id", id).single();
+    if (!r) return;
+    await this.sb
+      .from("plan_change_requests")
+      .update({ status: approve ? "aprobada" : "rechazada", decided_at: new Date().toISOString() })
+      .eq("id", id);
+    if (approve) await this.setTenantPlan(r.tenant_id, r.to_plan);
+    await this.sb.from("platform_activity").insert({
+      actor: "Plataforma",
+      message: `Solicitud de cambio de plan a ${r.to_plan} ${approve ? "aprobada" : "rechazada"}`,
+    });
   }
 
   async getPlatformSettings(): Promise<PlatformSettings> {

@@ -152,6 +152,19 @@ export interface Tables {
   access_log: {
     Row: { id: string; user_id: string | null; email: string | null; role: string | null; event: string; user_agent: string | null; at: string };
   };
+  plan_change_requests: {
+    Row: {
+      id: string;
+      tenant_id: string;
+      from_plan: PlanTier;
+      to_plan: PlanTier;
+      status: "pendiente" | "aprobada" | "rechazada";
+      note: string | null;
+      requested_by: string | null;
+      requested_at: string;
+      decided_at: string | null;
+    };
+  };
   complaints: {
     Row: {
       id: string;

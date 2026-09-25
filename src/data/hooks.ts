@@ -161,6 +161,23 @@ export function useComplaints() {
   const repo = useRepo();
   return useQuery({ queryKey: ["complaints"], queryFn: () => repo.getComplaints() });
 }
+export function useSubscription() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["subscription"], queryFn: () => repo.getSubscription() });
+}
+export function useMyPlanRequest() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["myPlanRequest"], queryFn: () => repo.getMyPlanRequest() });
+}
+export function useSubscriptionActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const requestPlanChange = useMutation({
+    mutationFn: (toPlan: string) => repo.requestPlanChange(toPlan),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["myPlanRequest"] }),
+  });
+  return { requestPlanChange };
+}
 export function useRolePermissions() {
   const repo = useRepo();
   return useQuery({ queryKey: ["rolePermissions"], queryFn: () => repo.getRolePermissions() });

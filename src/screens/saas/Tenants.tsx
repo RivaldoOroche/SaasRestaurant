@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTenants, usePlatformActions } from "@/data/platform/hooks";
+import { useTenants, usePlatformActions, usePlanRequests } from "@/data/platform/hooks";
 import { useAuth } from "@/auth/AuthContext";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card } from "@/components/ui/Card";
@@ -80,7 +80,9 @@ export function Tenants() {
 }
 
 function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {
-  const { setPlan, toggleSuspend, charge, regenerateLink, proposeCharge } = usePlatformActions();
+  const { setPlan, toggleSuspend, charge, regenerateLink, proposeCharge, decidePlanRequest } = usePlatformActions();
+  const { data: planRequests = [] } = usePlanRequests();
+  const planReq = planRequests.find((r) => r.tenantId === tenant.id);
   const { enterTenant } = useAuth();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<SaasCharge | null>(null);
@@ -124,6 +126,23 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
           <Tile label="Sucursales" value={String(tenant.branches)} />
           <Tile label="Usuarios" value={String(tenant.users)} />
         </div>
+
+        {planReq && (
+          <div className="mb-4 rounded-md border border-accent/50 bg-accent/5 p-3">
+            <p className="text-sm font-semibold">Solicitud de cambio de plan</p>
+            <p className="text-muted text-xs mb-2">
+              El cliente pidió pasar de <b>{planReq.fromPlan}</b> a <b>{planReq.toPlan}</b>.
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => decidePlanRequest.mutate({ id: planReq.id, approve: true })} disabled={decidePlanRequest.isPending}>
+                Aprobar cambio
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => decidePlanRequest.mutate({ id: planReq.id, approve: false })} disabled={decidePlanRequest.isPending}>
+                Rechazar
+              </Button>
+            </div>
+          </div>
+        )}
 
         <p className="text-xs uppercase tracking-wide text-muted mb-2">Cambiar plan</p>
         <div className="flex gap-2 mb-4">
