@@ -83,6 +83,8 @@ function PedidoActive({
   // Snapshot the order + total when opening checkout, so the receipt still
   // renders after payment clears the live order.
   const [cobro, setCobro] = useState<{ order: Order; amount: number } | null>(null);
+  // Móvil: el ticket se abre a pantalla completa desde la barra inferior.
+  const [cartOpen, setCartOpen] = useState(false);
 
   const cat = activeCat ?? categories[0]?.id ?? null;
 
@@ -127,6 +129,7 @@ function PedidoActive({
   const igv = round2(subtotal * taxRate);
   const total = round2(subtotal + igv);
   const canSend = lines.length > 0;
+  const itemCount = lines.reduce((s, l) => s + l.qty, 0);
 
   function toggleFilter(f: Filter) {
     const next = new Set(filters);
@@ -135,14 +138,14 @@ function PedidoActive({
   }
 
   return (
-    <div className="pos-row flex h-full min-h-0">
+    <div className="pos-row flex h-full min-h-0 mob:flex-col">
       {/* Categories */}
-      <aside className="cat-aside w-56 shrink-0 border-r border-border p-4 overflow-y-auto">
-        <div className="mb-3">
-          <h2 className="font-bold text-lg leading-tight">La Higuera</h2>
-          <p className="text-muted text-xs">Cocina peruana de temporada</p>
+      <aside className="cat-aside w-44 xl:w-56 shrink-0 border-r border-border p-4 overflow-y-auto mob:w-full mob:border-r-0 mob:border-b mob:p-0 mob:overflow-visible">
+        <div className="mb-3 mob:hidden">
+          <h2 className="font-bold text-lg leading-tight">{settings?.name ?? ""}</h2>
+          <p className="text-muted text-xs">{t("pedido.menu")}</p>
         </div>
-        <div className="cat-list flex flex-col gap-1">
+        <div className="cat-list flex flex-col gap-1 mob:flex-row mob:overflow-x-auto mob:px-3 mob:py-2">
           {categories.map((c) => {
             const count = items.filter((it) => it.categoryId === c.id).length;
             return (
@@ -153,7 +156,7 @@ function PedidoActive({
                   setSearch("");
                 }}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors",
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors mob:shrink-0 mob:whitespace-nowrap mob:rounded-full mob:border mob:border-border",
                   cat === c.id && !search
                     ? "bg-accent/20 text-accent"
                     : "hover:bg-chip-bg text-ink",
@@ -169,15 +172,16 @@ function PedidoActive({
       </aside>
 
       {/* Menu */}
-      <section className="flex-1 min-w-0 flex flex-col p-4 overflow-hidden">
-        <div className="flex items-center gap-3 mb-3 wrap-sm">
+      <section className="flex-1 min-w-0 min-h-0 flex flex-col p-4 overflow-hidden mob:p-3">
+        <div className="flex flex-wrap items-center gap-2 mb-3 wrap-sm">
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("pedido.search")}
-            className="flex-1 rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+            aria-label={t("pedido.search")}
+            className="flex-1 min-w-[12rem] rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
           />
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto">
             <FilterChip on={filters.has("veg")} onClick={() => toggleFilter("veg")}>
               {t("pedido.filterVeg")}
             </FilterChip>
@@ -205,14 +209,41 @@ function PedidoActive({
         </div>
       </section>
 
-      {/* Cart */}
-      <aside className="cart-panel w-80 shrink-0 border-l border-border flex flex-col">
+      {/* Móvil: resumen del ticket; abre el ticket a pantalla completa. */}
+      <div className="hidden mob:flex items-center gap-3 border-t border-border bg-panel px-3 py-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-muted">
+            {t("pedido.orderTable")} {tableLabel} · {itemCount} {t("pedido.items")}
+          </p>
+          <p className="font-mono font-bold">{formatMoney(total)}</p>
+        </div>
+        <Button onClick={() => setCartOpen(true)} aria-haspopup="dialog">
+          🧾 {t("pedido.viewTicket")}
+        </Button>
+      </div>
+
+      {/* Cart: columna en escritorio; hoja a pantalla completa en móvil. */}
+      <aside
+        className={cn(
+          "cart-panel w-72 xl:w-80 shrink-0 border-l border-border flex flex-col",
+          "mob:fixed mob:inset-0 mob:z-40 mob:w-auto mob:border-l-0 mob:bg-bg mob:pt-[env(safe-area-inset-top)]",
+          !cartOpen && "mob:hidden",
+        )}
+        aria-label={t("pedido.ticket")}
+      >
         <div className="p-4 border-b border-border">
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setCartOpen(false)}
+              className="hidden mob:grid h-9 w-9 shrink-0 place-items-center rounded-md bg-chip-bg border border-border"
+              aria-label={t("pedido.backToMenu")}
+            >
+              ←
+            </button>
             <div className="h-11 w-11 rounded-md bg-chip-bg grid place-items-center text-xs font-bold">
               M{tableLabel}
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <p className="font-semibold leading-tight">{t("pedido.orderTable")} {tableLabel}</p>
               <p className="text-muted text-xs">
                 {seats} {t("pedido.guests")} · {zone}
@@ -267,7 +298,7 @@ function PedidoActive({
           )}
         </div>
 
-        <div className="p-4 border-t border-border space-y-1.5">
+        <div className="p-4 border-t border-border space-y-1.5 mob:pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <Row label={t("pedido.subtotal")} value={formatMoney(subtotal)} />
           <Row label={`IGV (${Math.round(taxRate * 100)}%)`} value={formatMoney(igv)} />
           <div className="flex justify-between items-center pt-1">

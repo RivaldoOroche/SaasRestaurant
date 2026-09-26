@@ -105,14 +105,14 @@ export function ModifierModal({
           </div>
         </Section>
 
-        <div className="flex items-center justify-between mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-6">
           <span className="text-muted text-sm">
             Total línea{" "}
             <span className="font-mono text-ink font-semibold">
               {formatMoney(item.price + extraPrice)}
             </span>
           </span>
-          <div className="flex gap-2">
+          <div className="flex gap-2 ml-auto">
             <Button variant="ghost" onClick={onClose}>
               Cancelar
             </Button>

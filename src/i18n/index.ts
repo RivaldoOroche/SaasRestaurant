@@ -161,6 +161,11 @@ const DICT: Record<string, Record<Lang, string>> = {
   "pedido.guests": { es: "comensales", en: "guests" },
   "pedido.emptyHint": { es: "Toca un platillo para elegir modificadores, o + para agregarlo directo.", en: "Tap a dish to pick modifiers, or + to add it directly." },
   "pedido.void": { es: "✕ anular", en: "✕ void" },
+  "pedido.menu": { es: "Carta", en: "Menu" },
+  "pedido.items": { es: "ítems", en: "items" },
+  "pedido.viewTicket": { es: "Ver ticket", en: "View ticket" },
+  "pedido.ticket": { es: "Ticket del pedido", en: "Order ticket" },
+  "pedido.backToMenu": { es: "Volver a la carta", en: "Back to menu" },
   // Cobro (checkout)
   "cobro.titleDoc": { es: "Comprobante", en: "Receipt" },
   "cobro.titlePay": { es: "Cobrar · Mesa", en: "Charge · Table" },

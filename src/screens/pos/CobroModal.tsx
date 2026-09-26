@@ -184,7 +184,7 @@ export function CobroModal({
             </div>
 
             <Field label={t("cobro.discount")}>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {DISCOUNTS.map((d) => (
                   <Pill key={d} active={discountPct === d} onClick={() => setDiscountPct(d)}>
                     {d === 1 ? t("cobro.courtesy") : `${Math.round(d * 100)}%`}
@@ -194,7 +194,7 @@ export function CobroModal({
             </Field>
 
             <Field label={t("cobro.tip")}>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {TIPS.map((tp) => (
                   <Pill key={tp} active={tipPct === tp} onClick={() => setTipPct(tp)}>
                     {Math.round(tp * 100)}%
@@ -247,7 +247,7 @@ export function CobroModal({
             </Field>
 
             <Field label={t("cobro.method")}>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {METHOD_KEYS.map((k) => (
                   <Pill key={k} active={method === k} onClick={() => setMethod(k)}>
                     {methodLabel(t, k)}
@@ -372,7 +372,7 @@ export function CobroModal({
               <div className="mb-4 no-print space-y-3">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-muted mb-1.5">{t("cobro.docType")}</p>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {(["Boleta", "Factura"] as const).map((dt) => (
                       <Pill key={dt} active={docTipo === dt} onClick={() => setDocTipo(dt)}>
                         {dt}
@@ -432,7 +432,7 @@ export function CobroModal({
                   {t("cobro.emit")} {docTipo}
                 </Button>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button variant="secondary" onClick={() => window.print()}>
                     {t("cobro.print")}
                   </Button>
