@@ -15,7 +15,7 @@ export function Clientes() {
   const { data: customers = [] } = useCustomers();
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader title="Clientes" subtitle="CRM y lealtad · visitas, gasto y puntos" />
       <Card>
         <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-4 py-2 text-xs uppercase tracking-wide text-muted border-b border-border">

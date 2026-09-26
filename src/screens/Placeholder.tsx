@@ -12,7 +12,7 @@ export function Placeholder({
   phase: string;
 }) {
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-6 mob:p-4 max-w-6xl">
       <ScreenHeader title={title} subtitle={subtitle} />
       <Card>
         <CardBody className="py-16 text-center">

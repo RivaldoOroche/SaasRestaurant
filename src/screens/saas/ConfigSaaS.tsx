@@ -27,7 +27,7 @@ export function ConfigSaaS() {
   if (!s) return null;
 
   return (
-    <div className="p-6 max-w-2xl space-y-4">
+    <div className="p-6 mob:p-4 max-w-2xl space-y-4">
       <ScreenHeader
         title="Configuración del SaaS"
         subtitle="Datos de tu empresa y cómo emites las facturas de suscripción a los tenants"

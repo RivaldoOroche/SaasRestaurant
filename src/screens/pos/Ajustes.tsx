@@ -27,7 +27,7 @@ export function Ajustes() {
   if (!settings) return null;
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6 mob:p-4 max-w-2xl">
       <ScreenHeader title="Ajustes del negocio" subtitle="Moneda, impuestos y preferencias" />
       <div className="space-y-4">
         <ConfigChecklist />
@@ -184,8 +184,8 @@ function FacturacionCard({ settings }: { settings: BusinessSettings }) {
   return (
     <Card>
       <CardBody className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
             <h3 className="font-semibold">Facturación electrónica</h3>
             <p className="text-muted text-xs">Elige cómo se envían los comprobantes a SUNAT.</p>
           </div>

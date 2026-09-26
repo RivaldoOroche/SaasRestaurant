@@ -30,7 +30,7 @@ export function Cobros() {
   const history = charges.filter((c) => c.status === "cobrada" || c.status === "rechazada");
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader
         title="Cobros de suscripción"
         subtitle="Toda cobranza pasa por aprobación: valida los datos de la factura antes de cobrar."

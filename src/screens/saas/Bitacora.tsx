@@ -44,7 +44,7 @@ export function Bitacora() {
   const errors = activity.filter((a) => a.level === "error").length;
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-6 mob:p-4 max-w-6xl">
       <ScreenHeader
         title="Bitácora"
         subtitle="Todo lo que hacen los tenants · monitoreo y detección de fallos"
@@ -58,7 +58,7 @@ export function Bitacora() {
       />
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-2 mb-3">
+      <div className="flex flex-wrap gap-2 mb-3 mob:grid mob:grid-cols-2">
         <select value={tenant} onChange={(e) => setTenant(e.target.value)}
           className="rounded-md bg-chip-bg border border-border px-2 py-1.5 text-sm">
           <option>Todos</option>
@@ -82,7 +82,8 @@ export function Bitacora() {
           <option value="error">Errores</option>
         </select>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…"
-          className="flex-1 min-w-[10rem] rounded-md bg-chip-bg border border-border px-3 py-1.5 text-sm" />
+          aria-label="Buscar en la bitácora"
+          className="flex-1 min-w-[10rem] rounded-md bg-chip-bg border border-border px-3 py-1.5 text-sm mob:col-span-2" />
       </div>
 
       <Card>
@@ -101,25 +102,37 @@ export function Bitacora() {
 }
 
 function Row({ a }: { a: PlatformActivity }) {
+  const tone = cn(a.level === "error" && "bg-neutral/5", a.level === "warning" && "bg-warning/5");
+  const dot = <span className={cn("h-2 w-2 rounded-full shrink-0", LEVEL_DOT[a.level])} title={a.level} />;
+  const chip = (
+    <span className="rounded px-1.5 py-0.5 text-[11px] bg-chip-bg border border-border">{CAT_LABEL[a.category]}</span>
+  );
+  const msgCls = cn(a.level === "error" && "text-warning font-medium");
   return (
-    <div
-      className={cn(
-        "flex items-center gap-3 px-3 py-2 text-sm",
-        a.level === "error" && "bg-neutral/5",
-        a.level === "warning" && "bg-warning/5",
-      )}
-    >
-      <span className={cn("h-2 w-2 rounded-full shrink-0", LEVEL_DOT[a.level])} title={a.level} />
-      <span className="w-24 shrink-0 font-mono text-xs text-muted">{fmt(a.at)}</span>
-      <span className="w-40 shrink-0 truncate font-medium">{a.tenant}</span>
-      <span className="w-24 shrink-0 truncate text-muted text-xs">{a.actor}</span>
-      <span className="w-24 shrink-0">
-        <span className="rounded px-1.5 py-0.5 text-[11px] bg-chip-bg border border-border">{CAT_LABEL[a.category]}</span>
-      </span>
-      <span className={cn("flex-1 min-w-0 truncate", a.level === "error" && "text-warning font-medium")}>
-        {a.message}
-      </span>
-    </div>
+    <>
+      {/* Escritorio: fila tipo tabla */}
+      <div className={cn("flex items-center gap-3 px-3 py-2 text-sm mob:hidden", tone)}>
+        {dot}
+        <span className="w-24 shrink-0 font-mono text-xs text-muted">{fmt(a.at)}</span>
+        <span className="w-40 shrink-0 truncate font-medium">{a.tenant}</span>
+        <span className="w-24 shrink-0 truncate text-muted text-xs">{a.actor}</span>
+        <span className="w-24 shrink-0">{chip}</span>
+        <span className={cn("flex-1 min-w-0 truncate", msgCls)}>{a.message}</span>
+      </div>
+      {/* Móvil: tarjeta de dos líneas, el mensaje completo (sin cortar) */}
+      <div className={cn("hidden mob:block px-3 py-2.5 text-sm", tone)}>
+        <div className="flex items-center gap-2">
+          {dot}
+          <span className="flex-1 min-w-0 truncate font-medium">{a.tenant}</span>
+          <span className="shrink-0 font-mono text-xs text-muted">{fmt(a.at)}</span>
+        </div>
+        <div className="flex items-center gap-2 mt-1 pl-4">
+          {chip}
+          <span className="truncate text-muted text-xs">{a.actor}</span>
+        </div>
+        <p className={cn("mt-1 pl-4 break-words", msgCls)}>{a.message}</p>
+      </div>
+    </>
   );
 }
 

@@ -26,7 +26,7 @@ export function Editor() {
   }
 
   return (
-    <div className="p-6 max-w-3xl">
+    <div className="p-6 mob:p-4 max-w-3xl">
       <ScreenHeader title="Editor de carta" subtitle="Precios, disponibilidad (86) y recetas / food cost" />
       <Card className="divide-y divide-border">
         {items.map((it) => {
@@ -34,9 +34,9 @@ export function Editor() {
           const hasRecipe = (recipes[it.id]?.length ?? 0) > 0;
           const margin = it.price > 0 && hasRecipe ? Math.round(((it.price - cost) / it.price) * 100) : null;
           return (
-            <div key={it.id} className="flex items-center gap-4 p-3">
+            <div key={it.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-3">
               <span className="text-xl">{it.emoji}</span>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-[10rem]">
                 <div className="flex items-center gap-2">
                   <p className="font-medium truncate">{it.name}</p>
                   {!it.available && <Badge tone="warning">86</Badge>}
@@ -49,6 +49,7 @@ export function Editor() {
                   )}
                 </p>
               </div>
+              <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() => setMenuPrice.mutate({ itemId: it.id, price: Math.max(0, it.price - 1) })}
@@ -74,6 +75,7 @@ export function Editor() {
               >
                 {it.available ? "Marcar 86" : "Activar"}
               </Button>
+              </div>
             </div>
           );
         })}

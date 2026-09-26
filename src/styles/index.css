@@ -51,6 +51,13 @@
     font-family: inherit;
     outline: none;
   }
+  /* Los campos tienen un ancho mínimo intrínseco (~20 caracteres) que, dentro
+     de una fila flex, empuja los botones fuera de la pantalla en móvil. */
+  input,
+  select,
+  textarea {
+    min-width: 0;
+  }
 
   /* Themed focus ring (never the default blue) */
   :focus-visible {

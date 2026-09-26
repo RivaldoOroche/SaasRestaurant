@@ -35,7 +35,7 @@ export function Reservas() {
   const shown = reservations.filter((r) => r.date === dateFilter);
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-6 mob:p-4 max-w-5xl">
       <ScreenHeader title="Reservas y lista de espera" subtitle="Gestiona reservas del día y la cola de espera" />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -79,9 +79,9 @@ function ReservationRow({ r }: { r: Reservation }) {
   const { updateReservation, removeReservation } = useReservaActions();
   const next = RES_NEXT[r.status];
   return (
-    <Card className={cn("p-3 flex items-center gap-3", r.status === "cancelada" && "opacity-60")}>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+    <Card className={cn("p-3 flex flex-wrap items-center gap-x-3 gap-y-2", r.status === "cancelada" && "opacity-60")}>
+      <div className="flex-1 min-w-0 mob:basis-full">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="font-semibold">{r.name}</p>
           <Badge tone={RES_TONE[r.status]}>{r.status}</Badge>
         </div>
@@ -110,9 +110,9 @@ function ReservationRow({ r }: { r: Reservation }) {
 function WaitRow({ w }: { w: { id: string; name: string; phone?: string; partySize: number; waitLabel: string; status: WaitlistStatus } }) {
   const { updateWaitlist, removeWaitlist } = useReservaActions();
   return (
-    <Card className={cn("p-3 flex items-center gap-3", (w.status === "retirado" || w.status === "sentado") && "opacity-60")}>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+    <Card className={cn("p-3 flex flex-wrap items-center gap-x-3 gap-y-2", (w.status === "retirado" || w.status === "sentado") && "opacity-60")}>
+      <div className="flex-1 min-w-0 mob:basis-full">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="font-semibold">{w.name}</p>
           <Badge tone={WL_TONE[w.status]}>{w.status}</Badge>
         </div>

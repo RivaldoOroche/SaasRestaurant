@@ -15,24 +15,25 @@ export function OnlineOrders() {
   const cartaUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/carta/${slug}`;
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader title="En línea" subtitle="Carta digital y canales en línea" />
 
       <Card className="mb-4">
-        <CardBody className="flex items-center gap-4">
+        <CardBody className="flex flex-wrap items-center gap-4">
           <div className="shrink-0 border border-border rounded-md p-1.5 bg-white">
             <Qr value={cartaUrl} size={96} />
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-[14rem]">
             <h3 className="font-semibold">Carta digital (QR de mesa)</h3>
             <p className="text-muted text-sm mt-0.5">
               Imprime este QR para que los clientes vean la carta desde su celular.
             </p>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex flex-wrap items-center gap-2 mt-2">
               <input
                 readOnly
                 value={cartaUrl}
-                className="flex-1 rounded-md bg-chip-bg border border-border px-2 py-1.5 text-xs font-mono"
+                aria-label="Enlace de la carta"
+                className="flex-1 min-w-[10rem] rounded-md bg-chip-bg border border-border px-2 py-1.5 text-xs font-mono"
               />
               <Button size="sm" variant="secondary" onClick={() => navigator.clipboard?.writeText(cartaUrl)}>
                 Copiar

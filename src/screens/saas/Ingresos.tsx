@@ -33,7 +33,7 @@ export function Ingresos() {
   }
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-6 mob:p-4 max-w-5xl">
       <ScreenHeader
         title="Ingresos"
         subtitle="MRR por plan y cobranza del mes"
@@ -70,14 +70,21 @@ export function Ingresos() {
           <h3 className="font-semibold mb-3">Cobranza del mes</h3>
           <div className="divide-y divide-border-soft">
             {invoices.map((inv) => (
-              <div key={inv.id} className="flex items-center gap-4 py-2.5">
-                <span className="flex-1 text-sm">{inv.tenant}</span>
-                <span className="text-muted text-xs">{inv.date}</span>
-                <Badge tone={inv.status === "Pagada" ? "success" : "warning"}>{inv.status}</Badge>
-                <span className="font-mono text-sm w-24 text-right">{formatMoney(inv.amount)}</span>
-                <Button size="sm" variant="secondary" onClick={() => billTenant(inv.tenant)}>
-                  Factura
-                </Button>
+              <div key={inv.id} className="flex items-center gap-3 py-2.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{inv.tenant}</p>
+                  <p className="flex items-center gap-2 mt-0.5 text-muted text-xs">
+                    {inv.date}
+                    <Badge tone={inv.status === "Pagada" ? "success" : "warning"}>{inv.status}</Badge>
+                  </p>
+                </div>
+                {/* Escritorio: monto y botón en línea; móvil: apilados a la derecha. */}
+                <div className="flex items-center gap-3 shrink-0 mob:flex-col mob:items-end mob:gap-1.5">
+                  <span className="font-mono text-sm">{formatMoney(inv.amount)}</span>
+                  <Button size="sm" variant="secondary" onClick={() => billTenant(inv.tenant)}>
+                    Factura
+                  </Button>
+                </div>
               </div>
             ))}
           </div>

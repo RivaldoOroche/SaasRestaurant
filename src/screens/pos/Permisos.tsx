@@ -20,7 +20,7 @@ export function Permisos() {
   }
 
   return (
-    <div className="p-6 max-w-3xl">
+    <div className="p-6 mob:p-4 max-w-3xl">
       <ScreenHeader
         title="Permisos por rol"
         subtitle="Elige a qué pantallas accede cada rol. El Dueño siempre tiene acceso completo."

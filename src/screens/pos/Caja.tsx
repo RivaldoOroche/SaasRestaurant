@@ -33,7 +33,7 @@ export function Caja() {
   const diff = round2(countedValue - expectedCash);
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6 mob:p-4 max-w-2xl">
       <ScreenHeader title="Corte de caja" subtitle="Arqueo del turno · esperado por método vs. contado" />
 
       <Card className="mb-4">

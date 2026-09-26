@@ -33,7 +33,7 @@ export function Cuentas() {
   }
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-6 mob:p-4 max-w-5xl">
       <ScreenHeader
         title="Cuentas"
         subtitle="Cuentas abiertas en el piso · toca una para cobrar"

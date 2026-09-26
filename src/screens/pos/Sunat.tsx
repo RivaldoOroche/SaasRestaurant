@@ -71,12 +71,12 @@ export function Sunat() {
   }
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader
         title="Monitor SUNAT"
         subtitle="Comprobantes electrónicos · boletas, facturas y notas de crédito"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={enviarResumen} disabled={resumen.isPending}>
               📄 Resumen diario
             </Button>

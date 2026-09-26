@@ -13,7 +13,7 @@ export function Planes() {
   const [edit, setEdit] = useState<PlanInfo | null>(null);
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-6 mob:p-4 max-w-5xl">
       <ScreenHeader title="Planes" subtitle="Precios, beneficios y suscriptores por plan" />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {plans.map((p) => (

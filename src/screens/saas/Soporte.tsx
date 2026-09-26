@@ -17,7 +17,7 @@ export function Soporte() {
   const open = tickets.filter((t) => t.status !== "Resuelto").length;
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader
         title="Soporte"
         subtitle="Tickets de los tenants · cambia estado y prioridad"
@@ -27,7 +27,7 @@ export function Soporte() {
         {tickets.map((t) => (
           <div key={t.id} className="flex flex-wrap items-center gap-3 p-4">
             <div className="flex-1 min-w-[12rem]">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <p className="font-semibold">{t.subject}</p>
                 <Badge tone={PRIORITY_TONE[t.priority] ?? "neutral"}>{t.priority}</Badge>
               </div>

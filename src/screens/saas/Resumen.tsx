@@ -10,7 +10,7 @@ export function Resumen() {
   const maxMonth = Math.max(...s.mrrByMonth.map((m) => m.value));
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-6 mob:p-4 max-w-6xl">
       <ScreenHeader title="Wayra POS · Consola de plataforma" subtitle="Tu negocio SaaS · provees el POS a tus clientes (tenants)" />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">

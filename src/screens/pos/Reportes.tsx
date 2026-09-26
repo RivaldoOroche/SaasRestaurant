@@ -114,12 +114,12 @@ export function Reportes() {
   }
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-6 mob:p-4 max-w-5xl">
       <ScreenHeader
         title="Reportes"
         subtitle={admin ? "Resumen del negocio" : `Mi desempeño · ${session?.staff?.name ?? ""}`}
         actions={
-          <div className="flex items-center gap-2 no-print">
+          <div className="flex flex-wrap items-center gap-2 no-print">
             <div className="flex rounded-md border border-border overflow-hidden">
               {(["hoy", "semana", "mes"] as Rango[]).map((r) => (
                 <button

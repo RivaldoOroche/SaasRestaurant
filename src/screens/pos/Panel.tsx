@@ -24,7 +24,7 @@ export function Panel() {
   const pendingChanges = changes.filter((c) => c.status === "pendiente").length;
 
   return (
-    <div className="p-6 max-w-5xl">
+    <div className="p-6 mob:p-4 max-w-5xl">
       <ScreenHeader title="Panel" subtitle="Resumen operativo del turno" />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">

@@ -132,6 +132,10 @@ const DICT: Record<string, Record<Lang, string>> = {
   "kds.col.nuevos": { es: "Nuevos", en: "New" },
   "kds.col.prep": { es: "En preparación", en: "In progress" },
   "kds.col.listos": { es: "Listos para pasar", en: "Ready to serve" },
+  // Pestañas del KDS en móvil (cortas)
+  "kds.tab.nuevos": { es: "Nuevos", en: "New" },
+  "kds.tab.preparacion": { es: "Preparando", en: "Cooking" },
+  "kds.tab.listos": { es: "Listos", en: "Ready" },
   "kds.active": { es: "Activos", en: "Active" },
   "kds.delay": { es: "Retraso", en: "Delayed" },
   "kds.ready": { es: "Listos", en: "Ready" },

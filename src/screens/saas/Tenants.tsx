@@ -32,7 +32,7 @@ export function Tenants() {
   const totalMrr = tenants.reduce((s, t) => s + t.mrr, 0);
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-6 mob:p-4 max-w-6xl">
       <ScreenHeader
         title="Tenants (clientes)"
         subtitle="Restaurantes que usan tu plataforma"
@@ -49,24 +49,32 @@ export function Tenants() {
 
       <Card className="divide-y divide-border-soft">
         {tenants.map((t) => (
-          <div key={t.id} className={cn("flex items-center gap-4 p-4", t.isYou && "bg-accent/5")}>
+          <div key={t.id} className={cn("flex items-center gap-4 p-4 mob:gap-3", t.isYou && "bg-accent/5")}>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <p className="font-semibold">{t.name}</p>
                 {t.isYou && <Badge tone="accent">Tu demo</Badge>}
               </div>
               <p className="text-muted text-xs">
                 {t.ownerName} · cliente desde {t.since}
               </p>
+              {/* Móvil: plan, estado y tamaño debajo del nombre, sin apretarlo. */}
+              <div className="hidden mob:flex flex-wrap items-center gap-2 mt-2">
+                <Badge tone={PLAN_TONE[t.plan]}>{t.plan}</Badge>
+                <StatusBadge status={t.status} />
+                <span className="text-muted text-xs">
+                  {t.branches} suc · {t.users} usr
+                </span>
+              </div>
             </div>
-            <Badge tone={PLAN_TONE[t.plan]}>{t.plan}</Badge>
-            <span className="text-muted text-xs w-28 text-right hidden md:block">
-              {t.branches} suc · {t.users} usr
-            </span>
-            <Badge tone={t.status === "Activo" ? "success" : t.status === "Prueba" ? "warning" : "neutral"}>
-              {t.status}
-            </Badge>
-            <Button size="sm" variant="secondary" onClick={() => setDetail(t)}>
+            <div className="flex items-center gap-4 shrink-0 mob:hidden">
+              <Badge tone={PLAN_TONE[t.plan]}>{t.plan}</Badge>
+              <span className="text-muted text-xs w-28 text-right">
+                {t.branches} suc · {t.users} usr
+              </span>
+              <StatusBadge status={t.status} />
+            </div>
+            <Button size="sm" variant="secondary" className="shrink-0" onClick={() => setDetail(t)}>
               Gestionar
             </Button>
           </div>
@@ -77,6 +85,10 @@ export function Tenants() {
       <NewTenantModal open={newOpen} onClose={() => setNewOpen(false)} />
     </div>
   );
+}
+
+function StatusBadge({ status }: { status: Tenant["status"] }) {
+  return <Badge tone={status === "Activo" ? "success" : status === "Prueba" ? "warning" : "neutral"}>{status}</Badge>;
 }
 
 function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void }) {

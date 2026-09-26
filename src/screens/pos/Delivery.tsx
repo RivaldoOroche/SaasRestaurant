@@ -82,7 +82,7 @@ export function Delivery() {
   }
 
   return (
-    <div className="p-6 max-w-[1400px]">
+    <div className="p-6 mob:p-4 max-w-[1400px]">
       <ScreenHeader
         title="Delivery"
         subtitle="Pedidos a domicilio y de apps · del teléfono a la puerta"

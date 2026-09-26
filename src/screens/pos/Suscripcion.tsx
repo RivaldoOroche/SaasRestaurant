@@ -26,7 +26,7 @@ export function Suscripcion() {
   const price = sub?.price ?? 1499;
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader title="Plan" subtitle="Tu suscripción a Wayra POS" />
 
       <Card className="mb-4">

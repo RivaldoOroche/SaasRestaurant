@@ -43,7 +43,7 @@ export function Ayuda() {
   const cats = useMemo(() => Array.from(new Set(results.map((f) => f.cat))), [results]);
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader
         title="Centro de ayuda"
         subtitle="Guías rápidas, preguntas frecuentes y estado del servicio."

@@ -32,6 +32,8 @@ export function Cocina() {
   const t = useT();
   const { data: tickets = [] } = useKitchenTickets();
   const { advance } = useKitchenActions();
+  // Móvil: una columna a la vez, elegida con pestañas.
+  const [mobCol, setMobCol] = useState<KdsColumn>("nuevos");
 
   const now = Date.now();
   const delayed = tickets.filter((t) => !t.done && (now - t.enteredAt) / 1000 >= DELAY_SEC).length;
@@ -39,7 +41,7 @@ export function Cocina() {
 
   return (
     <div className="h-full flex flex-col bg-shell text-white/90">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 mob:px-4 border-b border-white/10">
         <div>
           <h1 className="text-xl font-bold text-white">{t("kds.title")}</h1>
           <p className="text-white/50 text-sm">{t("kds.subtitle")}</p>
@@ -51,12 +53,33 @@ export function Cocina() {
         </div>
       </div>
 
-      <div className="kds-grid grid grid-cols-3 gap-4 p-4 flex-1 min-h-0 overflow-hidden">
+      <div className="hidden mob:flex gap-1 px-4 pt-3" role="tablist" aria-label={t("kds.title")}>
+        {COLUMNS.map((col) => {
+          const n = tickets.filter((x) => x.col === col.key).length;
+          return (
+            <button
+              key={col.key}
+              role="tab"
+              aria-selected={mobCol === col.key}
+              onClick={() => setMobCol(col.key)}
+              className={cn(
+                "flex-1 flex flex-col items-center rounded-md px-1 py-1.5 text-xs font-semibold leading-tight",
+                mobCol === col.key ? "bg-accent text-white" : "bg-white/5 text-white/70",
+              )}
+            >
+              <span className="whitespace-nowrap">{t(`kds.tab.${col.key}`)}</span>
+              <span className="text-[11px] font-mono opacity-70">{n}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="kds-grid grid grid-cols-3 mob:grid-cols-1 gap-4 p-4 flex-1 min-h-0 overflow-hidden">
         {COLUMNS.map((col) => {
           const colTickets = tickets.filter((t) => t.col === col.key);
           return (
-            <div key={col.key} className="flex flex-col min-h-0">
-              <div className="flex items-center justify-between mb-2 px-1">
+            <div key={col.key} className={cn("flex flex-col min-h-0", mobCol !== col.key && "mob:hidden")}>
+              <div className="flex items-center justify-between mb-2 px-1 mob:hidden">
                 <h2 className="font-semibold text-white/80">{t(col.labelKey)}</h2>
                 <span className="text-xs text-white/40">{colTickets.length}</span>
               </div>

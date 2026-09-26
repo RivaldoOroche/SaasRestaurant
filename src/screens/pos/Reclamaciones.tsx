@@ -16,7 +16,7 @@ export function Reclamaciones() {
   const publicUrl = slug ? `${window.location.origin}/libro/${slug}` : null;
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader
         title="Libro de Reclamaciones"
         subtitle="Hojas de reclamación de tus clientes (Indecopi). Responde dentro de 15 días hábiles."

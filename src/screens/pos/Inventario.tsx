@@ -25,7 +25,7 @@ export function Inventario() {
   const out = items.filter((i) => statusOf(i) === "agotado").length;
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader
         title="Inventario"
         subtitle="Control de stock por insumo · ajusta con ± (solo admin)"

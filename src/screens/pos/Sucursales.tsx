@@ -23,7 +23,7 @@ export function Sucursales() {
   const totalSales = Math.round(sales.reduce((s, b) => s + b.sales, 0) * 100) / 100;
 
   return (
-    <div className="p-6 max-w-4xl">
+    <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader title="Dueño" subtitle="Sucursales, personal y bitácora de actividad" />
 
       <Card className="mb-4">
@@ -126,10 +126,10 @@ function BranchesCard() {
                 className="flex-1 rounded-md bg-chip-bg border border-border px-2 py-1 text-sm" />
               <input defaultValue={b.city}
                 onBlur={(e) => e.target.value !== b.city && updateBranch.mutate({ id: b.id, patch: { city: e.target.value } })}
-                className="w-32 rounded-md bg-chip-bg border border-border px-2 py-1 text-sm" />
+                className="w-32 mob:w-24 rounded-md bg-chip-bg border border-border px-2 py-1 text-sm" />
               <button
                 onClick={() => { setErr(null); removeBranch.mutate(b.id, { onError: (e) => setErr((e as Error).message) }); }}
-                className="text-warning text-sm" title="Eliminar sucursal">✕</button>
+                className="text-warning text-sm px-1 shrink-0" title="Eliminar sucursal" aria-label={`Eliminar sucursal ${b.name}`}>✕</button>
             </div>
           ))}
         </div>
@@ -199,13 +199,14 @@ function StaffCard() {
         {err && <p className="text-warning text-xs">{err}</p>}
         <div className="divide-y divide-border-soft">
           {staff.map((m) => (
-            <div key={m.id} className={cn("flex items-center gap-3 py-2", !m.active && "opacity-50")}>
+            <div key={m.id} className={cn("flex flex-wrap items-center gap-x-3 gap-y-2 py-2", !m.active && "opacity-50")}>
               <span className="h-8 w-8 shrink-0 grid place-items-center rounded-full bg-accent/20 text-accent text-xs font-bold">
                 {m.initials}
               </span>
               <input defaultValue={m.name}
                 onBlur={(e) => e.target.value !== m.name && updateStaff.mutate({ id: m.id, patch: { name: e.target.value } })}
-                className="flex-1 rounded-md bg-chip-bg border border-border px-2 py-1 text-sm" />
+                aria-label="Nombre" className="flex-1 min-w-[8rem] rounded-md bg-chip-bg border border-border px-2 py-1 text-sm" />
+              <div className="flex items-center gap-3 ml-auto">
               <select value={m.role} onChange={(e) => updateStaff.mutate({ id: m.id, patch: { role: e.target.value as StaffRole } })}
                 className="rounded-md bg-chip-bg border border-border px-2 py-1 text-sm">
                 {(["mesero", "admin", "dueno"] as StaffRole[]).map((r) => (
@@ -221,6 +222,7 @@ function StaffCard() {
               >
                 {m.active ? "Desactivar" : "Activar"}
               </button>
+              </div>
             </div>
           ))}
         </div>

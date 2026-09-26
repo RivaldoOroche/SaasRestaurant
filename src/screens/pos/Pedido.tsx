@@ -38,7 +38,7 @@ export function Pedido() {
 
   if (!activeTableId || !activeTable) {
     return (
-      <div className="p-6 max-w-3xl">
+      <div className="p-6 mob:p-4 max-w-3xl">
         <h1 className="text-2xl font-bold mb-2">{t("pedido.title")}</h1>
         <p className="text-muted mb-6">{t("pedido.chooseTable")}</p>
         <Button onClick={() => navigate("/pos/mesas")}>{t("pedido.goTables")}</Button>

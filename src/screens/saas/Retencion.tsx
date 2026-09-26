@@ -87,7 +87,7 @@ export function Retencion() {
   const maxBar = Math.max(...r.waterfall.map((w) => w.value));
 
   return (
-    <div className="p-6 max-w-6xl">
+    <div className="p-6 mob:p-4 max-w-6xl">
       <ScreenHeader
         title="Retención & cobranza"
         subtitle="MRR neto, churn, pruebas, pagos fallidos y uso vs. límites"

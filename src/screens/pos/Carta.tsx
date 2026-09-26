@@ -21,7 +21,7 @@ export function Carta() {
   const pending = changes.filter((c) => c.status === "pendiente");
 
   return (
-    <div className="p-6 max-w-3xl">
+    <div className="p-6 mob:p-4 max-w-3xl">
       <ScreenHeader
         title="Carta"
         subtitle="Revisión de cambios propuestos · aprueba o rechaza"
@@ -29,8 +29,8 @@ export function Carta() {
       />
       <div className="space-y-2">
         {changes.map((c) => (
-          <Card key={c.id} className="p-4 flex items-center gap-4">
-            <div className="flex-1">
+          <Card key={c.id} className="p-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+            <div className="flex-1 min-w-[12rem]">
               <div className="flex items-center gap-2">
                 <p className="font-semibold">{c.itemName}</p>
                 <Badge tone="accent">{KIND_LABEL[c.kind] ?? c.kind}</Badge>
@@ -38,7 +38,7 @@ export function Carta() {
               <p className="text-muted text-sm mt-0.5">{c.detail}</p>
             </div>
             {c.status === "pendiente" ? (
-              <div className="flex gap-2">
+              <div className="flex gap-2 ml-auto">
                 <Button
                   size="sm"
                   variant="secondary"
