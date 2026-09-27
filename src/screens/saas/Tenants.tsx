@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { formatMoney } from "@/lib/money";
-import { planInfo } from "@/lib/plans";
+import { branchLimitLabel, planInfo } from "@/lib/plans";
 import { homePathForRole } from "@/lib/roles";
 import { cn } from "@/lib/cn";
 import { tokenizeCard } from "@/lib/cardToken";
@@ -439,7 +439,7 @@ function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void 
                       {formatMoney(planInfo(p).price)}/mes
                     </span>
                     <span className="block text-[10px] opacity-70">
-                      {planInfo(p).maxBranches === null ? "sucursales ilimitadas" : `hasta ${planInfo(p).maxBranches} sucursales`}
+                      {branchLimitLabel(planInfo(p))}
                     </span>
                   </button>
                 ))}

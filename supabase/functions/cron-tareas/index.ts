@@ -38,11 +38,10 @@ function period(): string {
 
 async function runDunning(admin: Admin): Promise<number> {
   const p = period();
-  const { data: plans } = await admin.from("subscription_plans").select("tier, price");
-  const price = new Map((plans ?? []).map((r: { tier: string; price: number }) => [r.tier, Number(r.price)]));
+  // plan_total = precio del plan + locales adicionales (Enterprise), IGV incluido.
   const { data: tenants } = await admin
-    .from("tenants")
-    .select("id, name, plan, status")
+    .from("v_tenants")
+    .select("id, name, plan, status, plan_total")
     .in("status", ["Activo", "Suspendido"]);
   let proposed = 0;
   for (const t of tenants ?? []) {
@@ -54,7 +53,7 @@ async function runDunning(admin: Admin): Promise<number> {
       .in("status", ["pendiente", "aprobada", "cobrada"])
       .maybeSingle();
     if (open) continue;
-    const total = price.get(t.plan) ?? 0;
+    const total = Number(t.plan_total ?? 0);
     const base = Math.round((total / 1.18) * 100) / 100;
     const { data: bs } = await admin
       .from("business_settings")

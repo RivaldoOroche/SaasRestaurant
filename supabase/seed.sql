@@ -18,13 +18,15 @@
 -- 1) Planes de suscripción
 -- ---------------------------------------------------------------------------
 -- max_branches = sucursales además de la sede principal (null = sin límite).
-insert into subscription_plans (tier, price, features, max_branches, annual_price) values
-  ('Básico', 149, 'Todas las funciones: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT', 2, 1490),
-  ('Pro', 349, 'Todo lo del Básico + reportes consolidados de todas tus sucursales', 10, 3490),
-  ('Enterprise', 899, 'Todo lo del Pro para cadenas, sin límite de sucursales', null, 8990)
+-- Enterprise: 25 locales incluidos (principal + 24) y S/ 29 por local adicional.
+insert into subscription_plans (tier, price, features, max_branches, annual_price, included_branches, extra_branch_price) values
+  ('Básico', 149, 'Todas las funciones: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT', 2, 1490, null, null),
+  ('Pro', 349, 'Todo lo del Básico + reportes consolidados de todas tus sucursales', 10, 3490, null, null),
+  ('Enterprise', 899, 'Todo lo del Pro para cadenas: 25 locales incluidos y S/ 29 por local adicional', null, 8990, 24, 29)
 on conflict (tier) do update set
   price = excluded.price, features = excluded.features, max_branches = excluded.max_branches,
-  annual_price = excluded.annual_price;
+  annual_price = excluded.annual_price, included_branches = excluded.included_branches,
+  extra_branch_price = excluded.extra_branch_price;
 
 -- ---------------------------------------------------------------------------
 -- 2) Datos del emisor del SaaS (tu empresa)

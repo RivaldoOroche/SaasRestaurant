@@ -70,6 +70,7 @@ section{padding:56px 0}
 .plan.featured{border:2px solid var(--accent);box-shadow:var(--shadow);position:relative}
 .plan.featured .tag{position:absolute;top:-12px;left:26px;background:var(--accent);color:#fff;font-size:.72rem;font-weight:700;padding:4px 12px;border-radius:20px}
 .price{font-size:2.2rem;font-weight:800}.price small{font-size:.9rem;color:var(--muted);font-weight:600}
+.annual{color:var(--success);font-weight:700;font-size:.9rem;margin:2px 0 0}
 .plan ul{list-style:none;padding:0;margin:16px 0 22px;flex:1}
 .plan li{padding:6px 0 6px 26px;position:relative;color:var(--muted);font-size:.95rem}
 .plan li::before{content:"✓";position:absolute;left:0;color:var(--success);font-weight:800}

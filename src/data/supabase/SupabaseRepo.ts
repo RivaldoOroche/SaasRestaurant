@@ -51,6 +51,7 @@ import { stubSunatGateway, type SunatGateway, type SunatResult } from "../sunat/
 import { makeFunctionGateway } from "../sunat/functionGateway";
 import { decideEmission } from "../sunat/outbox";
 import { assertPinFree, pinVerifier } from "@/lib/pin";
+import { planInfo } from "@/lib/plans";
 import { sameName, slugKey, validateMenuItem } from "@/lib/menu";
 import { applyBranchOverrides } from "../model";
 
@@ -305,8 +306,20 @@ export class SupabaseRepo implements BackendRepo {
   async getBranchQuota(): Promise<BranchQuota> {
     const { data, error } = await this.sb.rpc("branch_quota", { p_tenant: this.tenantId });
     if (error) fail(error);
-    const q = data as { plan: string; used: number; max: number | null; remaining: number | null };
-    return { plan: q.plan, used: q.used, max: q.max, remaining: q.remaining };
+    const q = data as {
+      plan: string; used: number; max: number | null; remaining: number | null;
+      included?: number | null; extra_price?: number | string | null; extra?: number; monthly_total?: number | string | null;
+    };
+    return {
+      plan: q.plan,
+      used: q.used,
+      max: q.max,
+      remaining: q.remaining,
+      included: q.included ?? null,
+      extraPrice: q.extra_price != null ? Number(q.extra_price) : null,
+      extra: q.extra ?? 0,
+      monthlyTotal: Number(q.monthly_total ?? planInfo(q.plan).price),
+    };
   }
 
   // ---- Personal ----

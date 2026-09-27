@@ -14,12 +14,13 @@ import type { BusinessSettings, CardProvider, BillingProvider, SunatMode } from 
 
 const CURRENCIES: Currency[] = ["PEN", "USD", "EUR"];
 const CARD_PROVIDERS: CardProvider[] = ["ninguno", "culqi", "izipay", "niubiz"];
-const BILLING_PROVIDERS: { key: BillingProvider; label: string }[] = [
-  { key: "ninguno", label: "Ninguno" },
-  { key: "sunat_directo", label: "SUNAT directo" },
-  { key: "nubefact", label: "Nubefact" },
-  { key: "bizlinks", label: "Bizlinks" },
-  { key: "efact", label: "Efact" },
+// SUNAT directo primero: sin costo por comprobante. Los OSE los contrata y paga el restaurante.
+const BILLING_PROVIDERS: { key: BillingProvider; label: string; hint: string }[] = [
+  { key: "sunat_directo", label: "SUNAT directo", hint: "Recomendado · sin costo por comprobante" },
+  { key: "nubefact", label: "Nubefact (OSE)", hint: "Con tu contrato de Nubefact" },
+  { key: "bizlinks", label: "Bizlinks (OSE)", hint: "Con tu contrato de Bizlinks" },
+  { key: "efact", label: "Efact (OSE)", hint: "Con tu contrato de Efact" },
+  { key: "ninguno", label: "Aún no", hint: "Vende y emite después" },
 ];
 
 export function Ajustes() {
@@ -218,15 +219,21 @@ function FacturacionCard({ settings }: { settings: BusinessSettings }) {
               <button
                 key={p.key}
                 onClick={() => updateSettings.mutate({ billingProvider: p.key })}
+                aria-pressed={provider === p.key}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-sm border",
+                  "rounded-md px-3 py-1.5 text-sm border text-left",
                   provider === p.key ? "bg-accent/20 border-accent text-accent" : "bg-chip-bg border-border",
                 )}
               >
-                {p.label}
+                <span className="block font-medium">{p.label}</span>
+                <span className="block text-[11px] opacity-75">{p.hint}</span>
               </button>
             ))}
           </div>
+          <p className="text-xs text-muted mt-2">
+            Con SUNAT directo el sistema firma y envía tus comprobantes con tu certificado digital (el tributario de SUNAT es
+            gratuito) y no pagas nada por comprobante. Un OSE lo contratas y pagas directamente con ese proveedor.
+          </p>
         </Field>
 
         {provider !== "ninguno" && (

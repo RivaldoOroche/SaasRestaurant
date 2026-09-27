@@ -5,7 +5,7 @@ import { test, expect } from "@playwright/test";
 test("delivery: crear, aceptar, ver en cocina y seguir como cliente", async ({ page, context }) => {
   await page.addInitScript(() => {
     localStorage.setItem("wayra-tour-seen", JSON.stringify({ dueno: true }));
-    localStorage.setItem("wayra-legal-accepted", JSON.stringify({ terminos: "2026-09", privacidad: "2026-09", encargo: "2026-09" }));
+    localStorage.setItem("wayra-legal-accepted", JSON.stringify({ terminos: "2026-10", privacidad: "2026-09", encargo: "2026-09" }));
   });
   await page.goto("/login");
   for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "1", exact: true }).click();

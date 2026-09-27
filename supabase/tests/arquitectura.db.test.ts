@@ -160,6 +160,29 @@ describe("carta por sucursal", () => {
   });
 });
 
+describe("Enterprise: locales incluidos y adicionales", () => {
+  it("25 locales incluidos; cada sucursal activa adicional suma S/ 29 al MRR y a la cuota", async () => {
+    const root = await rootOf(MUELLE);
+    const existing = (await db.query<{ n: number }>(
+      `select count(*)::int n from branches where tenant_id = $1 and parent_id is not null and active`, [MUELLE])).rows[0].n;
+    for (let i = existing; i < 26; i++) {
+      await db.query(`insert into branches (tenant_id, parent_id, name) values ($1, $2, $3)`, [MUELLE, root, `Local ${i + 1}`]);
+    }
+    const t = await db.query<{ plan_total: string; mrr: string }>(`select plan_total, mrr from v_tenants where id = $1`, [MUELLE]);
+    expect(Number(t.rows[0].plan_total)).toBe(899 + 2 * 29);
+    const owner = await makeUser(db, "andres@muelle.pe", MUELLE, "dueno");
+    const q = await asUser(db, owner, (qq) => qq<{ q: { included: number; extra: number; extra_price: string; monthly_total: string } }>(
+      `select branch_quota($1) q`, [MUELLE]));
+    expect(q.rows[0].q.included).toBe(24);
+    expect(q.rows[0].q.extra).toBe(2);
+    expect(Number(q.rows[0].q.monthly_total)).toBe(957);
+    // Desactivar una sucursal baja el cobro.
+    await db.query(`update branches set active = false where tenant_id = $1 and name = 'Local 26'`, [MUELLE]);
+    const t2 = await db.query<{ plan_total: string }>(`select plan_total from v_tenants where id = $1`, [MUELLE]);
+    expect(Number(t2.rows[0].plan_total)).toBe(928);
+  });
+});
+
 describe("integridad y normalización", () => {
   it("una fila operativa no puede apuntar a la sucursal de otro restaurante", async () => {
     await expect(

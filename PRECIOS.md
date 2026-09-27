@@ -108,7 +108,22 @@ Clientes necesarios para cubrir costos:
 | Toteat corporativo | S/ 400+ y 0.3 % de las ventas | cadenas |
 | **Wayra** | **S/ 149 / 349 / 899** | todo incluido; Básico con 3 locales; anual = 2 meses gratis |
 
-## 7. Veredicto
+## 7. Aplicado (28/09/2026)
+
+- Precios S/ 149 / 349 / 899 se mantienen.
+- **Enterprise:** 25 locales incluidos + S/ 29 al mes por cada sucursal activa adicional. Migración
+  `0044` (`included_branches`, `extra_branch_price`, `app.plan_monthly_total`); el MRR (`v_tenants`),
+  el cobro mensual automático (`cron-tareas`) y la cuota (`branch_quota`) ya incluyen los adicionales.
+  La app avisa «+ S/ 29 al mes» antes de crear la sucursal y muestra el desglose en Plan.
+- **Precio anual visible:** S/ 124 / 291 / 749 al mes pagando anual (landing y pantalla Plan).
+- **SUNAT directo recomendado:** primero en Ajustes con «sin costo por comprobante»; los OSE figuran
+  como contrato propio del restaurante. Landing y FAQ dicen «sin costo por comprobante».
+- **Términos y Condiciones versión 2026-10:** incluyen el cobro por local adicional y que el OSE lo
+  paga el restaurante. Al entrar, cada cliente vuelve a aceptarlos. Antes de cobrar adicionales a
+  clientes Enterprise existentes, hay que avisarles por correo con 30 días de anticipación, como
+  dicen los propios términos.
+
+## 8. Veredicto
 
 1. **Mantener S/ 149 / 349 / 899.** Con sueldos y cargas reales, son los precios que
    permiten sostener un equipo con unos 140 clientes sin salir del rango del mercado.

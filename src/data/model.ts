@@ -92,6 +92,14 @@ export interface BranchQuota {
   /** null = sin límite */
   max: number | null;
   remaining: number | null;
+  /** Sucursales incluidas en el precio (null = todas las permitidas). */
+  included: number | null;
+  /** Precio mensual por sucursal adicional (IGV incluido). */
+  extraPrice: number | null;
+  /** Sucursales activas que hoy se cobran aparte. */
+  extra: number;
+  /** Total mensual del plan con adicionales (IGV incluido). */
+  monthlyTotal: number;
 }
 
 export type StaffRole = "dueno" | "admin" | "mesero";

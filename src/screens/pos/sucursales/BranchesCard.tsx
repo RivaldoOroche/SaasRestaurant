@@ -12,7 +12,8 @@ import { Modal } from "@/components/ui/Modal";
 import { buildTree, descendants, flatten, indentedName, type BranchNode } from "@/lib/branchTree";
 import { branchLimitLabel } from "@/lib/plans";
 import { cn } from "@/lib/cn";
-import type { Branch } from "@/data/model";
+import type { Branch, BranchQuota } from "@/data/model";
+import { formatMoney } from "@/lib/money";
 
 type Draft = { id?: string; name: string; city: string; address: string; phone: string; parentId: string | null };
 
@@ -53,7 +54,7 @@ export function BranchesCard() {
           </Button>
         </div>
 
-        {quota && <QuotaBar used={quota.used} max={quota.max} plan={quota.plan} />}
+        {quota && <QuotaBar quota={quota} />}
         {err && (
           <p role="alert" className="text-warning text-sm">
             {err}
@@ -83,6 +84,11 @@ export function BranchesCard() {
         <BranchForm
           draft={draft}
           branches={branches}
+          extraCost={
+            !draft.id && quota && quota.included !== null && quota.extraPrice !== null && quota.used >= quota.included
+              ? quota.extraPrice
+              : null
+          }
           onClose={() => setDraft(null)}
           onSaved={() => setDraft(null)}
         />
@@ -91,23 +97,36 @@ export function BranchesCard() {
   );
 }
 
-function QuotaBar({ used, max, plan }: { used: number; max: number | null; plan: string }) {
-  const pct = max ? Math.min(100, (used / Math.max(1, max)) * 100) : 0;
+function QuotaBar({ quota }: { quota: BranchQuota }) {
+  const { used, max, plan, included, extraPrice, extra, monthlyTotal } = quota;
+  const cap = included ?? max;
+  const pct = cap ? Math.min(100, (Math.min(used, cap) / Math.max(1, cap)) * 100) : 0;
   const full = max !== null && used >= max;
   return (
     <div className="rounded-md bg-chip-bg p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
         <span>
-          Plan <strong>{plan}</strong> · {branchLimitLabel(max)}
+          Plan <strong>{plan}</strong> ·{" "}
+          {branchLimitLabel({ maxBranches: max, includedBranches: included, extraBranchPrice: extraPrice })}
         </span>
         <span className={cn("font-mono", full && "text-warning font-semibold")}>
-          {max === null ? `${used} sucursales` : `${used} de ${max} sucursales`}
+          {included !== null
+            ? `${Math.min(used, included)} de ${included} sucursales incluidas`
+            : max === null
+              ? `${used} sucursales`
+              : `${used} de ${max} sucursales`}
         </span>
       </div>
-      {max !== null && (
-        <div className="h-1.5 rounded-full bg-border mt-2 overflow-hidden" role="progressbar" aria-valuenow={used} aria-valuemax={max} aria-label="Sucursales usadas">
+      {cap !== null && (
+        <div className="h-1.5 rounded-full bg-border mt-2 overflow-hidden" role="progressbar" aria-valuenow={used} aria-valuemax={cap} aria-label="Sucursales usadas">
           <div className={cn("h-full rounded-full", full ? "bg-warning" : "bg-accent")} style={{ width: `${pct}%` }} />
         </div>
+      )}
+      {extra > 0 && extraPrice !== null && (
+        <p className="text-xs mt-2">
+          + {extra} {extra === 1 ? "sucursal adicional" : "sucursales adicionales"} × {formatMoney(extraPrice)} ={" "}
+          <strong>{formatMoney(monthlyTotal)}/mes</strong> en total (IGV incluido).
+        </p>
       )}
       {full && (
         <p className="text-xs mt-2">
@@ -188,11 +207,14 @@ function BranchRow({
 function BranchForm({
   draft,
   branches,
+  extraCost,
   onClose,
   onSaved,
 }: {
   draft: Draft;
   branches: Branch[];
+  /** Si la nueva sucursal se cobra aparte: su precio mensual. */
+  extraCost: number | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -264,6 +286,12 @@ function BranchForm({
               Útil para agrupar por zona o marca; la mayoría de restaurantes cuelga todo de la principal.
             </span>
           </label>
+        )}
+        {extraCost !== null && (
+          <p className="rounded-md border border-warning/40 bg-warning/10 p-2.5 text-sm">
+            Ya usas todas las sucursales incluidas en tu plan. Esta se suma a tu mensualidad:{" "}
+            <strong>+ {formatMoney(extraCost)} al mes</strong> (IGV incluido), mientras esté activa.
+          </p>
         )}
         {err && (
           <p role="alert" className="text-warning text-sm">

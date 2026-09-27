@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
-import { PLANS, annualSavings, branchLimitLabel, planInfo } from "@/lib/plans";
+import { PLANS, annualMonthly, annualSavings, branchLimitLabel, planInfo } from "@/lib/plans";
 
 export function Suscripcion() {
   const { data: sub } = useSubscription();
@@ -14,10 +14,16 @@ export function Suscripcion() {
   const { data: quota } = useBranchQuota();
   const { data: staff = [] } = useStaff();
   const plan = sub?.plan ?? "Pro";
-  const price = sub?.price ?? planInfo(plan).price;
+  const basePrice = sub?.price ?? planInfo(plan).price;
+  // Total real del mes: plan + sucursales adicionales (Enterprise).
+  const price = quota?.monthlyTotal ?? basePrice;
   const usedBranches = quota?.used ?? 0;
   const usage = [
-    { metric: "Sucursales (además de la principal)", cur: usedBranches, cap: quota?.max ?? null },
+    {
+      metric: quota?.included != null ? "Sucursales incluidas (además de la principal)" : "Sucursales (además de la principal)",
+      cur: quota?.included != null ? Math.min(usedBranches, quota.included) : usedBranches,
+      cap: quota?.included ?? quota?.max ?? null,
+    },
     { metric: "Personal activo", cur: staff.filter((m) => m.active).length, cap: null },
   ];
 
@@ -34,10 +40,23 @@ export function Suscripcion() {
             </div>
             <p className="text-muted text-sm mt-0.5">Renueva el 01 de cada mes</p>
           </div>
-          <p className="text-2xl font-mono font-bold whitespace-nowrap">
-            {formatMoney(price)}
-            <span className="text-sm text-muted font-sans">/mes</span>
-          </p>
+          <div className="text-right">
+            <p className="text-2xl font-mono font-bold whitespace-nowrap">
+              {formatMoney(price)}
+              <span className="text-sm text-muted font-sans">/mes</span>
+            </p>
+            {quota && quota.extra > 0 && quota.extraPrice !== null && (
+              <p className="text-xs text-muted">
+                {formatMoney(basePrice)} + {quota.extra} {quota.extra === 1 ? "sucursal adicional" : "sucursales adicionales"} ×{" "}
+                {formatMoney(quota.extraPrice)}
+              </p>
+            )}
+          </div>
+        </CardBody>
+        <CardBody className="border-t border-border-soft pt-3 text-sm text-muted">
+          💡 Pagando el año completo pagas 10 meses y usas 12 (
+          <strong className="text-success">{formatMoney(annualMonthly(planInfo(plan)))} al mes</strong> en tu plan). Con Yape o
+          transferencia no hay recargos. Tus comprobantes electrónicos a SUNAT no tienen costo adicional.
         </CardBody>
       </Card>
 
@@ -94,9 +113,9 @@ export function Suscripcion() {
                   <span className="text-xs text-muted font-sans">/mes</span>
                 </p>
                 <p className="text-[11px] text-success">
-                  o {formatMoney(t.annualPrice)}/año · ahorras {formatMoney(annualSavings(t))}
+                  {formatMoney(annualMonthly(t))}/mes pagando anual · ahorras {formatMoney(annualSavings(t))} al año
                 </p>
-                <p className="text-xs mt-2 font-semibold">{branchLimitLabel(t.maxBranches)}</p>
+                <p className="text-xs mt-2 font-semibold">{branchLimitLabel(t)}</p>
                 <p className="text-muted text-xs mt-1">{t.features}</p>
                 <p className="text-muted text-xs mt-1 flex-1">{t.support}</p>
                 {current ? (
@@ -122,7 +141,7 @@ export function Suscripcion() {
         })}
       </div>
       <p className="text-muted text-xs">
-        Precios finales con IGV incluido. El cambio de plan lo confirma Wayra POS y se refleja en tu próxima
+        Precios finales con IGV incluido, sin costo por comprobante. El cambio de plan lo confirma Wayra POS y se refleja en tu próxima
         facturación. Sin permanencia: puedes cancelar cuando quieras.
       </p>
     </div>

@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import type { PlanInfo, PlanTier } from "@/data/platform/model";
+import { branchLimitLabel, planInfo } from "@/lib/plans";
 
 export function Planes() {
   const { data: plans = [] } = usePlans();
@@ -27,6 +28,7 @@ export function Planes() {
                 {formatMoney(p.price)}
                 <span className="text-sm text-muted font-sans">/mes</span>
               </p>
+              <p className="text-xs font-semibold mt-1">{branchLimitLabel(planInfo(p.tier))}</p>
               <p className="text-muted text-sm mt-2 min-h-[2.5rem]">{p.features}</p>
               <div className="border-t border-border-soft my-3" />
               <div className="flex justify-between text-sm">

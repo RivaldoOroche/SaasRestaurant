@@ -12,7 +12,7 @@ async function pin(page: Page, code: string) {
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("wayra-install-dismissed", "1");
-    localStorage.setItem("wayra-legal-accepted", JSON.stringify({ terminos: "2026-09", privacidad: "2026-09", encargo: "2026-09" }));
+    localStorage.setItem("wayra-legal-accepted", JSON.stringify({ terminos: "2026-10", privacidad: "2026-09", encargo: "2026-09" }));
   });
 });
 

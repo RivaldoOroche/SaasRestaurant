@@ -33,7 +33,7 @@ import type {
 import { deliveryTotals, isAggregator } from "@/lib/delivery";
 import { applyOp, OpError, type ReduceCtx } from "../pos/reduce";
 import type { OpResult, PosOp, PosSnapshot } from "../pos/ops";
-import { planInfo, quotaExceededMessage } from "@/lib/plans";
+import { extraBranches, monthlyTotal, planInfo, quotaExceededMessage } from "@/lib/plans";
 import { cashDifference, cashExpected } from "@/lib/cash";
 import { stubSunatGateway } from "../sunat/gateway";
 import type { Branch, BranchSales, CashSession, Category, MenuBranchOverride, MenuCatalog, MenuItemInput, ModifierExtra, ModifierPref, StaffMember, StaffRole, StaffPin } from "../model";
@@ -493,9 +493,18 @@ export class MockRepo implements BackendRepo {
     this.persist();
   }
   async getBranchQuota(): Promise<BranchQuota> {
-    const { tier, maxBranches } = planInfo(this.state.plan);
+    const p = planInfo(this.state.plan);
     const used = this.activeChildren();
-    return { plan: tier, used, max: maxBranches, remaining: maxBranches === null ? null : Math.max(0, maxBranches - used) };
+    return {
+      plan: p.tier,
+      used,
+      max: p.maxBranches,
+      remaining: p.maxBranches === null ? null : Math.max(0, p.maxBranches - used),
+      included: p.includedBranches,
+      extraPrice: p.extraBranchPrice,
+      extra: extraBranches(p, used),
+      monthlyTotal: monthlyTotal(p, used),
+    };
   }
 
   // ---- Personal ----

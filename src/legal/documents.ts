@@ -35,12 +35,13 @@ export interface LegalDoc {
   sections: LegalSection[];
 }
 
-const UPDATED = "2026-09-27";
+const UPDATED = "2026-09-28";
 
 const TERMINOS: LegalDoc = {
   id: "terminos",
   title: "Términos y Condiciones del Servicio",
-  version: "2026-09",
+  // 2026-10: Enterprise con 25 locales incluidos y cobro por local adicional; SUNAT sin costo por comprobante.
+  version: "2026-10",
   updated: UPDATED,
   acceptance: true,
   summary:
@@ -65,8 +66,9 @@ const TERMINOS: LegalDoc = {
     {
       h: "3. Planes, precios y pago",
       p: [
-        "Los precios publicados son precios finales en soles e incluyen IGV. El plan Básico permite la sede principal y hasta 2 sucursales; el Pro, hasta 10 sucursales; el Enterprise, sucursales ilimitadas.",
+        "Los precios publicados son precios finales en soles e incluyen IGV. El plan Básico permite la sede principal y hasta 2 sucursales; el Pro, hasta 10 sucursales; el Enterprise incluye 25 locales (la sede principal y 24 sucursales) y cada sucursal activa adicional se cobra a S/ 29 al mes, IGV incluido. El sistema avisa ese costo antes de crear la sucursal, y desactivarla deja de cobrarla desde el siguiente periodo.",
         "El pago es mensual o anual, por adelantado. El pago anual equivale a 10 meses. Wayra emite el comprobante electrónico correspondiente por cada pago.",
+        "La emisión de comprobantes directamente a SUNAT no tiene costo adicional por comprobante. Si el Cliente prefiere emitir mediante un OSE o PSE, lo contrata y paga directamente a ese proveedor.",
         "Wayra puede cambiar sus precios avisando al Cliente por correo con al menos 30 días calendario de anticipación. El nuevo precio se aplica desde el siguiente periodo; si el Cliente no está de acuerdo, puede cancelar antes sin penalidad. Los periodos ya pagados no cambian de precio.",
         "Si un pago no se realiza, Wayra avisará al Cliente y le dará un plazo mínimo de 7 días calendario para regularizarlo antes de suspender el servicio. Durante la suspensión los datos se conservan y el Cliente puede descargarlos.",
       ],
