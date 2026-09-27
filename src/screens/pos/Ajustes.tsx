@@ -16,10 +16,10 @@ const CURRENCIES: Currency[] = ["PEN", "USD", "EUR"];
 const CARD_PROVIDERS: CardProvider[] = ["ninguno", "culqi", "izipay", "niubiz"];
 // SUNAT directo primero: sin costo por comprobante. Los OSE los contrata y paga el restaurante.
 const BILLING_PROVIDERS: { key: BillingProvider; label: string; hint: string }[] = [
-  { key: "sunat_directo", label: "SUNAT directo", hint: "Recomendado · sin costo por comprobante" },
-  { key: "nubefact", label: "Nubefact (OSE)", hint: "Con tu contrato de Nubefact" },
-  { key: "bizlinks", label: "Bizlinks (OSE)", hint: "Con tu contrato de Bizlinks" },
-  { key: "efact", label: "Efact (OSE)", hint: "Con tu contrato de Efact" },
+  { key: "sunat_directo", label: "SUNAT directo", hint: "Recomendado · S/ 0 por comprobante" },
+  { key: "nubefact", label: "Nubefact (OSE)", hint: "Tarifa según tu contrato con Nubefact" },
+  { key: "bizlinks", label: "Bizlinks (OSE)", hint: "Tarifa según tu contrato con Bizlinks" },
+  { key: "efact", label: "Efact (OSE)", hint: "Tarifa según tu contrato con Efact" },
   { key: "ninguno", label: "Aún no", hint: "Vende y emite después" },
 ];
 
@@ -231,8 +231,10 @@ function FacturacionCard({ settings }: { settings: BusinessSettings }) {
             ))}
           </div>
           <p className="text-xs text-muted mt-2">
-            Con SUNAT directo el sistema firma y envía tus comprobantes con tu certificado digital (el tributario de SUNAT es
-            gratuito) y no pagas nada por comprobante. Un OSE lo contratas y pagas directamente con ese proveedor.
+            Wayra no cobra por comprobante. Con <b>SUNAT directo</b> el sistema firma y envía tus comprobantes con tu certificado
+            digital; SUNAT da gratis el Certificado Digital Tributario a negocios con ventas de hasta 300 UIT al año. Con un{" "}
+            <b>OSE</b> pagas solo la tarifa de tu contrato con ese proveedor; es obligatorio si SUNAT te designó principal
+            contribuyente con ingresos de 300 UIT o más.
           </p>
         </Field>
 

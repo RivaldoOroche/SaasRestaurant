@@ -145,8 +145,14 @@ constitución), que en el modelo está repartida mes a mes.
 1. SUNAT directo por defecto; el OSE siempre a cargo del restaurante.
 2. Empujar el pago anual, Yape o transferencia (se ahorra ~S/ 9 por cobro con tarjeta).
 3. Contratar por etapas y sumar un asistente de soporte cada ~250 locales.
-4. Mensaje comercial: «todo incluido para tu local por S/ 159, S/ 132.50 pagando anual, sin
-   costo por comprobante y funciona sin internet».
+4. Mensaje comercial: «todo incluido para tu local por S/ 159, S/ 132.50 pagando anual;
+   Wayra no cobra por comprobante y funciona sin internet».
+5. Cómo decirlo sin prometer de más: **Wayra no cobra por comprobante**. Directo a SUNAT
+   cuesta S/ 0 (con el certificado digital gratuito de SUNAT para ventas de hasta 300 UIT).
+   Con un OSE (Nubefact, Efact, Bizlinks), el restaurante paga solo la tarifa de su contrato
+   con el OSE; es obligatorio para principales contribuyentes con ingresos de 300 UIT o más.
+   Así aparece en la landing (sección «Facturación electrónica» y preguntas frecuentes),
+   en Ajustes, en Plan y en los Términos.
 
 ## Fuentes
 

@@ -71,6 +71,15 @@ section{padding:56px 0}
 .plan.featured .tag{position:absolute;top:-12px;left:26px;background:var(--accent);color:#fff;font-size:.72rem;font-weight:700;padding:4px 12px;border-radius:20px}
 .price{font-size:2.2rem;font-weight:800}.price small{font-size:.9rem;color:var(--muted);font-weight:600}
 .annual{color:var(--success);font-weight:700;font-size:.9rem;margin:2px 0 0}
+.billing{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;max-width:880px;margin:0 auto}
+.billing .card{position:relative;display:flex;flex-direction:column}
+.billing .card.featured{border-color:var(--accent);box-shadow:0 10px 30px rgba(145,132,217,.18)}
+.billing .price{font-size:1.6rem;margin:.2em 0 .4em}
+.billing ul{list-style:none;padding:0;margin:0}
+.billing li{padding:6px 0 6px 26px;position:relative;color:var(--muted);font-size:.95rem}
+.billing li::before{content:"✓";position:absolute;left:0;color:var(--success);font-weight:800}
+.billing .tag{position:absolute;top:-12px;left:22px;background:var(--accent);color:#fff;font-size:.72rem;font-weight:700;padding:4px 12px;border-radius:20px}
+.more{font-size:.85em;white-space:nowrap}
 .plan ul{list-style:none;padding:0;margin:16px 0 22px;flex:1}
 .plan li{padding:6px 0 6px 26px;position:relative;color:var(--muted);font-size:.95rem}
 .plan li::before{content:"✓";position:absolute;left:0;color:var(--success);font-weight:800}
@@ -129,6 +138,7 @@ footer a:hover{color:#fff}
 
 /* Responsive */
 @media (max-width:900px){
+  .billing{grid-template-columns:1fr}
   .hero .grid,.features,.plans,.contact,.foot-grid{grid-template-columns:1fr}
   .features,.plans{gap:16px}
   .nav-links{position:absolute;top:68px;left:0;right:0;background:#fff;border-bottom:1px solid var(--line);

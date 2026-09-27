@@ -33,7 +33,7 @@ export const PLANS: PlanInfo[] = [
     includedBranches: null,
     extraBranchPrice: null,
     support: "Soporte por WhatsApp los 7 días, en horario de restaurantes",
-    features: "Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT sin costo por comprobante",
+    features: "Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT (Wayra no cobra por comprobante)",
   },
   {
     tier: "Pro",

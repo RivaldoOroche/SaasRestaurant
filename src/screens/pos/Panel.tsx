@@ -104,7 +104,7 @@ export function Panel() {
     {
       key: "sunat",
       title: "Conecta la facturación electrónica",
-      hint: "SUNAT directo, sin costo por comprobante. Puedes vender antes y emitir luego.",
+      hint: "Directo a SUNAT (S/ 0 por comprobante) o con tu OSE. Puedes vender antes y emitir luego.",
       to: "/pos/ajustes",
       done: !!settings?.billingProvider && settings.billingProvider !== "ninguno",
     },

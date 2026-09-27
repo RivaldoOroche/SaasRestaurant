@@ -10,7 +10,7 @@
 -- =============================================================================
 insert into subscription_plans (tier, price, annual_price, max_branches, included_branches, extra_branch_price, features) values
   ('Básico', 159, 1590, 0, null, null,
-   'Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT sin costo por comprobante'),
+   'Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT (Wayra no cobra por comprobante)'),
   ('Pro', 299, 2990, 4, 1, 119,
    'Todo lo del Básico para 2 locales (hasta 5): reportes consolidados, traslados de insumos y personal por local'),
   ('Enterprise', 899, 8990, null, 5, 99,

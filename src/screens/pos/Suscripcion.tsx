@@ -60,7 +60,7 @@ export function Suscripcion() {
         <CardBody className="border-t border-border-soft pt-3 text-sm text-muted">
           💡 Pagando el año completo pagas 10 meses y usas 12 (
           <strong className="text-success">{formatMoney(annualMonthly(planInfo(plan)))} al mes</strong> en tu plan). Con Yape o
-          transferencia no hay recargos. Tus comprobantes electrónicos a SUNAT no tienen costo adicional.
+          transferencia no hay recargos. Wayra no cobra por comprobante: directo a SUNAT cuesta S/ 0 y, si usas un OSE, pagas solo su tarifa.
         </CardBody>
       </Card>
 
@@ -146,7 +146,7 @@ export function Suscripcion() {
         })}
       </div>
       <p className="text-muted text-xs">
-        Precios finales con IGV incluido, sin costo por comprobante. El cambio de plan lo confirma Wayra POS y se refleja en tu próxima
+        Precios finales con IGV incluido. Wayra no cobra por comprobante. El cambio de plan lo confirma Wayra POS y se refleja en tu próxima
         facturación. Sin permanencia: puedes cancelar cuando quieras.
       </p>
     </div>

@@ -3669,7 +3669,7 @@ grant execute on function public.branch_quota(uuid) to authenticated;
 -- =============================================================================
 insert into subscription_plans (tier, price, annual_price, max_branches, included_branches, extra_branch_price, features) values
   ('Básico', 159, 1590, 0, null, null,
-   'Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT sin costo por comprobante'),
+   'Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT (Wayra no cobra por comprobante)'),
   ('Pro', 299, 2990, 4, 1, 119,
    'Todo lo del Básico para 2 locales (hasta 5): reportes consolidados, traslados de insumos y personal por local'),
   ('Enterprise', 899, 8990, null, 5, 99,
@@ -3760,7 +3760,7 @@ end $$;
 -- Casi todos los restaurantes tienen un local: Básico = 1 local; Pro = 2 incluidos
 -- (+ S/ 119 c/u, hasta 5); Enterprise = 6 incluidos (+ S/ 99 c/u, sin tope).
 insert into subscription_plans (tier, price, features, max_branches, annual_price, included_branches, extra_branch_price) values
-  ('Básico', 159, 'Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT sin costo por comprobante', 0, 1590, null, null),
+  ('Básico', 159, 'Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT (Wayra no cobra por comprobante)', 0, 1590, null, null),
   ('Pro', 299, 'Todo lo del Básico para 2 locales (hasta 5): reportes consolidados, traslados de insumos y personal por local', 4, 2990, 1, 119),
   ('Enterprise', 899, 'Para cadenas: 6 locales incluidos, S/ 99 por local adicional y asesor dedicado', null, 8990, 5, 99)
 on conflict (tier) do update set

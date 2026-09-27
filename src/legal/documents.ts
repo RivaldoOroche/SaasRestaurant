@@ -40,7 +40,7 @@ const UPDATED = "2026-09-28";
 const TERMINOS: LegalDoc = {
   id: "terminos",
   title: "Términos y Condiciones del Servicio",
-  // 2026-10: planes por local (Básico 1 local; Pro y Enterprise con locales incluidos y cobro por local adicional); SUNAT sin costo por comprobante.
+  // 2026-10: planes por local (Básico 1 local; Pro y Enterprise con locales incluidos y cobro por local adicional); Wayra no cobra por comprobante; el OSE, si se usa, lo paga el restaurante.
   version: "2026-10",
   updated: UPDATED,
   acceptance: true,
@@ -68,7 +68,7 @@ const TERMINOS: LegalDoc = {
       p: [
         "Los precios publicados son precios finales en soles e incluyen IGV. El plan Básico es para un local. El Pro incluye 2 locales (la sede principal y 1 sucursal) y permite hasta 5; cada local adicional se cobra a S/ 119 al mes. El Enterprise incluye 6 locales, sin tope, y cada local adicional se cobra a S/ 99 al mes. El sistema avisa ese costo antes de crear la sucursal, y desactivarla deja de cobrarla desde el siguiente periodo.",
         "El pago es mensual o anual, por adelantado. El pago anual equivale a 10 meses. Wayra emite el comprobante electrónico correspondiente por cada pago.",
-        "La emisión de comprobantes directamente a SUNAT no tiene costo adicional por comprobante. Si el Cliente prefiere emitir mediante un OSE o PSE, lo contrata y paga directamente a ese proveedor.",
+        "Wayra no cobra por comprobante emitido en ningún plan. La emisión directa a SUNAT no tiene costo por comprobante. Si el Cliente emite mediante un OSE o PSE (por elección o porque SUNAT se lo exige), lo contrata y paga directamente a ese proveedor según su tarifa; Wayra no agrega cargos.",
         "Wayra puede cambiar sus precios avisando al Cliente por correo con al menos 30 días calendario de anticipación. El nuevo precio se aplica desde el siguiente periodo; si el Cliente no está de acuerdo, puede cancelar antes sin penalidad. Los periodos ya pagados no cambian de precio.",
         "Si un pago no se realiza, Wayra avisará al Cliente y le dará un plazo mínimo de 7 días calendario para regularizarlo antes de suspender el servicio. Durante la suspensión los datos se conservan y el Cliente puede descargarlos.",
       ],

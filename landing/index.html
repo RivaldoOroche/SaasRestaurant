@@ -41,9 +41,10 @@
   </script>
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
-    {"@type":"Question","name":"¿Wayra POS emite comprobantes válidos ante SUNAT?","acceptedAnswer":{"@type":"Answer","text":"Sí. Emite boletas, facturas y notas de crédito electrónicas directo a SUNAT, sin costo por comprobante. Si prefieres un OSE (Nubefact, Efact, Bizlinks), lo contratas con ellos."}},
+    {"@type":"Question","name":"¿Wayra POS emite comprobantes válidos ante SUNAT?","acceptedAnswer":{"@type":"Answer","text":"Sí. Emite boletas, facturas y notas de crédito electrónicas directo a SUNAT o mediante tu OSE (Nubefact, Efact, Bizlinks). Wayra no cobra por comprobante: directo a SUNAT cuesta S/ 0 y, si usas un OSE, pagas solo la tarifa de tu OSE."}},
+    {"@type":"Question","name":"¿Cobran por cada comprobante?","acceptedAnswer":{"@type":"Answer","text":"Wayra no cobra por comprobante en ningún plan. Emitiendo directo a SUNAT el costo es S/ 0. Si usas un OSE, este cobra su propia tarifa según tu contrato con él."}},
     {"@type":"Question","name":"¿Acepta Yape, Plin y tarjeta?","acceptedAnswer":{"@type":"Answer","text":"Sí. Incluye QR de Yape/Plin y cobro con tarjeta mediante Culqi, Izipay o Niubiz."}},
-    {"@type":"Question","name":"¿Cuánto cuesta?","acceptedAnswer":{"@type":"Answer","text":"S/ 159 al mes con IGV incluido para un local (S/ 132.50 al mes pagando anual), con todas las funciones y los comprobantes SUNAT sin costo adicional. Si tienes más locales, el plan Pro incluye 2 por S/ 299. Hay prueba gratuita de 14 días."}}
+    {"@type":"Question","name":"¿Cuánto cuesta?","acceptedAnswer":{"@type":"Answer","text":"S/ 159 al mes con IGV incluido para un local (S/ 132.50 al mes pagando anual), con todas las funciones. Wayra no cobra por comprobante. Si tienes más locales, el plan Pro incluye 2 por S/ 299. Hay prueba gratuita de 14 días."}}
   ]}
   </script>
   <script src="/consent.js" defer></script>
@@ -102,7 +103,7 @@
           <p>Desde la comanda hasta el cierre de caja y la consola de tu cadena.</p>
         </div>
         <div class="features">
-          <article class="card"><div class="ic" aria-hidden="true">🧾</div><h3>Facturación SUNAT</h3><p>Boletas, facturas y notas de crédito electrónicas directo a SUNAT, sin costo por comprobante. Cola offline con reintentos.</p></article>
+          <article class="card"><div class="ic" aria-hidden="true">🧾</div><h3>Facturación SUNAT</h3><p>Boletas, facturas y notas de crédito electrónicas, directo a SUNAT o con tu OSE. Wayra no cobra por comprobante. Cola offline con reintentos.</p></article>
           <article class="card"><div class="ic" aria-hidden="true">👨‍🍳</div><h3>Cocina en vivo (KDS)</h3><p>Los pedidos llegan a cocina al instante, con temporizadores de tiempo de preparación.</p></article>
           <article class="card"><div class="ic" aria-hidden="true">💳</div><h3>Pagos Yape/Plin/tarjeta</h3><p>Cobra con QR de Yape y Plin o con tarjeta (Culqi, Izipay, Niubiz). Propinas y división de cuenta.</p></article>
           <article class="card"><div class="ic" aria-hidden="true">📦</div><h3>Inventario y recetas</h3><p>Descuento automático de insumos, costos por plato (food cost) y alertas de stock.</p></article>
@@ -117,7 +118,7 @@
       <div class="container">
         <div class="section-head">
           <h2>Precios claros, sin sorpresas</h2>
-          <p>Todas las funciones en todos los planes. Pagas por tus locales, no por módulos ni por comprobante.</p>
+          <p>Todas las funciones en todos los planes. Pagas por tus locales, no por módulos. Wayra no cobra por comprobante.</p>
         </div>
         <div class="plans">
           <div class="plan featured">
@@ -125,7 +126,7 @@
             <h3>Básico</h3>
             <div class="price">S/ 159 <small>/ mes</small></div>
             <p class="annual">S/ 132.50/mes pagando anual</p>
-            <ul><li>1 local, todo incluido</li><li>POS, mesas, cocina, caja y delivery</li><li>Inventario, recetas y food cost</li><li>Boletas y facturas SUNAT sin costo por comprobante</li><li>Funciona sin internet</li><li>Soporte por WhatsApp los 7 días</li></ul>
+            <ul><li>1 local, todo incluido</li><li>POS, mesas, cocina, caja y delivery</li><li>Inventario, recetas y food cost</li><li>Boletas y facturas SUNAT: Wayra no cobra por comprobante <a href="#facturacion" class="more">¿cómo?</a></li><li>Funciona sin internet</li><li>Soporte por WhatsApp los 7 días</li></ul>
             <a class="btn btn-primary" href="#contacto">Probar 14 días gratis</a>
           </div>
           <div class="plan">
@@ -144,6 +145,38 @@
           </div>
         </div>
         <p class="igv">Precios finales en soles, IGV incluido. Pago anual: pagas 10 meses y usas 12. Paga con Yape, Plin, transferencia o tarjeta. Prueba gratuita de 14 días, sin tarjeta y sin permanencia.</p>
+      </div>
+    </section>
+
+    <!-- FACTURACIÓN ELECTRÓNICA: cuánto cuesta -->
+    <section id="facturacion">
+      <div class="container">
+        <div class="section-head">
+          <h2>Facturación electrónica: Wayra no cobra por comprobante</h2>
+          <p>Elige cómo enviar tus boletas, facturas y notas de crédito a SUNAT.</p>
+        </div>
+        <div class="billing">
+          <article class="card featured">
+            <span class="tag">Recomendado</span>
+            <h3>Directo a SUNAT</h3>
+            <div class="price">S/ 0 <small>por comprobante</small></div>
+            <ul>
+              <li>Wayra firma y envía tus comprobantes a SUNAT</li>
+              <li>Necesitas un certificado digital: SUNAT lo da <b>gratis</b> a negocios con ventas de hasta 300 UIT al año</li>
+              <li>Ideal para la mayoría de restaurantes</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Con tu OSE</h3>
+            <div class="price">Tarifa de tu OSE</div>
+            <ul>
+              <li>Nubefact, Efact o Bizlinks, con tu propio contrato</li>
+              <li>El OSE te cobra según su tarifa; Wayra no suma nada</li>
+              <li>Obligatorio solo si SUNAT te designó principal contribuyente con ingresos de 300 UIT o más</li>
+            </ul>
+          </article>
+        </div>
+        <p class="igv">Puedes empezar a vender antes de configurar la facturación y cambiar de opción cuando quieras.</p>
       </div>
     </section>
 
@@ -170,8 +203,9 @@
       <div class="container" style="max-width:800px">
         <div class="section-head"><h2>Preguntas frecuentes</h2></div>
         <div class="faq">
-          <details><summary>¿Los comprobantes son válidos ante SUNAT?</summary><p>Sí. Wayra POS emite boletas, facturas y notas de crédito electrónicas directo a SUNAT. Si prefieres un OSE (Nubefact, Efact, Bizlinks), también funciona; ese servicio lo contratas con ellos.</p></details>
-          <details><summary>¿Cobran por cada comprobante?</summary><p>No. Emitiendo directo a SUNAT no hay costo por comprobante: emites todos los que necesites dentro de tu plan.</p></details>
+          <details><summary>¿Los comprobantes son válidos ante SUNAT?</summary><p>Sí. Wayra POS emite boletas, facturas y notas de crédito electrónicas, directo a SUNAT o mediante tu OSE (Nubefact, Efact, Bizlinks).</p></details>
+          <details><summary>¿Cobran por cada comprobante?</summary><p>Wayra no cobra por comprobante en ningún plan. Si emites <b>directo a SUNAT</b>, el costo es S/ 0: solo necesitas tu certificado digital, que SUNAT da gratis a negocios con ventas de hasta 300 UIT al año. Si usas un <b>OSE</b> (por ejemplo Nubefact, Efact o Bizlinks), el OSE te cobra su propia tarifa según tu contrato con él; Wayra no suma nada.</p></details>
+          <details><summary>¿Cuándo me conviene un OSE?</summary><p>Si ya trabajas con uno, o si SUNAT te lo exige: los principales contribuyentes con ingresos de 300 UIT o más deben emitir mediante un OSE. La mayoría de restaurantes puede emitir directo a SUNAT. Wayra funciona igual con las dos opciones y puedes cambiar cuando quieras.</p></details>
           <details><summary>¿Acepta Yape, Plin y tarjeta?</summary><p>Sí. Incluye QR de Yape/Plin y cobro con tarjeta mediante Culqi, Izipay o Niubiz.</p></details>
           <details><summary>¿Necesito instalar algo?</summary><p>No. Es 100% en la nube; funciona desde el navegador en tablets y computadoras, y puede instalarse como app (PWA).</p></details>
           <details><summary>¿Puedo manejar varias sucursales?</summary><p>Sí. El plan Básico es para un local. Si abres otro, pasas a Pro: incluye 2 locales por S/ 299 y cada local adicional suma S/ 119 al mes, hasta 5. Para cadenas más grandes, Enterprise incluye 6 locales y suma S/ 99 por cada local adicional. Cada local tiene su personal, caja, cocina e inventario, y ves los reportes de todos juntos.</p></details>
