@@ -50,6 +50,7 @@ import { useTheme } from "@/store/theme";
 
 import type { ComponentType } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Personal } from "@/screens/pos/Personal";
 
 /** Screens implemented so far; the rest fall back to a gated placeholder. */
 const SCREENS: Record<string, ComponentType> = {
@@ -68,6 +69,7 @@ const SCREENS: Record<string, ComponentType> = {
   caja: Caja,
   panel: Panel,
   sucursales: Sucursales,
+  personal: Personal,
   suscripcion: Suscripcion,
   comprobantes: Sunat,
   reclamaciones: Reclamaciones,

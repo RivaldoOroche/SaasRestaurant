@@ -50,7 +50,7 @@ import type { OpResult, PosOp, PosSnapshot } from "../pos/ops";
 import { stubSunatGateway, type SunatGateway, type SunatResult } from "../sunat/gateway";
 import { makeFunctionGateway } from "../sunat/functionGateway";
 import { decideEmission } from "../sunat/outbox";
-import { pinVerifier } from "@/lib/pin";
+import { assertPinFree, pinVerifier } from "@/lib/pin";
 import { sameName, slugKey, validateMenuItem } from "@/lib/menu";
 import { applyBranchOverrides } from "../model";
 
@@ -326,6 +326,8 @@ export class SupabaseRepo implements BackendRepo {
     }));
   }
   async addStaff(input: { name: string; role: StaffRole; pin: string }): Promise<void> {
+    if (!input.name.trim()) throw new Error("Escribe el nombre.");
+    await assertPinFree(input.pin, await this.getStaffPins());
     const id = crypto.randomUUID();
     const { error } = await this.sb.from("staff_members").insert({
       id,
@@ -359,6 +361,7 @@ export class SupabaseRepo implements BackendRepo {
     }
   }
   async setStaffPin(id: string, pin: string): Promise<void> {
+    await assertPinFree(pin, await this.getStaffPins(), id);
     const { error } = await this.sb.from("staff_members").update({ pin_verifier: await pinVerifier(pin, id) }).eq("id", id);
     if (error) throw error;
   }

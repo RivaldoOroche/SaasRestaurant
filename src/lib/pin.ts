@@ -36,6 +36,16 @@ export async function matchPin<T extends PinCandidate>(pin: string, staff: T[]):
 
 export const isValidPin = (pin: string) => /^\d{4}$/.test(pin);
 
+/**
+ * Cada PIN identifica a UNA persona: si dos compartieran PIN, al ingresar
+ * entraría siempre la primera. Lanza un error legible si ya está en uso.
+ */
+export async function assertPinFree(pin: string, others: (PinCandidate & { name: string })[], exceptId?: string): Promise<void> {
+  if (!isValidPin(pin)) throw new Error("El PIN debe tener 4 dígitos.");
+  const taken = await matchPin(pin, others.filter((o) => o.id !== exceptId));
+  if (taken) throw new Error(`Ese PIN ya lo usa ${taken.name}. Elige otro.`);
+}
+
 // ---- Bloqueo por intentos fallidos (por equipo) ----
 const KEY = "wayra-pin-fails";
 const FREE_ATTEMPTS = 5;

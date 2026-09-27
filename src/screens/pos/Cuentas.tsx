@@ -4,12 +4,12 @@ import { useOpenOrders } from "@/data/hooks";
 import { usePos } from "@/store/pos";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card } from "@/components/ui/Card";
-import { formatMoney, DEFAULT_TAX_RATE, round2 } from "@/lib/money";
+import { formatMoney, round2 } from "@/lib/money";
 import type { Order } from "@/data/model";
 
 function orderTotal(o: Order): number {
   const sub = o.lines.reduce((s, l) => s + (l.unitPrice + l.extraPrice) * l.qty, 0);
-  return round2(sub * (1 + DEFAULT_TAX_RATE));
+  return round2(sub); // los precios de la carta ya incluyen IGV
 }
 
 function elapsed(iso: string): string {

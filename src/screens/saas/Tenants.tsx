@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { formatMoney } from "@/lib/money";
+import { planInfo } from "@/lib/plans";
 import { homePathForRole } from "@/lib/roles";
 import { cn } from "@/lib/cn";
 import { tokenizeCard } from "@/lib/cardToken";
@@ -402,31 +403,47 @@ function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void 
         </h2>
         {!done ? (
           <div className="space-y-3">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Nombre del restaurante"
-              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
-            />
-            <input
-              value={owner}
-              onChange={(e) => setOwner(e.target.value)}
-              placeholder="Dueño / responsable"
-              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
-            />
-            <div className="flex gap-2">
-              {(["Básico", "Pro", "Enterprise"] as PlanTier[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPlan(p)}
-                  className={cn(
-                    "flex-1 rounded-md px-2 py-2 text-sm border",
-                    plan === p ? "bg-accent/20 border-accent text-accent" : "bg-chip-bg border-border",
-                  )}
-                >
-                  {p}
-                </button>
-              ))}
+            <label className="block">
+              <span className="text-xs text-muted">Nombre del restaurante</span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ej. Cevichería El Muelle"
+                className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs text-muted">Dueño o responsable</span>
+              <input
+                value={owner}
+                onChange={(e) => setOwner(e.target.value)}
+                placeholder="Nombre y apellido"
+                className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+              />
+            </label>
+            <div>
+              <p className="text-xs text-muted mb-1">Plan</p>
+              <div className="flex gap-2">
+                {(["Básico", "Pro", "Enterprise"] as PlanTier[]).map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPlan(p)}
+                    aria-pressed={plan === p}
+                    className={cn(
+                      "flex-1 rounded-md px-2 py-2 text-sm border text-center",
+                      plan === p ? "bg-accent/20 border-accent text-accent" : "bg-chip-bg border-border",
+                    )}
+                  >
+                    <span className="block font-semibold">{p}</span>
+                    <span className="block text-[11px] opacity-80">
+                      {formatMoney(planInfo(p).price)}/mes
+                    </span>
+                    <span className="block text-[10px] opacity-70">
+                      {planInfo(p).maxBranches === null ? "sucursales ilimitadas" : `hasta ${planInfo(p).maxBranches} sucursales`}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>

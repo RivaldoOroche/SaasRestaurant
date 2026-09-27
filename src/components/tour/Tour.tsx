@@ -10,13 +10,35 @@ interface Step {
   body: string;
 }
 
-const TENANT_STEPS: Step[] = [
-  { icon: "👋", title: "Bienvenido a Wayra POS", body: "Este recorrido rápido te muestra lo esencial para vender hoy mismo. Puedes cerrarlo cuando quieras y volver a verlo desde el Centro de ayuda." },
-  { icon: "🧾", title: "Toma pedidos en segundos", body: "En Pedido eliges la mesa, agregas platos y modificadores, y envías a Cocina. La comanda aparece al instante en la pantalla del KDS." },
-  { icon: "🍽️", title: "Controla el salón", body: "En Mesas ves el estado de cada mesa en tiempo real (libre, ocupada, por cobrar) y en Reservas gestionas las reservas del día." },
-  { icon: "💳", title: "Cobra y factura a SUNAT", body: "Al cobrar eliges efectivo, tarjeta, Yape o Plin, aplicas descuentos y propinas, y emites boleta o factura electrónica. Si no hay internet, el comprobante se envía solo al reconectar." },
-  { icon: "📊", title: "Mide tu negocio", body: "Reportes, Inventario, Clientes y Caja te dan el pulso del restaurante. ¿Dudas? El Centro de ayuda está siempre a un clic." },
+const WELCOME: Step = {
+  icon: "👋",
+  title: "Bienvenido a Wayra POS",
+  body: "Cuatro pasos rápidos con lo esencial para vender hoy mismo. Puedes cerrarlo cuando quieras y volver a verlo desde Ayuda.",
+};
+const SERVICE_STEPS: Step[] = [
+  {
+    icon: "🍽️",
+    title: "Atiende una mesa",
+    body: "En Mesas toca una mesa libre y se abre su pedido. Agrega platos con ＋ (toca el plato para sus extras o «sin cebolla») y luego «Enviar a cocina»: la comanda llega al instante a Cocina.",
+  },
+  {
+    icon: "💳",
+    title: "Cobra y emite el comprobante",
+    body: "Toca «Cobrar»: efectivo, tarjeta, Yape o Plin, con propina, descuento o cuenta dividida. Al final emites boleta o factura para SUNAT.",
+  },
+  {
+    icon: "📶",
+    title: "Sin internet, sigue vendiendo",
+    body: "Si se va la red, todo se guarda en este equipo y se sincroniza solo al volver. El ícono 📶 te dice si hay algo pendiente.",
+  },
 ];
+const MANAGER_STEP: Step = {
+  icon: "🏠",
+  title: "Tu Inicio",
+  body: "En Inicio ves las ventas del día, la caja y los insumos por reponer, y una guía de primeros pasos para dejar listo tu restaurante: carta, mesas, personal y SUNAT.",
+};
+const TENANT_STEPS: Step[] = [WELCOME, MANAGER_STEP, ...SERVICE_STEPS];
+const MESERO_STEPS: Step[] = [WELCOME, ...SERVICE_STEPS];
 
 const SAAS_STEPS: Step[] = [
   { icon: "👋", title: "Bienvenido a la consola SaaS", body: "Desde aquí operas Wayra POS como negocio: tenants, ingresos y salud de la plataforma. Este recorrido es rápido y puedes reabrirlo desde el Centro de ayuda." },
@@ -32,7 +54,7 @@ export function Tour() {
   const [i, setI] = useState(0);
 
   const role = session?.role ?? "";
-  const steps = role === "saas" ? SAAS_STEPS : TENANT_STEPS;
+  const steps = role === "saas" ? SAAS_STEPS : role === "mesero" ? MESERO_STEPS : TENANT_STEPS;
 
   // Autoarranque en el primer ingreso de cada rol.
   useEffect(() => {

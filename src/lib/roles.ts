@@ -12,7 +12,7 @@ export interface RoleInfo {
 
 export const ROLE_LABELS: Record<Role, string> = {
   saas: "Dueño de la plataforma",
-  dueno: "Dueña",
+  dueno: "Dueño(a)",
   admin: "Gerente",
   mesero: "Mesero",
 };
@@ -26,7 +26,14 @@ export interface NavEntry {
   roles: Role[];
   /** Where the entry lives in the rail. */
   section: "top" | "bottom";
+  /** Grupo con título en el menú (Servicio, Caja y ventas, Gestión). */
+  group?: NavGroup;
+  /** Accesible por ruta pero sin botón propio (se llega desde otra pantalla). */
+  hidden?: boolean;
 }
+
+export type NavGroup = "servicio" | "ventas" | "gestion";
+export const NAV_GROUP_LABEL: Record<NavGroup, string> = { servicio: "Servicio", ventas: "Caja y ventas", gestion: "Gestión" };
 
 const TENANT_ROLES: Role[] = ["dueno", "admin", "mesero"];
 const MANAGER_UP: Role[] = ["dueno", "admin"];
@@ -34,25 +41,30 @@ const OWNER_ONLY: Role[] = ["dueno"];
 
 /** Tenant-facing POS navigation. */
 export const TENANT_NAV: NavEntry[] = [
-  { key: "pedido", label: "Pedido", path: "/pos/pedido", icon: "🧾", roles: TENANT_ROLES, section: "top" },
-  { key: "mesas", label: "Mesas", path: "/pos/mesas", icon: "🍽️", roles: TENANT_ROLES, section: "top" },
-  { key: "reservas", label: "Reservas", path: "/pos/reservas", icon: "📅", roles: TENANT_ROLES, section: "top" },
-  { key: "cuentas", label: "Cuentas", path: "/pos/cuentas", icon: "📑", roles: TENANT_ROLES, section: "top" },
-  { key: "cocina", label: "Cocina", path: "/pos/cocina", icon: "👨‍🍳", roles: TENANT_ROLES, section: "top" },
-  { key: "delivery", label: "Delivery", path: "/pos/delivery", icon: "🛵", roles: TENANT_ROLES, section: "top" },
-  { key: "online", label: "En línea", path: "/pos/online", icon: "📱", roles: TENANT_ROLES, section: "top" },
-  { key: "editor", label: "Carta", path: "/pos/editor", icon: "📖", roles: MANAGER_UP, section: "top" },
-  { key: "carta", label: "Aprobaciones", path: "/pos/carta", icon: "✅", roles: MANAGER_UP, section: "top" },
-  { key: "inventario", label: "Inventario", path: "/pos/inventario", icon: "📦", roles: MANAGER_UP, section: "top" },
-  { key: "clientes", label: "Clientes", path: "/pos/clientes", icon: "🧑‍🤝‍🧑", roles: TENANT_ROLES, section: "top" },
-  { key: "comprobantes", label: "SUNAT", path: "/pos/sunat", icon: "🧾", roles: MANAGER_UP, section: "top" },
-  { key: "reclamaciones", label: "Reclamos", path: "/pos/reclamaciones", icon: "📕", roles: MANAGER_UP, section: "top" },
-  { key: "caja", label: "Caja", path: "/pos/caja", icon: "💵", roles: MANAGER_UP, section: "top" },
-  { key: "reportes", label: "Reportes", path: "/pos/reportes", icon: "📊", roles: TENANT_ROLES, section: "top" },
-  { key: "sucursales", label: "Dueño", path: "/pos/sucursales", icon: "🏢", roles: OWNER_ONLY, section: "top" },
-  { key: "suscripcion", label: "Plan", path: "/pos/plan", icon: "💳", roles: OWNER_ONLY, section: "top" },
+  { key: "panel", label: "Inicio", path: "/pos/panel", icon: "🏠", roles: MANAGER_UP, section: "top" },
+  // Servicio: lo que se usa con el local abierto.
+  { key: "mesas", label: "Mesas", path: "/pos/mesas", icon: "🍽️", roles: TENANT_ROLES, section: "top", group: "servicio" },
+  { key: "pedido", label: "Pedido", path: "/pos/pedido", icon: "🧾", roles: TENANT_ROLES, section: "top", group: "servicio" },
+  { key: "cuentas", label: "Cuentas", path: "/pos/cuentas", icon: "📑", roles: TENANT_ROLES, section: "top", group: "servicio" },
+  { key: "cocina", label: "Cocina", path: "/pos/cocina", icon: "👨‍🍳", roles: TENANT_ROLES, section: "top", group: "servicio" },
+  { key: "delivery", label: "Delivery", path: "/pos/delivery", icon: "🛵", roles: TENANT_ROLES, section: "top", group: "servicio" },
+  { key: "online", label: "En línea", path: "/pos/online", icon: "📱", roles: TENANT_ROLES, section: "top", group: "servicio" },
+  { key: "reservas", label: "Reservas", path: "/pos/reservas", icon: "📅", roles: TENANT_ROLES, section: "top", group: "servicio" },
+  // Caja y ventas.
+  { key: "caja", label: "Caja", path: "/pos/caja", icon: "💵", roles: MANAGER_UP, section: "top", group: "ventas" },
+  { key: "comprobantes", label: "SUNAT", path: "/pos/sunat", icon: "🧾", roles: MANAGER_UP, section: "top", group: "ventas" },
+  { key: "clientes", label: "Clientes", path: "/pos/clientes", icon: "🧑‍🤝‍🧑", roles: TENANT_ROLES, section: "top", group: "ventas" },
+  { key: "reportes", label: "Reportes", path: "/pos/reportes", icon: "📊", roles: TENANT_ROLES, section: "top", group: "ventas" },
+  // Gestión del negocio.
+  { key: "editor", label: "Carta", path: "/pos/editor", icon: "📖", roles: MANAGER_UP, section: "top", group: "gestion" },
+  { key: "inventario", label: "Inventario", path: "/pos/inventario", icon: "📦", roles: MANAGER_UP, section: "top", group: "gestion" },
+  { key: "personal", label: "Personal", path: "/pos/personal", icon: "👥", roles: OWNER_ONLY, section: "top", group: "gestion" },
+  { key: "sucursales", label: "Sucursales", path: "/pos/sucursales", icon: "🏢", roles: OWNER_ONLY, section: "top", group: "gestion" },
+  { key: "reclamaciones", label: "Reclamos", path: "/pos/reclamaciones", icon: "📕", roles: MANAGER_UP, section: "top", group: "gestion" },
+  { key: "suscripcion", label: "Plan", path: "/pos/plan", icon: "💳", roles: OWNER_ONLY, section: "top", group: "gestion" },
+  // Se llega desde Carta e Inicio cuando hay cambios propuestos.
+  { key: "carta", label: "Aprobaciones", path: "/pos/carta", icon: "✅", roles: MANAGER_UP, section: "top", group: "gestion", hidden: true },
   { key: "permisos", label: "Permisos", path: "/pos/permisos", icon: "🔐", roles: OWNER_ONLY, section: "bottom" },
-  { key: "panel", label: "Panel", path: "/pos/panel", icon: "📌", roles: MANAGER_UP, section: "top" },
   { key: "ajustes", label: "Ajustes", path: "/pos/ajustes", icon: "⚙️", roles: MANAGER_UP, section: "bottom" },
   { key: "ayuda", label: "Ayuda", path: "/pos/ayuda", icon: "❓", roles: TENANT_ROLES, section: "bottom" },
 ];
@@ -81,7 +93,7 @@ export function isAdmin(role: Role): boolean {
 }
 
 export function homePathForRole(role: Role): string {
-  return navForRole(role)[0]?.path ?? "/login";
+  return navForRole(role).find((e) => !e.hidden)?.path ?? "/login";
 }
 
 export function canAccess(role: Role, path: string): boolean {

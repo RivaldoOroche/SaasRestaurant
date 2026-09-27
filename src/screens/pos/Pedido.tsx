@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   useCategories,
@@ -79,6 +79,7 @@ function PedidoActive({
   const { data: settings } = useSettings();
   const taxRate = useTaxRate() / 100;
   const { session } = useAuth();
+  const navigate = useNavigate();
   const actorName = session?.staff?.name ?? "POS";
 
   const [activeCat, setActiveCat] = useState<string | null>(null);
@@ -113,6 +114,19 @@ function PedidoActive({
     return o.id;
   }
 
+  // Aviso breve «＋ Causa limeña» para que se note que el plato entró al pedido.
+  const [added, setAdded] = useState<{ name: string; n: number } | null>(null);
+  useEffect(() => {
+    if (!added) return;
+    const t = window.setTimeout(() => setAdded(null), 1600);
+    return () => window.clearTimeout(t);
+  }, [added]);
+  const qtyByItem = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of order?.lines ?? []) if (l.itemId) m.set(l.itemId, (m.get(l.itemId) ?? 0) + l.qty);
+    return m;
+  }, [order]);
+
   async function quickAdd(item: MenuItem) {
     const orderId = await ensureOrder();
     const line: DraftLine = {
@@ -124,6 +138,7 @@ function PedidoActive({
       modifiers: "",
     };
     await actions.addLine.mutateAsync({ orderId, line });
+    setAdded({ name: item.name, n: Date.now() });
   }
 
   async function addWithMods(line: DraftLine) {
@@ -237,13 +252,26 @@ function PedidoActive({
             <MenuCard
               key={it.id}
               item={it}
+              inOrder={qtyByItem.get(it.id) ?? 0}
               onCard={() => it.available && setModItem(it)}
               onAdd={() => it.available && quickAdd(it)}
             />
           ))}
-          {shown.length === 0 && (
-            <p className="text-muted text-sm col-span-full py-8 text-center">{t("pedido.noResults")}</p>
-          )}
+          {shown.length === 0 &&
+            (items.length === 0 ? (
+              <div className="col-span-full py-10 text-center">
+                <p className="font-semibold">La carta está vacía</p>
+                {session?.role === "mesero" ? (
+                  <p className="text-muted text-sm mt-1">Pide al encargado que cargue los platos en «Carta».</p>
+                ) : (
+                  <button onClick={() => navigate("/pos/editor")} className="mt-3 rounded-md bg-accent-cta text-white px-4 py-2 text-sm font-semibold">
+                    Crear mi carta →
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="text-muted text-sm col-span-full py-8 text-center">{t("pedido.noResults")}</p>
+            ))}
         </div>
       </section>
 
@@ -251,7 +279,7 @@ function PedidoActive({
       <div className="hidden mob:flex items-center gap-3 border-t border-border bg-panel px-3 py-2">
         <div className="flex-1 min-w-0">
           <p className="text-xs text-muted">
-            {t("pedido.orderTable")} {tableLabel} · {itemCount} {t("pedido.items")}
+            {t("pedido.orderTable")} {tableLabel} · {itemCount} {itemCount === 1 ? t("pedido.item") : t("pedido.items")}
           </p>
           <p className="font-mono font-bold">{formatMoney(total)}</p>
         </div>
@@ -433,16 +461,27 @@ function PedidoActive({
           voiding && floor.voidLine.mutate({ lineId: voiding.id, reason, actor: actorName })
         }
       />
+      <div
+        role="status"
+        aria-live="polite"
+        className={cn(
+          "pointer-events-none fixed left-1/2 -translate-x-1/2 bottom-24 mob:bottom-36 z-40 rounded-full bg-success text-white px-4 py-2 text-sm font-semibold shadow-lg transition-opacity",
+          added ? "opacity-100" : "opacity-0",
+        )}
+      >
+        {added ? `＋ ${added.name}` : ""}
+      </div>
     </div>
   );
 }
 
-function MenuCard({ item, onCard, onAdd }: { item: MenuItem; onCard: () => void; onAdd: () => void }) {
+function MenuCard({ item, inOrder, onCard, onAdd }: { item: MenuItem; inOrder: number; onCard: () => void; onAdd: () => void }) {
   const t = useT();
   return (
     <div
       className={cn(
-        "rounded-lg border border-border bg-surface p-3 flex flex-col transition-colors",
+        "relative rounded-lg border bg-surface p-3 flex flex-col transition-colors",
+        inOrder > 0 ? "border-accent" : "border-border",
         item.available ? "hover:border-accent/50 cursor-pointer" : "opacity-50",
       )}
       onClick={onCard}
@@ -450,6 +489,11 @@ function MenuCard({ item, onCard, onAdd }: { item: MenuItem; onCard: () => void;
       <div className="flex items-start justify-between mb-1">
         <span className="text-2xl">{item.emoji}</span>
         <div className="flex gap-1">
+          {inOrder > 0 && (
+            <span className="rounded-full bg-accent text-white text-xs font-bold px-2 py-0.5" aria-label={`${inOrder} en el pedido`}>
+              ×{inOrder}
+            </span>
+          )}
           {item.badge && <Badge tone="accent">{item.badge}</Badge>}
           {!item.available && <Badge tone="warning">{t("pedido.soldOut")}</Badge>}
         </div>

@@ -29,7 +29,7 @@ function net(o: Order): number {
   return o.lines.reduce((s, l) => s + (l.unitPrice + l.extraPrice) * l.qty, 0);
 }
 function collected(o: Order): number {
-  return o.paidTotal ?? round2(net(o) * 1.18);
+  return o.paidTotal ?? round2(net(o)); // precios con IGV incluido
 }
 
 export function Reportes() {

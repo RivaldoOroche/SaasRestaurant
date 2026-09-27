@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { WayraMark } from "@/components/brand/Logo";
 import { supabase, isBackendConfigured } from "@/lib/supabase";
 import { ACCEPTANCE_DOCS } from "@/legal/documents";
+import { LEGAL_ENTITY } from "@/legal/entity";
 
 /** Página pública de alta de un tenant desde el link firmado. */
 export function Onboarding() {
@@ -65,8 +66,25 @@ export function Onboarding() {
 
   if (!token) {
     return (
-      <div className="min-h-screen grid place-items-center bg-bg text-muted p-6 text-center">
-        Enlace de activación inválido. Solicita uno nuevo a tu proveedor.
+      <div className="min-h-screen grid place-items-center bg-bg text-ink p-6">
+        <div className="max-w-sm text-center space-y-3">
+          <p className="text-4xl" aria-hidden="true">
+            🔗
+          </p>
+          <h1 className="text-xl font-bold">Este enlace de activación no es válido</h1>
+          <p className="text-sm text-muted">
+            Puede que esté incompleto, que ya se haya usado o que haya vencido. Pide uno nuevo a quien te dio de alta en Wayra POS.
+          </p>
+          <p className="text-sm text-muted">
+            ¿Ya activaste tu cuenta?{" "}
+            <Link to="/login" className="text-accent underline">
+              Inicia sesión
+            </Link>
+          </p>
+          <p className="text-xs text-muted">
+            Ayuda: <a href={`mailto:${LEGAL_ENTITY.emailSoporte}`} className="underline">{LEGAL_ENTITY.emailSoporte}</a>
+          </p>
+        </div>
       </div>
     );
   }

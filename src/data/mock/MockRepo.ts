@@ -39,6 +39,7 @@ import { stubSunatGateway } from "../sunat/gateway";
 import type { Branch, BranchSales, CashSession, Category, MenuBranchOverride, MenuCatalog, MenuItemInput, ModifierExtra, ModifierPref, StaffMember, StaffRole, StaffPin } from "../model";
 import { applyBranchOverrides } from "../model";
 import { sameName, slugKey, validateMenuItem } from "@/lib/menu";
+import { MOCK_USERS } from "@/auth/session";
 import { pinVerifier } from "@/lib/pin";
 import {
   CATEGORIES,
@@ -505,6 +506,8 @@ export class MockRepo implements BackendRepo {
     });
   }
   async addStaff(input: { name: string; role: StaffRole; pin: string }) {
+    if (!input.name.trim()) throw new Error("Escribe el nombre.");
+    this.assertMockPinFree(input.pin);
     this.state.staff.push({
       id: uid("st"),
       name: input.name,
@@ -538,9 +541,18 @@ export class MockRepo implements BackendRepo {
         })),
     );
   }
+  /** En el demo los PIN se guardan tal cual (incluidos los de acceso rápido 1111…). */
+  private assertMockPinFree(pin: string, exceptId?: string) {
+    if (!/^\d{4}$/.test(pin)) throw new Error("El PIN debe tener 4 dígitos.");
+    const taken = this.state.staff.find((x) => x.id !== exceptId && x.active && x.pin === pin);
+    const demo = MOCK_USERS.find((u) => u.pin === pin);
+    if (taken || demo) throw new Error(`Ese PIN ya lo usa ${taken?.name ?? demo?.name}. Elige otro.`);
+  }
+
   async setStaffPin(id: string, pin: string) {
     const s = this.state.staff.find((x) => x.id === id);
     if (!s) return;
+    this.assertMockPinFree(pin, id);
     s.pin = pin;
     this.pushLog("Dueño", `Cambió el PIN de ${s.name}`);
     this.persist();

@@ -94,7 +94,7 @@ test("móvil 360px: Pedido con mesa abierta, carta y ticket", async ({ page }) =
 
   // Agregar un plato con "+" y abrir el ticket a pantalla completa.
   await page.getByRole("button", { name: /^Agregar / }).first().click();
-  await expect(page.getByText(/1 ítems/)).toBeVisible();
+  await expect(page.getByText(/· 1 ítem$/)).toBeVisible();
   await page.getByRole("button", { name: /Ver ticket/ }).click();
   const ticket = page.getByRole("complementary", { name: "Ticket del pedido" });
   await expect(ticket.getByRole("button", { name: "Enviar a cocina" })).toBeInViewport();

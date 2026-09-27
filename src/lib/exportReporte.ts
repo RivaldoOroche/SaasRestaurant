@@ -1,4 +1,5 @@
 import type { Order, Comprobante, MenuItem, InventoryItem } from "@/data/model";
+import { formatRate, splitIncluded } from "./tax";
 
 export interface ReporteData {
   rangoLabel: string;
@@ -56,15 +57,16 @@ export async function exportReporteExcel(data: ReporteData): Promise<void> {
   resumen.getCell("A2").value = `Rango: ${data.rangoLabel}`;
   resumen.getCell("A3").value = `Generado: ${new Date().toLocaleString("es-PE")}`;
 
-  const ventas = round2(data.orders.reduce((s, o) => s + lineNet(o), 0));
-  const igvTot = round2(ventas * tax);
+  // Los precios de la carta incluyen IGV: se separa base e impuesto.
+  const vendido = round2(data.orders.reduce((s, o) => s + lineNet(o), 0));
+  const { base: ventas, tax: igvTot } = splitIncluded(vendido, tax * 100);
   const cobrado = round2(data.orders.reduce((s, o) => s + (o.paidTotal ?? 0), 0));
   const tickets = data.orders.length;
   const kpiStart = 5;
   const kpis: [string, number][] = [
     ["Op. gravada (ventas netas)", ventas],
-    [`IGV (${Math.round(tax * 100)}%)`, igvTot],
-    ["Total gravado", round2(ventas + igvTot)],
+    [`IGV (${formatRate(tax * 100)})`, igvTot],
+    ["Total vendido (IGV incluido)", vendido],
     ["Cobrado (incl. propina/desc.)", cobrado],
     ["Tickets", tickets],
     ["Ticket promedio", tickets ? round2(cobrado / tickets) : 0],
@@ -107,8 +109,8 @@ export async function exportReporteExcel(data: ReporteData): Promise<void> {
     byDay.set(d, cur);
   }
   for (const [fecha, v] of [...byDay.entries()].sort()) {
-    const igv = round2(v.sub * tax);
-    dias.addRow({ fecha, tickets: v.tickets, sub: v.sub, igv, total: round2(v.sub + igv) });
+    const { base, tax: igv } = splitIncluded(v.sub, tax * 100);
+    dias.addRow({ fecha, tickets: v.tickets, sub: base, igv, total: v.sub });
   }
   headerRow(dias, 1);
 
@@ -124,13 +126,13 @@ export async function exportReporteExcel(data: ReporteData): Promise<void> {
     { header: "Cobrado", key: "cob", width: 12, style: { numFmt: MONEY } },
   ];
   for (const o of data.orders) {
-    const sub = round2(lineNet(o));
-    const igv = round2(sub * tax);
+    const total = round2(lineNet(o));
+    const { base: sub, tax: igv } = splitIncluded(total, tax * 100);
     ped.addRow({
       f: new Date(o.openedAt).toLocaleString("es-PE"),
       mesa: o.tableLabel,
       met: o.paidMethod ?? "—",
-      sub, igv, total: round2(sub + igv), cob: o.paidTotal ?? 0,
+      sub, igv, total, cob: o.paidTotal ?? 0,
     });
   }
   headerRow(ped, 1);

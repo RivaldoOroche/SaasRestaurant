@@ -16,12 +16,21 @@ test("asignar sucursal a una persona limita lo que ve al entrar con PIN", async 
     localStorage.setItem("wayra-legal-accepted", JSON.stringify({ terminos: "2026-09", privacidad: "2026-09", encargo: "2026-09" }));
   });
   await pin(page, "1111");
-  await page.goto("/pos/sucursales");
-  const ana = page.locator("div").filter({ has: page.getByRole("textbox", { name: "Nombre" }) }).filter({ has: page.locator('input[value="Ana Ruiz"]') }).last();
-  await ana.getByRole("button", { name: /Todas/ }).click();
+  await page.goto("/pos/personal");
+  await page.getByRole("button", { name: "Sucursales de Ana Ruiz" }).click();
   await page.getByRole("dialog").getByLabel("San Isidro").check();
   await page.getByRole("dialog").getByRole("button", { name: "Guardar" }).click();
-  await expect(ana.getByRole("button", { name: /San Isidro/ })).toBeVisible();
+  await expect(page.getByText("🏬 San Isidro")).toBeVisible();
+
+  // Un PIN repetido se rechaza con un mensaje claro.
+  await page.getByRole("button", { name: "＋ Agregar persona" }).click();
+  await page.getByRole("dialog").getByPlaceholder("Ej. Rosa Quispe").fill("Rosa Quispe");
+  await page.getByRole("dialog").getByLabel("PIN de 4 dígitos").fill("3333");
+  await page.getByRole("dialog").getByRole("button", { name: "Agregar" }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("Ese PIN ya lo usa Ana Ruiz");
+  await page.getByRole("dialog").getByLabel("PIN de 4 dígitos").fill("5678");
+  await page.getByRole("dialog").getByRole("button", { name: "Agregar" }).click();
+  await expect(page.getByText("Rosa Quispe")).toBeVisible();
 
   // Cambiar de usuario → Ana.
   await page.getByRole("button", { name: "Cambiar de usuario" }).first().click();
