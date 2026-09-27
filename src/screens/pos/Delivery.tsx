@@ -23,6 +23,8 @@ import { ChannelPill, PAY_LABEL } from "./delivery/labels";
 import { NuevoDeliveryModal } from "./delivery/NuevoDeliveryModal";
 import { DispatchModal, CancelDeliveryModal } from "./delivery/DeliveryActionModals";
 import { DeliveryConfigModal } from "./delivery/DeliveryConfigModal";
+import { comandaBytes } from "@/lib/escpos";
+import { getPrinterConfig, printRaw } from "@/lib/printer";
 
 const COLUMNS: DeliveryStatus[] = ["recibido", "preparando", "listo", "en_camino"];
 
@@ -76,7 +78,20 @@ export function Delivery() {
   function run(v: { id: string; to: DeliveryStatus; driverId?: string | null; cancelReason?: string }, onDone?: () => void) {
     setError(null);
     setStatus.mutate(v, {
-      onSuccess: () => onDone?.(),
+      onSuccess: () => {
+        onDone?.();
+        // Al aceptar, la comanda sale en la impresora de este equipo si está activada.
+        const printer = getPrinterConfig();
+        const o = orders.find((x) => x.id === v.id);
+        if (v.to === "preparando" && o && printer.kind !== "none" && printer.autoComanda) {
+          void printRaw(
+            comandaBytes(
+              { label: `DELIVERY ${o.code}`, at: new Date(), lines: o.items.map((i) => ({ qty: i.qty, name: i.name })), note: o.notes || undefined },
+              printer.width,
+            ),
+          ).catch(() => undefined);
+        }
+      },
       onError: (e) => setError((e as Error).message),
     });
   }

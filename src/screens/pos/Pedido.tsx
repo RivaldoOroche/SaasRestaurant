@@ -20,6 +20,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { useConnection } from "@/store/connection";
 import { printThermal } from "@/lib/printThermal";
+import { comandaBytes } from "@/lib/escpos";
+import { getPrinterConfig, printRaw } from "@/lib/printer";
 import { splitIncluded, formatRate } from "@/lib/tax";
 import { useT } from "@/i18n";
 import { cn } from "@/lib/cn";
@@ -147,8 +149,22 @@ function PedidoActive({
       at: new Date(),
     };
     actions.sendToKitchen.mutate(order.id, {
-      // Sin internet la pantalla de cocina no la recibe aún: se ofrece imprimirla.
-      onSuccess: () => !online && setComanda(snapshot),
+      onSuccess: async () => {
+        const printer = getPrinterConfig();
+        // Impresora directa de este equipo: la comanda sale al instante, con o sin red.
+        if (printer.kind !== "none" && (printer.autoComanda || !online)) {
+          try {
+            await printRaw(
+              comandaBytes({ ...snapshot, waiter: actorName, pending: !online }, printer.width),
+            );
+            return;
+          } catch {
+            /* sin impresora disponible: se ofrece imprimir desde el navegador */
+          }
+        }
+        // Sin internet la pantalla de cocina no la recibe aún: se ofrece imprimirla.
+        if (!online) setComanda(snapshot);
+      },
     });
   }
   const itemCount = lines.reduce((s, l) => s + l.qty, 0);

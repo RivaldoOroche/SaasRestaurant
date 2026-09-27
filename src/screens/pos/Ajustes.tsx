@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { effectiveRate, formatRate, TAX_REGIME_LABEL, type TaxRegime } from "@/lib/tax";
 import { generateConfigPdf } from "@/lib/configPdf";
 import { ConfigChecklist } from "@/components/ConfigChecklist";
+import { PrinterCard } from "./ajustes/PrinterCard";
 import { useLang } from "@/i18n";
 import type { Currency } from "@/lib/money";
 import type { BusinessSettings, CardProvider, BillingProvider, SunatMode } from "@/data/model";
@@ -101,6 +102,8 @@ export function Ajustes() {
             </Field>
           </CardBody>
         </Card>
+
+        <PrinterCard />
 
         <NotificacionesCard />
 
