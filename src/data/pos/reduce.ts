@@ -340,6 +340,7 @@ export function applyOp(s: PosState, op: PosOp, ctx: ReduceCtx): Record<string, 
 
     // No cambian el estado operativo (inventario y comprobantes se consultan aparte).
     case "inventory.adjust":
+    case "inventory.transfer":
     case "cpe.emit":
       return {};
   }

@@ -3310,6 +3310,146 @@ create policy staff_branches_write on staff_branches for all using (
   with check ((select app.is_platform_admin()) or tenant_id = any ((select app.my_managed_tenant_ids())::uuid[]));
 
 -- ==================================================================
+-- Migracion 0040_carta.sql
+-- ==================================================================
+
+-- =============================================================================
+-- 0040 · Carta administrable y por sucursal
+--   · Platos archivables (no se borran si tienen ventas: el historial los usa).
+--   · Precio y disponibilidad por sucursal (menu_item_branch). Sin fila = el
+--     precio y la disponibilidad generales del plato.
+--   · La carta pública oculta lo archivado.
+-- =============================================================================
+alter table menu_items add column if not exists archived boolean not null default false;
+drop index if exists menu_items_category_idx; -- duplicado de menu_items_category_id_idx
+
+create table menu_item_branch (
+  tenant_id  uuid not null references tenants (id) on delete cascade,
+  branch_id  uuid not null,
+  item_id    uuid not null references menu_items (id) on delete cascade,
+  price      numeric(10,2) check (price is null or price >= 0), -- null = precio general
+  available  boolean,                                          -- null = disponibilidad general
+  updated_at timestamptz not null default now(),
+  primary key (branch_id, item_id),
+  foreign key (tenant_id, branch_id) references branches (tenant_id, id) on delete cascade
+);
+create index menu_item_branch_item_idx on menu_item_branch (item_id);
+create index menu_item_branch_tenant_idx on menu_item_branch (tenant_id);
+
+alter table menu_item_branch enable row level security;
+create policy mib_read on menu_item_branch for select using (
+  (select app.is_platform_admin()) or tenant_id = any ((select app.my_tenant_ids())::uuid[]));
+create policy mib_write on menu_item_branch for all using (
+  (select app.is_platform_admin()) or tenant_id = any ((select app.my_managed_tenant_ids())::uuid[]))
+  with check ((select app.is_platform_admin()) or tenant_id = any ((select app.my_managed_tenant_ids())::uuid[]));
+
+-- Categorías: clave única por restaurante (la app la genera desde el nombre).
+create unique index if not exists menu_categories_tenant_key on menu_categories (tenant_id, key);
+
+-- Carta pública (QR): sin platos archivados.
+create or replace function public.public_menu(p_slug text)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case when t.id is null then null else jsonb_build_object(
+    'tenant_name', t.name,
+    'currency', coalesce(bs.currency::text, 'PEN'),
+    'categories', coalesce((
+      select jsonb_agg(jsonb_build_object('id', c.id, 'key', c.key, 'name', c.name,
+        'icon', c.icon, 'subtitle', c.subtitle, 'sort', c.sort) order by c.sort)
+      from menu_categories c where c.tenant_id = t.id), '[]'::jsonb),
+    'items', coalesce((
+      select jsonb_agg(jsonb_build_object('id', i.id, 'category_id', i.category_id,
+        'name', i.name, 'description', i.description, 'price', i.price, 'emoji', i.emoji,
+        'badge', i.badge, 'is_veg', i.is_veg, 'is_spicy', i.is_spicy, 'is_gf', i.is_gf,
+        'is_meat', i.is_meat, 'available', i.available, 'sort', i.sort) order by i.sort)
+      from menu_items i where i.tenant_id = t.id and i.available and not i.archived), '[]'::jsonb)
+  ) end
+  from (select id, name from tenants where slug = p_slug) t
+  left join business_settings bs on bs.tenant_id = t.id;
+$$;
+
+-- ==================================================================
+-- Migracion 0041_inventario_traslados.sql
+-- ==================================================================
+
+-- =============================================================================
+-- 0041 · Inventario: compras, mermas y traslados entre sucursales
+--   · Cada movimiento puede llevar una nota y una referencia (ref_id) que une
+--     las dos patas de un traslado (salida en el origen, entrada en el destino).
+--   · Nueva operación POS `inventory.transfer` (funciona sin conexión: se
+--     encola en el equipo y se aplica una sola vez al sincronizar).
+-- =============================================================================
+alter table inventory_movements add column if not exists ref_id uuid;
+alter table inventory_movements add column if not exists note text not null default '';
+create index if not exists inventory_movements_ref_idx on inventory_movements (ref_id) where ref_id is not null;
+-- Un traslado mueve cada insumo una sola vez por sucursal (reintentos idempotentes).
+create unique index if not exists inventory_movements_transfer_once
+  on inventory_movements (ref_id, branch_id, item_id) where reason = 'traslado';
+
+alter function app.pos_exec(uuid, jsonb) rename to pos_exec_cash;
+
+create or replace function app.pos_exec(p_tenant uuid, op jsonb) returns jsonb
+language plpgsql security definer set search_path = public, app as $$
+declare
+  v_type   text := op ->> 'type';
+  v_at     timestamptz := least(coalesce((op ->> 'at')::timestamptz, now()), now());
+  v_actor  text := coalesce(nullif(op ->> 'actor', ''), 'POS');
+  v_ref    uuid;
+  v_from   uuid;
+  v_to     uuid;
+  v_qty    numeric;
+  v_item   inventory_items;
+  v_names  text[];
+begin
+  if v_type <> 'inventory.transfer' then
+    return app.pos_exec_cash(p_tenant, op);
+  end if;
+
+  if not ((select app.is_platform_admin()) or p_tenant = any ((select app.my_managed_tenant_ids())::uuid[])) then
+    raise exception 'Solo gerencia puede trasladar inventario.' using errcode = 'P0001';
+  end if;
+  v_ref := (op ->> 'transfer_id')::uuid;
+  if exists (select 1 from inventory_movements where ref_id = v_ref and reason = 'traslado') then
+    return '{}'::jsonb; -- reintento
+  end if;
+  select * into v_item from inventory_items where id = (op ->> 'item_id')::uuid and tenant_id = p_tenant;
+  if not found then
+    raise exception 'El insumo ya no existe.' using errcode = 'P0001';
+  end if;
+  select id into v_from from branches where id = (op ->> 'from_branch_id')::uuid and tenant_id = p_tenant;
+  select id into v_to   from branches where id = (op ->> 'to_branch_id')::uuid and tenant_id = p_tenant;
+  if v_from is null or v_to is null then
+    raise exception 'Elige sucursales de origen y destino válidas.' using errcode = 'P0001';
+  end if;
+  if v_from = v_to then
+    raise exception 'El origen y el destino deben ser sucursales distintas.' using errcode = 'P0001';
+  end if;
+  v_qty := round((op ->> 'qty')::numeric, 3);
+  if v_qty is null or v_qty <= 0 then
+    raise exception 'La cantidad a trasladar debe ser mayor que cero.' using errcode = 'P0001';
+  end if;
+
+  insert into inventory_movements (tenant_id, branch_id, item_id, delta, reason, actor, created_at, ref_id, note)
+  values (p_tenant, v_from, v_item.id, -v_qty, 'traslado', v_actor, v_at, v_ref, coalesce(op ->> 'note', '')),
+         (p_tenant, v_to,   v_item.id,  v_qty, 'traslado', v_actor, v_at, v_ref, coalesce(op ->> 'note', ''));
+
+  select array_agg(name order by case when id = v_from then 0 else 1 end) into v_names
+  from branches where id in (v_from, v_to);
+  perform app.pos_log(p_tenant, v_actor,
+    format('Trasladó %s %s de %s de %s a %s', v_qty, v_item.unit, v_item.name, v_names[1], v_names[2]));
+  return '{}'::jsonb;
+end $$;
+
+-- Kardex legible para la app (últimos movimientos con nombre de sucursal e insumo).
+create or replace view public.inventory_kardex with (security_invoker = true) as
+select m.id, m.tenant_id, m.branch_id, b.name as branch_name, m.item_id, i.name as item_name, i.unit,
+       m.delta, m.reason, m.actor, m.note, m.ref_id, m.created_at
+from inventory_movements m
+join branches b on b.id = m.branch_id
+join inventory_items i on i.id = m.item_id;
+grant select on public.inventory_kardex to authenticated;
+
+-- ==================================================================
 -- seed.sql
 -- ==================================================================
 

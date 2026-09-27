@@ -5,6 +5,7 @@ import type {
   RestaurantTable,
   Customer,
   InventoryItem,
+  InventoryMovement,
   LogEntry,
   BusinessSettings,
   MenuChange,
@@ -34,7 +35,9 @@ import type { OpResult, PosOp, PosSnapshot } from "../pos/ops";
 import { planInfo, quotaExceededMessage } from "@/lib/plans";
 import { cashDifference, cashExpected } from "@/lib/cash";
 import { stubSunatGateway } from "../sunat/gateway";
-import type { Branch, BranchSales, CashSession, StaffMember, StaffRole, StaffPin } from "../model";
+import type { Branch, BranchSales, CashSession, Category, MenuBranchOverride, MenuCatalog, MenuItemInput, ModifierExtra, ModifierPref, StaffMember, StaffRole, StaffPin } from "../model";
+import { applyBranchOverrides } from "../model";
+import { sameName, slugKey, validateMenuItem } from "@/lib/menu";
 import { pinVerifier } from "@/lib/pin";
 import {
   CATEGORIES,
@@ -51,11 +54,6 @@ import {
   DEFAULT_SETTINGS,
 } from "./seed";
 
-interface MenuOverride {
-  price?: number;
-  available?: boolean;
-}
-
 interface MockStaff extends StaffMember {
   pin?: string; // solo demo (local)
 }
@@ -69,10 +67,17 @@ interface MockState {
   inventory: InventoryItem[];
   /** stock[branchId][itemId] */
   stock: Record<string, Record<string, number>>;
+  /** Kardex (los más recientes primero, se guardan los últimos 400). */
+  movements: InventoryMovement[];
   log: LogEntry[];
   settings: BusinessSettings;
   changes: MenuChange[];
-  menuOverrides: Record<string, MenuOverride>;
+  /** Carta editable (se siembra con la de ejemplo). */
+  categories: Category[];
+  menuItems: MenuItem[];
+  extras: ModifierExtra[];
+  prefs: ModifierPref[];
+  menuBranch: MenuBranchOverride[];
   comprobantes: Comprobante[];
   branches: Branch[];
   staff: MockStaff[];
@@ -134,10 +139,15 @@ function freshState(): MockState {
     customers: CUSTOMERS.map((c) => ({ ...c })),
     inventory: seedInventory(),
     stock: seedStock(),
+    movements: [],
     log: [],
     settings: { ...DEFAULT_SETTINGS },
     changes: seedMenuChanges(),
-    menuOverrides: {},
+    categories: CATEGORIES.map((c) => ({ ...c })),
+    menuItems: MENU_ITEMS.map((i) => ({ ...i, archived: false })),
+    extras: EXTRAS.map((e) => ({ ...e })),
+    prefs: PREFS.map((p) => ({ ...p })),
+    menuBranch: [],
     comprobantes: [],
     branches: BRANCHES.map((b) => ({ ...b })),
     staff: seedStaff(),
@@ -269,31 +279,145 @@ export class MockRepo implements BackendRepo {
     };
   }
 
-  // ---- Menu ----
+  // ---- Carta ----
   async getCategories() {
-    return [...CATEGORIES].sort((a, b) => a.sort - b.sort);
+    return [...this.state.categories].sort((a, b) => a.sort - b.sort);
   }
-  async getMenuItems(): Promise<MenuItem[]> {
-    return MENU_ITEMS.map((it) => {
-      const ov = this.state.menuOverrides[it.id];
-      return ov ? { ...it, price: ov.price ?? it.price, available: ov.available ?? it.available } : { ...it };
-    });
+  async getMenuItems(branchId?: string | null): Promise<MenuItem[]> {
+    const live = this.state.menuItems.filter((i) => !i.archived).map((i) => ({ ...i }));
+    return applyBranchOverrides(live, this.state.menuBranch, branchId);
   }
   async getExtras() {
-    return [...EXTRAS];
+    return this.state.extras.map((e) => ({ ...e }));
   }
   async getPrefs() {
-    return [...PREFS];
+    return this.state.prefs.map((p) => ({ ...p }));
+  }
+  private item(id: string) {
+    const it = this.state.menuItems.find((i) => i.id === id);
+    if (!it) throw new Error("El plato ya no existe.");
+    return it;
   }
   async setMenuPrice(itemId: string, price: number) {
-    this.state.menuOverrides[itemId] = { ...this.state.menuOverrides[itemId], price };
-    this.pushLog("Editor", `Cambió precio de ${itemId} a S/ ${price}`);
+    const it = this.item(itemId);
+    it.price = Math.max(0, price);
+    this.pushLog("Carta", `Cambió el precio de ${it.name} a S/ ${it.price.toFixed(2)}`);
     this.persist();
   }
   async setMenuAvailable(itemId: string, available: boolean) {
-    this.state.menuOverrides[itemId] = { ...this.state.menuOverrides[itemId], available };
-    const item = MENU_ITEMS.find((i) => i.id === itemId);
-    this.pushLog("Editor", `${available ? "Reactivó" : "Marcó 86"} ${item?.name ?? itemId}`);
+    const it = this.item(itemId);
+    it.available = available;
+    this.pushLog("Carta", `${available ? "Reactivó" : "Marcó agotado"} ${it.name}`);
+    this.persist();
+  }
+  async getMenuCatalog(): Promise<MenuCatalog> {
+    return {
+      categories: await this.getCategories(),
+      items: this.state.menuItems.map((i) => ({ ...i })),
+      overrides: this.state.menuBranch.map((o) => ({ ...o })),
+    };
+  }
+  async saveCategory(input: { id?: string; name: string; icon: string; subtitle: string }) {
+    if (!input.name.trim()) throw new Error("Escribe el nombre de la categoría.");
+    const c = input.id ? this.state.categories.find((x) => x.id === input.id) : undefined;
+    if (c) Object.assign(c, { name: input.name.trim(), icon: input.icon, subtitle: input.subtitle });
+    else
+      this.state.categories.push({
+        id: uid("c"),
+        key: slugKey(input.name, this.state.categories.map((x) => x.key)),
+        name: input.name.trim(),
+        icon: input.icon || "🍽️",
+        subtitle: input.subtitle,
+        sort: Math.max(0, ...this.state.categories.map((x) => x.sort)) + 1,
+      });
+    this.pushLog("Carta", `${c ? "Editó" : "Creó"} la categoría ${input.name}`);
+    this.persist();
+  }
+  async removeCategory(id: string) {
+    if (this.state.menuItems.some((i) => i.categoryId === id)) {
+      throw new Error("La categoría tiene platos. Muévelos a otra categoría o archívalos primero.");
+    }
+    this.state.categories = this.state.categories.filter((c) => c.id !== id);
+    this.persist();
+  }
+  async reorderCategories(ids: string[]) {
+    ids.forEach((id, i) => {
+      const c = this.state.categories.find((x) => x.id === id);
+      if (c) c.sort = i + 1;
+    });
+    this.persist();
+  }
+  async saveMenuItem(input: MenuItemInput): Promise<string> {
+    const err = validateMenuItem(input);
+    if (err) throw new Error(err);
+    if (input.id) {
+      Object.assign(this.item(input.id), { ...input, name: input.name.trim() });
+      this.pushLog("Carta", `Editó ${input.name}`);
+      this.persist();
+      return input.id;
+    }
+    const id = uid("i");
+    const sort = Math.max(0, ...this.state.menuItems.filter((i) => i.categoryId === input.categoryId).map((i) => i.sort)) + 1;
+    this.state.menuItems.push({ ...input, id, name: input.name.trim(), sort, archived: false });
+    this.pushLog("Carta", `Agregó ${input.name} a la carta`);
+    this.persist();
+    return id;
+  }
+  async archiveMenuItem(id: string, archived: boolean) {
+    const it = this.item(id);
+    it.archived = archived;
+    this.pushLog("Carta", `${archived ? "Archivó" : "Restauró"} ${it.name}`);
+    this.persist();
+  }
+  async setBranchOverride(itemId: string, branchId: string, patch: { price: number | null; available: boolean | null }) {
+    this.state.menuBranch = this.state.menuBranch.filter((o) => !(o.itemId === itemId && o.branchId === branchId));
+    if (patch.price !== null || patch.available !== null) this.state.menuBranch.push({ itemId, branchId, ...patch });
+    this.persist();
+  }
+  async saveExtra(input: { id?: string; name: string; price: number }) {
+    if (!input.name.trim()) throw new Error("Escribe el nombre del extra.");
+    const e = input.id ? this.state.extras.find((x) => x.id === input.id) : undefined;
+    if (e) Object.assign(e, { name: input.name.trim(), price: Math.max(0, input.price) });
+    else this.state.extras.push({ id: uid("x"), key: slugKey(input.name, this.state.extras.map((x) => x.key)), name: input.name.trim(), price: Math.max(0, input.price) });
+    this.persist();
+  }
+  async removeExtra(id: string) {
+    this.state.extras = this.state.extras.filter((x) => x.id !== id);
+    this.persist();
+  }
+  async savePref(input: { id?: string; name: string }) {
+    if (!input.name.trim()) throw new Error("Escribe la preferencia.");
+    const p = input.id ? this.state.prefs.find((x) => x.id === input.id) : undefined;
+    if (p) p.name = input.name.trim();
+    else this.state.prefs.push({ id: uid("p"), key: slugKey(input.name, this.state.prefs.map((x) => x.key)), name: input.name.trim() });
+    this.persist();
+  }
+  async removePref(id: string) {
+    this.state.prefs = this.state.prefs.filter((x) => x.id !== id);
+    this.persist();
+  }
+  async saveInventoryItem(input: { id?: string; name: string; unit: string; cost: number; par: number }): Promise<string> {
+    if (!input.name.trim()) throw new Error("Escribe el nombre del insumo.");
+    if (this.state.inventory.some((x) => x.id !== input.id && sameName(x.name, input.name))) {
+      throw new Error(`Ya existe un insumo llamado «${input.name.trim()}».`);
+    }
+    const inv = input.id ? this.state.inventory.find((x) => x.id === input.id) : undefined;
+    if (inv) {
+      Object.assign(inv, { name: input.name.trim(), unit: input.unit, cost: Math.max(0, input.cost), par: Math.max(0, input.par) });
+      this.persist();
+      return inv.id;
+    }
+    const id = uid("inv");
+    this.state.inventory.push({ id, name: input.name.trim(), unit: input.unit || "und", stock: 0, par: Math.max(0, input.par), cost: Math.max(0, input.cost) });
+    this.pushLog("Inventario", `Creó el insumo ${input.name}`);
+    this.persist();
+    return id;
+  }
+  async archiveInventoryItem(id: string) {
+    this.state.inventory = this.state.inventory.filter((x) => x.id !== id);
+    for (const k of Object.keys(this.state.recipes)) {
+      this.state.recipes[k] = this.state.recipes[k].filter((r) => r.inventoryId !== id);
+    }
     this.persist();
   }
 
@@ -524,6 +648,7 @@ export class MockRepo implements BackendRepo {
 
   /** Efectos de "servidor" de cada operación (espejo de app.pos_exec). */
   private effects(op: PosOp, result: Record<string, unknown>) {
+    const at = op.at && op.at < new Date().toISOString() ? op.at : new Date().toISOString();
     const who = op.actor || "POS";
     switch (op.type) {
       case "order.send":
@@ -592,9 +717,24 @@ export class MockRepo implements BackendRepo {
         const inv = this.state.inventory.find((i) => i.id === op.item_id);
         if (!inv) throw new OpError("El insumo ya no existe.");
         const branch = op.branch_id ?? this.root().id;
-        const stock = (this.state.stock[branch] ??= {});
-        stock[op.item_id] = Math.round(((stock[op.item_id] ?? 0) + op.delta) * 1000) / 1000;
+        const reason = (["compra", "merma"] as const).find((r) => r === op.reason) ?? "ajuste";
+        this.move(branch, op.item_id, op.delta, reason, who, op.note ?? "", null, at);
         this.pushLog(who, `Ajustó ${inv.name} (${op.delta > 0 ? "+" : ""}${op.delta} ${inv.unit})`);
+        break;
+      }
+      case "inventory.transfer": {
+        if (this.state.movements.some((m) => m.refId === op.transfer_id)) break; // reintento
+        const inv = this.state.inventory.find((i) => i.id === op.item_id);
+        if (!inv) throw new OpError("El insumo ya no existe.");
+        const from = this.state.branches.find((b) => b.id === op.from_branch_id);
+        const to = this.state.branches.find((b) => b.id === op.to_branch_id);
+        if (!from || !to) throw new OpError("Elige sucursales de origen y destino válidas.");
+        if (from.id === to.id) throw new OpError("El origen y el destino deben ser sucursales distintas.");
+        const qty = Math.round(op.qty * 1000) / 1000;
+        if (!(qty > 0)) throw new OpError("La cantidad a trasladar debe ser mayor que cero.");
+        this.move(from.id, inv.id, -qty, "traslado", who, op.note, op.transfer_id, at);
+        this.move(to.id, inv.id, qty, "traslado", who, op.note, op.transfer_id, at);
+        this.pushLog(who, `Trasladó ${qty} ${inv.unit} de ${inv.name} de ${from.name} a ${to.name}`);
         break;
       }
       case "cpe.emit":
@@ -646,15 +786,43 @@ export class MockRepo implements BackendRepo {
 
   /** Descuenta insumos por receta en la sucursal de la venta. */
   private deductInventory(branchId: string, lines: Order["lines"]) {
-    const stock = (this.state.stock[branchId] ??= {});
-    let n = 0;
+    const use: Record<string, number> = {};
     for (const line of lines) {
       for (const r of (line.itemId && this.state.recipes[line.itemId]) || []) {
-        stock[r.inventoryId] = Math.round(((stock[r.inventoryId] ?? 0) - r.qtyPerUnit * line.qty) * 1000) / 1000;
-        n++;
+        use[r.inventoryId] = (use[r.inventoryId] ?? 0) + r.qtyPerUnit * line.qty;
       }
     }
-    if (n > 0) this.pushLog("Sistema", `Descontó insumos del inventario`);
+    const ids = Object.keys(use);
+    for (const id of ids) this.move(branchId, id, -use[id], "venta", "Venta", "", null, new Date().toISOString());
+    if (ids.length > 0) this.pushLog("Sistema", `Descontó insumos del inventario`);
+  }
+
+  /** Registra un movimiento en el kardex y actualiza el stock de la sucursal. */
+  private move(branchId: string, itemId: string, delta: number, reason: InventoryMovement["reason"], actor: string, note: string, refId: string | null, at: string) {
+    const d = Math.round(delta * 1000) / 1000;
+    const stock = (this.state.stock[branchId] ??= {});
+    stock[itemId] = Math.round(((stock[itemId] ?? 0) + d) * 1000) / 1000;
+    const inv = this.state.inventory.find((i) => i.id === itemId);
+    const branch = this.state.branches.find((b) => b.id === branchId);
+    this.state.movements.unshift({
+      id: crypto.randomUUID(),
+      branchId,
+      branchName: branch?.name ?? "",
+      itemId,
+      itemName: inv?.name ?? "",
+      unit: inv?.unit ?? "",
+      delta: d,
+      reason,
+      actor,
+      note,
+      refId,
+      at,
+    });
+    if (this.state.movements.length > 400) this.state.movements.length = 400;
+  }
+
+  async getInventoryMovements(branchId?: string | null): Promise<InventoryMovement[]> {
+    return this.state.movements.filter((m) => !branchId || m.branchId === branchId).slice(0, 200);
   }
 
   // ---- CRM ----

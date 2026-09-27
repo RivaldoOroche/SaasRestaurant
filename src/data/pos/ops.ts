@@ -81,7 +81,16 @@ export type PosOpBody =
       cancel_reason?: string;
       ticket_id?: string;
     }
-  | { type: "inventory.adjust"; item_id: string; branch_id: string | null; delta: number; reason: string }
+  | { type: "inventory.adjust"; item_id: string; branch_id: string | null; delta: number; reason: string; note?: string }
+  | {
+      type: "inventory.transfer";
+      transfer_id: string;
+      item_id: string;
+      from_branch_id: string;
+      to_branch_id: string;
+      qty: number;
+      note: string;
+    }
   | { type: "cash.open"; session_id: string; branch_id: string | null; opening_float: number }
   | { type: "cash.move"; session_id: string; movement_id: string; kind: "ingreso" | "egreso"; amount: number; reason: string }
   | {
@@ -188,7 +197,9 @@ export function describeOp(op: PosOp): string {
     case "delivery.status":
       return `Delivery → ${op.to}`;
     case "inventory.adjust":
-      return `Ajuste de inventario (${op.delta > 0 ? "+" : ""}${op.delta})`;
+      return `${op.reason === "compra" ? "Compra" : op.reason === "merma" ? "Merma" : "Ajuste"} de inventario (${op.delta > 0 ? "+" : ""}${op.delta})`;
+    case "inventory.transfer":
+      return `Traslado de inventario (${op.qty})`;
     case "cpe.emit":
       return `${op.tipo} por S/ ${op.total.toFixed(2)}`;
     case "cash.open":

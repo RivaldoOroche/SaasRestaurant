@@ -269,7 +269,10 @@ export interface Tables {
     Row: { id: string; tenant_id: string; key: string; name: string; icon: string; subtitle: string; sort: number };
   };
   menu_items: {
-    Row: { id: string; tenant_id: string; category_id: string; name: string; description: string; price: number; emoji: string; badge: string | null; is_veg: boolean; is_spicy: boolean; is_gf: boolean; is_meat: boolean; available: boolean; sort: number };
+    Row: { id: string; tenant_id: string; category_id: string; name: string; description: string; price: number; emoji: string; badge: string | null; is_veg: boolean; is_spicy: boolean; is_gf: boolean; is_meat: boolean; available: boolean; sort: number; archived: boolean };
+  };
+  menu_item_branch: {
+    Row: { tenant_id: string; branch_id: string; item_id: string; price: number | null; available: boolean | null; updated_at: string };
   };
   modifier_extras: {
     Row: { id: string; tenant_id: string; key: string; name: string; price: number };
@@ -346,6 +349,24 @@ export type Database = {
       };
     };
     Views: {
+      inventory_kardex: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          branch_id: string;
+          branch_name: string;
+          item_id: string;
+          item_name: string;
+          unit: string;
+          delta: number;
+          reason: "inicial" | "venta" | "ajuste" | "merma" | "compra" | "traslado";
+          actor: string;
+          note: string;
+          ref_id: string | null;
+          created_at: string;
+        };
+        Relationships: [];
+      };
       v_tenants: {
         Row: Tables["tenants"]["Row"] & { mrr: number; branches_count: number };
         Relationships: [];

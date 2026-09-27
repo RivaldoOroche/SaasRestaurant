@@ -137,6 +137,29 @@ describe("cuota de sucursales por plan", () => {
   });
 });
 
+describe("carta por sucursal", () => {
+  it("la gerencia fija precio por sucursal; el mesero no; la carta pública oculta archivados", async () => {
+    const item = (await db.query<{ id: string; name: string }>(
+      `select id, name from menu_items where tenant_id = $1 order by sort limit 1`, [HIGUERA])).rows[0];
+    await asUser(db, higueraOwner, (q) =>
+      q(`insert into menu_item_branch (tenant_id, branch_id, item_id, price) values ($1, $2, $3, 99)`, [HIGUERA, MIRAFLORES, item.id]),
+    );
+    await expect(
+      asUser(db, higueraMesero, (q) =>
+        q(`update menu_item_branch set price = 1 where item_id = $1 returning 1`, [item.id]).then((r) => {
+          if (r.rows.length === 0) throw new Error("row-level security");
+        }),
+      ),
+    ).rejects.toThrow(/row-level security/);
+    await expect(
+      db.query(`insert into menu_item_branch (tenant_id, branch_id, item_id, price) values ($1, $2, $3, 5)`, [MUELLE, MIRAFLORES, item.id]),
+    ).rejects.toThrow();
+    await db.query(`update menu_items set archived = true where id = $1`, [item.id]);
+    const { rows } = await db.query<{ m: { items: { id: string }[] } }>(`select public.public_menu('la-higuera') m`);
+    expect(rows[0].m.items.some((i) => i.id === item.id)).toBe(false);
+  });
+});
+
 describe("integridad y normalización", () => {
   it("una fila operativa no puede apuntar a la sucursal de otro restaurante", async () => {
     await expect(

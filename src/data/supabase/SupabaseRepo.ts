@@ -3,6 +3,9 @@ import type { BackendRepo, BranchInput, TerminalInfo } from "../Repo";
 import type {
   Category,
   MenuItem,
+  MenuItemInput,
+  MenuCatalog,
+  MenuBranchOverride,
   ModifierExtra,
   ModifierPref,
   Branch,
@@ -17,6 +20,7 @@ import type {
   KitchenTicket,
   Customer,
   InventoryItem,
+  InventoryMovement,
   LogEntry,
   BusinessSettings,
   MenuChange,
@@ -46,6 +50,8 @@ import { stubSunatGateway, type SunatGateway, type SunatResult } from "../sunat/
 import { makeFunctionGateway } from "../sunat/functionGateway";
 import { decideEmission } from "../sunat/outbox";
 import { pinVerifier } from "@/lib/pin";
+import { sameName, slugKey, validateMenuItem } from "@/lib/menu";
+import { applyBranchOverrides } from "../model";
 
 /** Error legible a partir de un error de PostgREST (mensajes de los triggers en español). */
 function fail(error: { message?: string } | null): never {
@@ -84,10 +90,153 @@ export class SupabaseRepo implements BackendRepo {
     return (data ?? []).map(mapCategory);
   }
 
-  async getMenuItems(): Promise<MenuItem[]> {
-    const { data, error } = await this.sb.from("menu_items").select("*").order("sort");
-    if (error) throw error;
-    return (data ?? []).map(mapItem);
+  async getMenuItems(branchId?: string | null): Promise<MenuItem[]> {
+    const [{ data, error }, overrides] = await Promise.all([
+      this.sb.from("menu_items").select("*").eq("archived", false).order("sort"),
+      branchId ? this.getOverrides(branchId) : Promise.resolve([] as MenuBranchOverride[]),
+    ]);
+    if (error) fail(error);
+    return applyBranchOverrides((data ?? []).map(mapItem), overrides, branchId);
+  }
+
+  private async getOverrides(branchId?: string): Promise<MenuBranchOverride[]> {
+    let q = this.sb.from("menu_item_branch").select("item_id, branch_id, price, available");
+    if (branchId) q = q.eq("branch_id", branchId);
+    const { data, error } = await q;
+    if (error) fail(error);
+    return (data ?? []).map((o) => ({
+      itemId: o.item_id,
+      branchId: o.branch_id,
+      price: o.price == null ? null : Number(o.price),
+      available: o.available,
+    }));
+  }
+
+  async getMenuCatalog(): Promise<MenuCatalog> {
+    const [categories, { data, error }, overrides] = await Promise.all([
+      this.getCategories(),
+      this.sb.from("menu_items").select("*").order("sort"),
+      this.getOverrides(),
+    ]);
+    if (error) fail(error);
+    return { categories, items: (data ?? []).map(mapItem), overrides };
+  }
+
+  async saveCategory(input: { id?: string; name: string; icon: string; subtitle: string }): Promise<void> {
+    if (!input.name.trim()) throw new Error("Escribe el nombre de la categoría.");
+    const row = { name: input.name.trim(), icon: input.icon || "🍽️", subtitle: input.subtitle };
+    if (input.id) {
+      const { error } = await this.sb.from("menu_categories").update(row).eq("id", input.id);
+      if (error) fail(error);
+      return;
+    }
+    const cats = await this.getCategories();
+    const { error } = await this.sb.from("menu_categories").insert({
+      ...row,
+      tenant_id: this.tenantId,
+      key: slugKey(input.name, cats.map((c) => c.key)),
+      sort: Math.max(0, ...cats.map((c) => c.sort)) + 1,
+    });
+    if (error) fail(error);
+  }
+  async removeCategory(id: string): Promise<void> {
+    const { count } = await this.sb.from("menu_items").select("id", { count: "exact", head: true }).eq("category_id", id);
+    if (count) throw new Error("La categoría tiene platos. Muévelos a otra categoría o archívalos primero.");
+    const { error } = await this.sb.from("menu_categories").delete().eq("id", id);
+    if (error) fail(error);
+  }
+  async reorderCategories(ids: string[]): Promise<void> {
+    await Promise.all(ids.map((id, i) => this.sb.from("menu_categories").update({ sort: i + 1 }).eq("id", id)));
+  }
+  async saveMenuItem(input: MenuItemInput): Promise<string> {
+    const err = validateMenuItem(input);
+    if (err) throw new Error(err);
+    const row = {
+      category_id: input.categoryId,
+      name: input.name.trim(),
+      description: input.description,
+      price: input.price,
+      emoji: input.emoji,
+      badge: input.badge,
+      is_veg: input.veg,
+      is_spicy: input.spicy,
+      is_gf: input.gf,
+      is_meat: input.meat,
+      available: input.available,
+    };
+    if (input.id) {
+      const { error } = await this.sb.from("menu_items").update(row).eq("id", input.id);
+      if (error) fail(error);
+      return input.id;
+    }
+    const { data, error } = await this.sb.from("menu_items").insert({ ...row, tenant_id: this.tenantId }).select("id").single();
+    if (error) fail(error);
+    return data.id;
+  }
+  async archiveMenuItem(id: string, archived: boolean): Promise<void> {
+    const { error } = await this.sb.from("menu_items").update({ archived }).eq("id", id);
+    if (error) fail(error);
+  }
+  async setBranchOverride(itemId: string, branchId: string, patch: { price: number | null; available: boolean | null }): Promise<void> {
+    const { error } =
+      patch.price === null && patch.available === null
+        ? await this.sb.from("menu_item_branch").delete().eq("item_id", itemId).eq("branch_id", branchId)
+        : await this.sb.from("menu_item_branch").upsert({ tenant_id: this.tenantId, item_id: itemId, branch_id: branchId, ...patch });
+    if (error) fail(error);
+  }
+  async saveExtra(input: { id?: string; name: string; price: number }): Promise<void> {
+    if (!input.name.trim()) throw new Error("Escribe el nombre del extra.");
+    const { error } = input.id
+      ? await this.sb.from("modifier_extras").update({ name: input.name.trim(), price: Math.max(0, input.price) }).eq("id", input.id)
+      : await this.sb.from("modifier_extras").insert({
+          tenant_id: this.tenantId,
+          key: slugKey(input.name, (await this.getExtras()).map((x) => x.key)),
+          name: input.name.trim(),
+          price: Math.max(0, input.price),
+        });
+    if (error) fail(error);
+  }
+  async removeExtra(id: string): Promise<void> {
+    const { error } = await this.sb.from("modifier_extras").delete().eq("id", id);
+    if (error) fail(error);
+  }
+  async savePref(input: { id?: string; name: string }): Promise<void> {
+    if (!input.name.trim()) throw new Error("Escribe la preferencia.");
+    const { error } = input.id
+      ? await this.sb.from("modifier_prefs").update({ name: input.name.trim() }).eq("id", input.id)
+      : await this.sb.from("modifier_prefs").insert({
+          tenant_id: this.tenantId,
+          key: slugKey(input.name, (await this.getPrefs()).map((x) => x.key)),
+          name: input.name.trim(),
+        });
+    if (error) fail(error);
+  }
+  async removePref(id: string): Promise<void> {
+    const { error } = await this.sb.from("modifier_prefs").delete().eq("id", id);
+    if (error) fail(error);
+  }
+  async saveInventoryItem(input: { id?: string; name: string; unit: string; cost: number; par: number }): Promise<string> {
+    if (!input.name.trim()) throw new Error("Escribe el nombre del insumo.");
+    const { data: same } = await this.sb.from("inventory_items").select("id, name").eq("active", true);
+    if ((same ?? []).some((x) => x.id !== input.id && sameName(x.name, input.name))) {
+      throw new Error(`Ya existe un insumo llamado «${input.name.trim()}».`);
+    }
+    const row = { name: input.name.trim(), unit: input.unit || "und", cost: Math.max(0, input.cost), par: Math.max(0, input.par) };
+    if (input.id) {
+      const { error } = await this.sb.from("inventory_items").update(row).eq("id", input.id);
+      if (error) fail(error);
+      return input.id;
+    }
+    const { data, error } = await this.sb.from("inventory_items").insert({ ...row, tenant_id: this.tenantId }).select("id").single();
+    if (error) fail(error);
+    return data.id;
+  }
+  async archiveInventoryItem(id: string): Promise<void> {
+    const { error } = await this.sb.from("inventory_items").update({ active: false }).eq("id", id);
+    if (error) fail(error);
+    // Un insumo que ya no se usa deja de descontarse en las ventas.
+    const { error: rErr } = await this.sb.from("recipes").delete().eq("inventory_id", id);
+    if (rErr) fail(rErr);
   }
 
   async getExtras(): Promise<ModifierExtra[]> {
@@ -338,6 +487,27 @@ export class SupabaseRepo implements BackendRepo {
       spent: Number(c.spent),
       points: c.points,
       tier: c.tier,
+    }));
+  }
+
+  async getInventoryMovements(branchId?: string | null): Promise<InventoryMovement[]> {
+    let q = this.sb.from("inventory_kardex").select("*").order("created_at", { ascending: false }).limit(200);
+    if (branchId) q = q.eq("branch_id", branchId);
+    const { data, error } = await q;
+    if (error) fail(error);
+    return (data ?? []).map((m) => ({
+      id: m.id,
+      branchId: m.branch_id,
+      branchName: m.branch_name,
+      itemId: m.item_id,
+      itemName: m.item_name,
+      unit: m.unit,
+      delta: Number(m.delta),
+      reason: m.reason,
+      actor: m.actor,
+      note: m.note,
+      refId: m.ref_id,
+      at: m.created_at,
     }));
   }
 
@@ -1082,8 +1252,10 @@ function mapItem(r: Row<"menu_items">): MenuItem {
     meat: r.is_meat,
     available: r.available,
     sort: r.sort,
+    archived: r.archived ?? false,
   };
 }
+
 type StaffRow = { id: string; name: string; initials: string; role: string; active: boolean; staff_branches?: { branch_id: string }[] };
 
 function deviceLabel(): string {

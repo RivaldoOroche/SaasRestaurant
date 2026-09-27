@@ -1,6 +1,10 @@
 import type {
   Category,
   MenuItem,
+  MenuItemInput,
+  MenuCatalog,
+  InventoryMovement,
+  InventoryReason,
   ModifierExtra,
   ModifierPref,
   RestaurantTable,
@@ -71,13 +75,33 @@ export interface PayInput extends PayExtras {
  * demo, SupabaseRepo en producción). Las pantallas no saben cuál está activo.
  */
 export interface Repo {
-  // Menu
+  // Carta
   getCategories(): Promise<Category[]>;
-  getMenuItems(): Promise<MenuItem[]>;
+  /** Carta para vender: sin archivados y con el precio/disponibilidad de la sucursal. */
+  getMenuItems(branchId?: string | null): Promise<MenuItem[]>;
   getExtras(): Promise<ModifierExtra[]>;
   getPrefs(): Promise<ModifierPref[]>;
   setMenuPrice(itemId: string, price: number): Promise<void>;
   setMenuAvailable(itemId: string, available: boolean): Promise<void>;
+  /** Editor: categorías, todos los platos (con archivados) y ajustes por sucursal. */
+  getMenuCatalog(): Promise<MenuCatalog>;
+  saveCategory(input: { id?: string; name: string; icon: string; subtitle: string }): Promise<void>;
+  /** Solo si la categoría no tiene platos (activos o archivados). */
+  removeCategory(id: string): Promise<void>;
+  /** Nuevo orden de las categorías (ids de arriba a abajo). */
+  reorderCategories(ids: string[]): Promise<void>;
+  /** Crea o actualiza un plato; devuelve su id. */
+  saveMenuItem(input: MenuItemInput): Promise<string>;
+  archiveMenuItem(id: string, archived: boolean): Promise<void>;
+  /** Precio/disponibilidad de una sucursal (ambos null = volver a los generales). */
+  setBranchOverride(itemId: string, branchId: string, patch: { price: number | null; available: boolean | null }): Promise<void>;
+  saveExtra(input: { id?: string; name: string; price: number }): Promise<void>;
+  removeExtra(id: string): Promise<void>;
+  savePref(input: { id?: string; name: string }): Promise<void>;
+  removePref(id: string): Promise<void>;
+  /** Insumos del inventario (catálogo). Devuelve el id. */
+  saveInventoryItem(input: { id?: string; name: string; unit: string; cost: number; par: number }): Promise<string>;
+  archiveInventoryItem(id: string): Promise<void>;
 
   // Sucursales
   /** Árbol completo: la sede principal (parentId null) y sus sucursales, activas o no. */
@@ -131,7 +155,19 @@ export interface Repo {
   // Inventory
   /** Stock de una sucursal (o la suma de todas con null). */
   getInventory(branchId?: string | null): Promise<InventoryItem[]>;
-  adjustInventory(itemId: string, delta: number, actor: string, branchId?: string | null): Promise<void>;
+  /** Entrada/salida en una sucursal. reason: ajuste de conteo, compra o merma. */
+  adjustInventory(
+    itemId: string,
+    delta: number,
+    actor: string,
+    branchId?: string | null,
+    reason?: InventoryReason,
+    note?: string,
+  ): Promise<void>;
+  /** Mueve stock de una sucursal a otra (funciona sin conexión). */
+  transferInventory(input: { itemId: string; fromBranchId: string; toBranchId: string; qty: number; note: string; actor: string }): Promise<void>;
+  /** Kardex: últimos movimientos (de una sucursal o de todas). */
+  getInventoryMovements(branchId?: string | null): Promise<InventoryMovement[]>;
   /** Recetas: menú item id -> insumos consumidos por unidad. */
   getRecipes(): Promise<Record<string, { inventoryId: string; qtyPerUnit: number }[]>>;
   /** Define/reemplaza la receta de un platillo. */
@@ -271,6 +307,7 @@ export type PosMethod =
   | "createDeliveryOrder"
   | "setDeliveryStatus"
   | "adjustInventory"
+  | "transferInventory"
   | "emitComprobante"
   | "openCash"
   | "cashMovement"

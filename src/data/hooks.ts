@@ -11,7 +11,7 @@ import {
 import { useAuth } from "@/auth/AuthContext";
 import { useBranchStore } from "@/store/branch";
 import { effectiveRate, GENERAL_RATE } from "@/lib/tax";
-import type { DraftLine, NewDeliveryInput, DeliveryStatus, DeliveryZone, DeliveryDriver } from "./model";
+import type { DraftLine, NewDeliveryInput, DeliveryStatus, DeliveryZone, DeliveryDriver, InventoryReason } from "./model";
 import type { BranchInput, PayInput } from "./Repo";
 
 export function useRepo() {
@@ -59,9 +59,39 @@ export function useCategories() {
   const repo = useRepo();
   return useQuery({ queryKey: ["categories"], queryFn: () => repo.getCategories() });
 }
+/** Carta para vender en la sucursal activa (precio/disponibilidad de la sucursal). */
 export function useMenuItems() {
   const repo = useRepo();
-  return useQuery({ queryKey: ["menuItems"], queryFn: () => repo.getMenuItems() });
+  const branchId = useBranchStore((s) => s.branchId);
+  return useQuery({ queryKey: ["menuItems", branchId], queryFn: () => repo.getMenuItems(branchId) });
+}
+/** Editor de carta: todo, incluidos archivados y ajustes por sucursal. */
+export function useMenuCatalog() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["menuCatalog"], queryFn: () => repo.getMenuCatalog() });
+}
+export function useMenuActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const inv = () => ["menuCatalog", "menuItems", "categories", "extras", "prefs", "inventory", "recipes"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  return {
+    saveCategory: useMutation({ mutationFn: (i: Parameters<typeof repo.saveCategory>[0]) => repo.saveCategory(i), onSuccess: inv }),
+    removeCategory: useMutation({ mutationFn: (id: string) => repo.removeCategory(id), onSuccess: inv }),
+    reorderCategories: useMutation({ mutationFn: (ids: string[]) => repo.reorderCategories(ids), onSuccess: inv }),
+    saveItem: useMutation({ mutationFn: (i: Parameters<typeof repo.saveMenuItem>[0]) => repo.saveMenuItem(i), onSuccess: inv }),
+    archiveItem: useMutation({ mutationFn: (v: { id: string; archived: boolean }) => repo.archiveMenuItem(v.id, v.archived), onSuccess: inv }),
+    setOverride: useMutation({
+      mutationFn: (v: { itemId: string; branchId: string; price: number | null; available: boolean | null }) =>
+        repo.setBranchOverride(v.itemId, v.branchId, { price: v.price, available: v.available }),
+      onSuccess: inv,
+    }),
+    saveExtra: useMutation({ mutationFn: (i: Parameters<typeof repo.saveExtra>[0]) => repo.saveExtra(i), onSuccess: inv }),
+    removeExtra: useMutation({ mutationFn: (id: string) => repo.removeExtra(id), onSuccess: inv }),
+    savePref: useMutation({ mutationFn: (i: Parameters<typeof repo.savePref>[0]) => repo.savePref(i), onSuccess: inv }),
+    removePref: useMutation({ mutationFn: (id: string) => repo.removePref(id), onSuccess: inv }),
+    saveInventoryItem: useMutation({ mutationFn: (i: Parameters<typeof repo.saveInventoryItem>[0]) => repo.saveInventoryItem(i), onSuccess: inv }),
+    archiveInventoryItem: useMutation({ mutationFn: (id: string) => repo.archiveInventoryItem(id), onSuccess: inv }),
+  };
 }
 export function useExtras() {
   const repo = useRepo();
@@ -170,6 +200,30 @@ export function useInventory() {
   const repo = useRepo();
   const branchId = useBranchStore((s) => s.branchId);
   return useQuery({ queryKey: ["inventory", branchId], queryFn: () => repo.getInventory(branchId) });
+}
+export function useInventoryMovements() {
+  const repo = useRepo();
+  const branchId = useBranchStore((s) => s.branchId);
+  return useQuery({ queryKey: ["inventoryMovements", branchId], queryFn: () => repo.getInventoryMovements(branchId) });
+}
+/** Movimientos de inventario: compras, mermas, ajustes de conteo y traslados. */
+export function useInventoryActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const branchId = useBranchStore((s) => s.branchId);
+  const inv = () => ["inventory", "inventoryMovements", "activityLog"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  return {
+    branchId,
+    move: useMutation({
+      mutationFn: (v: { itemId: string; delta: number; reason: InventoryReason; note: string; actor: string; branchId?: string | null }) =>
+        repo.adjustInventory(v.itemId, v.delta, v.actor, v.branchId ?? branchId, v.reason, v.note),
+      onSuccess: inv,
+    }),
+    transfer: useMutation({
+      mutationFn: (v: Parameters<typeof repo.transferInventory>[0]) => repo.transferInventory(v),
+      onSuccess: inv,
+    }),
+  };
 }
 export function useRecipes() {
   const repo = useRepo();
@@ -451,6 +505,7 @@ export function useTenantActions() {
       repo.adjustInventory(itemId, delta, actor, branchId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory"] });
+      qc.invalidateQueries({ queryKey: ["inventoryMovements"] });
       qc.invalidateQueries({ queryKey: ["activityLog"] });
     },
   });

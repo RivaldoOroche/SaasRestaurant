@@ -25,6 +25,37 @@ export interface MenuItem {
   meat: boolean;
   available: boolean;
   sort: number;
+  /** Archivado: ya no se vende ni aparece en la carta (se conserva por su historial). */
+  archived?: boolean;
+}
+
+/** Datos editables de un plato. */
+export type MenuItemInput = Omit<MenuItem, "id" | "sort" | "archived"> & { id?: string };
+
+/** Precio o disponibilidad propios de una sucursal (null = los generales). */
+export interface MenuBranchOverride {
+  itemId: string;
+  branchId: string;
+  price: number | null;
+  available: boolean | null;
+}
+
+/** Todo lo que necesita el editor de carta. */
+export interface MenuCatalog {
+  categories: Category[];
+  /** Incluye archivados, con precios y disponibilidad generales. */
+  items: MenuItem[];
+  overrides: MenuBranchOverride[];
+}
+
+/** Aplica los ajustes de una sucursal a la carta general. */
+export function applyBranchOverrides(items: MenuItem[], overrides: MenuBranchOverride[], branchId?: string | null): MenuItem[] {
+  if (!branchId) return items;
+  const byItem = new Map(overrides.filter((o) => o.branchId === branchId).map((o) => [o.itemId, o]));
+  return items.map((it) => {
+    const o = byItem.get(it.id);
+    return o ? { ...it, price: o.price ?? it.price, available: o.available ?? it.available } : it;
+  });
 }
 
 export interface ModifierExtra {
@@ -210,6 +241,27 @@ export interface InventoryItem {
   stock: number;
   par: number;
   cost?: number; // costo por unidad (para food cost)
+}
+
+export type InventoryReason = "ajuste" | "compra" | "merma";
+
+/** Movimiento del kardex de una sucursal. */
+export interface InventoryMovement {
+  id: string;
+  branchId: string;
+  branchName: string;
+  itemId: string;
+  itemName: string;
+  unit: string;
+  delta: number;
+  reason: "inicial" | "venta" | "ajuste" | "merma" | "compra" | "traslado";
+  actor: string;
+  note: string;
+  /** Une las dos patas de un traslado. */
+  refId: string | null;
+  at: string;
+  /** Aún en la cola del equipo (sin sincronizar). */
+  pending?: boolean;
 }
 
 /** Recipe: for a menu item, how much of each inventory item it consumes per unit. */

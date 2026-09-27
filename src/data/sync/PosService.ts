@@ -12,6 +12,8 @@ import type {
   DraftLine,
   EmitComprobanteInput,
   InventoryItem,
+  InventoryMovement,
+  InventoryReason,
   KitchenTicket,
   NewDeliveryInput,
   Order,
@@ -180,15 +182,59 @@ class PosService {
 
   async getInventory(branchId?: string | null): Promise<InventoryItem[]> {
     const items = await this.cachedRead("getInventory", [branchId ?? null], () => this.backend.getInventory(branchId));
-    const pending = this.engine.pendingOps().filter((op) => op.type === "inventory.adjust");
+    const pending = this.pendingInventory(branchId);
     if (!pending.length) return items;
     return items.map((it) => {
-      const delta = pending.reduce(
-        (s, op) => s + (op.type === "inventory.adjust" && op.item_id === it.id && (!branchId || op.branch_id === branchId) ? op.delta : 0),
-        0,
-      );
+      const delta = pending.reduce((s, m) => s + (m.itemId === it.id ? m.delta : 0), 0);
       return delta ? { ...it, stock: Math.round((it.stock + delta) * 1000) / 1000 } : it;
     });
+  }
+
+  /** Kardex con los movimientos que aún esperan en la cola de este equipo. */
+  async getInventoryMovements(branchId?: string | null): Promise<InventoryMovement[]> {
+    const remote = await this.cachedRead("getInventoryMovements", [branchId ?? null], () => this.backend.getInventoryMovements(branchId));
+    const pending = this.pendingInventory(branchId);
+    if (!pending.length) return remote;
+    const [items, branches] = await Promise.all([
+      this.cachedRead("getInventory", [null], () => this.backend.getInventory(null)),
+      this.cachedRead("getBranches", [], () => this.backend.getBranches()),
+    ]);
+    const local = pending.map((m, i) => {
+      const it = items.find((x) => x.id === m.itemId);
+      return {
+        ...m,
+        id: `pending-${i}`,
+        branchName: branches.find((b) => b.id === m.branchId)?.name ?? "Sede principal",
+        itemName: it?.name ?? "",
+        unit: it?.unit ?? "",
+        pending: true,
+      };
+    });
+    return [...local.reverse(), ...remote];
+  }
+
+  /** Movimientos de inventario encolados (ajustes y las dos patas de cada traslado). */
+  private pendingInventory(branchId?: string | null) {
+    const out: Pick<InventoryMovement, "branchId" | "itemId" | "delta" | "reason" | "actor" | "note" | "refId" | "at">[] = [];
+    for (const op of this.engine.pendingOps()) {
+      if (op.type === "inventory.adjust") {
+        out.push({
+          branchId: op.branch_id ?? "",
+          itemId: op.item_id,
+          delta: op.delta,
+          reason: (op.reason as InventoryReason) || "ajuste",
+          actor: op.actor,
+          note: op.note ?? "",
+          refId: null,
+          at: op.at,
+        });
+      } else if (op.type === "inventory.transfer") {
+        const base = { itemId: op.item_id, reason: "traslado" as const, actor: op.actor, note: op.note, refId: op.transfer_id, at: op.at };
+        out.push({ ...base, branchId: op.from_branch_id, delta: -op.qty }, { ...base, branchId: op.to_branch_id, delta: op.qty });
+      }
+    }
+    // Un ajuste sin sucursal va a la principal: solo cuenta en la vista "todas".
+    return out.filter((m) => !branchId || m.branchId === branchId);
   }
 
   async getComprobantes(): Promise<Comprobante[]> {
@@ -342,9 +388,35 @@ class PosService {
     await this.run({ type: "cash.close", session_id: sessionId, counted, notes, expected });
   }
 
-  async adjustInventory(itemId: string, delta: number, who: string, branchId?: string | null): Promise<void> {
+  async adjustInventory(
+    itemId: string,
+    delta: number,
+    who: string,
+    branchId?: string | null,
+    reason: InventoryReason = "ajuste",
+    note = "",
+  ): Promise<void> {
     await this.engine.submit(
-      makeOp({ type: "inventory.adjust", item_id: itemId, branch_id: branchId ?? null, delta, reason: "ajuste" }, who || actor()),
+      makeOp({ type: "inventory.adjust", item_id: itemId, branch_id: branchId ?? null, delta, reason, note }, who || actor()),
+    );
+  }
+
+  async transferInventory(input: { itemId: string; fromBranchId: string; toBranchId: string; qty: number; note: string; actor: string }): Promise<void> {
+    if (input.fromBranchId === input.toBranchId) throw new OpError("El origen y el destino deben ser sucursales distintas.");
+    if (!(input.qty > 0)) throw new OpError("La cantidad a trasladar debe ser mayor que cero.");
+    await this.engine.submit(
+      makeOp(
+        {
+          type: "inventory.transfer",
+          transfer_id: uuid(),
+          item_id: input.itemId,
+          from_branch_id: input.fromBranchId,
+          to_branch_id: input.toBranchId,
+          qty: Math.round(input.qty * 1000) / 1000,
+          note: input.note.trim(),
+        },
+        input.actor || actor(),
+      ),
     );
   }
 
@@ -449,13 +521,13 @@ class PosService {
 const POS_METHODS: PosMethod[] = [
   "getTables", "getOpenOrders", "getOpenOrderForTable", "openOrder", "addLine", "setLineQty", "removeLine",
   "voidLine", "clearOrder", "transferOrder", "mergeOrder", "sendToKitchen", "payOrder", "getKitchenTickets",
-  "advanceTicket", "getDeliveryOrders", "createDeliveryOrder", "setDeliveryStatus", "adjustInventory",
+  "advanceTicket", "getDeliveryOrders", "createDeliveryOrder", "setDeliveryStatus", "adjustInventory", "transferInventory",
   "emitComprobante", "openCash", "cashMovement", "closeCash", "subscribe", "syncStatus", "onSyncStatus", "dismissRejected", "syncNow",
 ];
-const OVERLAID = new Set(["getPaidOrders", "getInventory", "getComprobantes", "getCashSessions"]);
+const OVERLAID = new Set(["getPaidOrders", "getInventory", "getInventoryMovements", "getComprobantes", "getCashSessions"]);
 /** Lecturas que conviene tener sin conexión (abrir la app y tomar pedidos). */
 const CACHED = new Set([
-  "getCategories", "getMenuItems", "getExtras", "getPrefs", "getBranches", "getStaff", "getSettings",
+  "getCategories", "getMenuItems", "getMenuCatalog", "getExtras", "getPrefs", "getBranches", "getStaff", "getSettings",
   "getCustomers", "getRecipes", "getStaffPins", "getDeliveryZones", "getDrivers", "getRolePermissions", "getSubscription",
   "getReservations", "getWaitlist", "getActivityLog", "getBranchSales", "getBranchQuota",
 ]);

@@ -286,6 +286,35 @@ describe("sincronización y terminales", () => {
     expect(await stock(SAN_ISIDRO, "Limón")).toBeCloseTo(before + 5, 3);
   });
 
+  it("traslado entre sucursales: sale del origen, entra al destino, una sola vez", async () => {
+    const MIRA = "22222222-0000-0000-0000-000000000001";
+    const item = (await db.query<{ id: string }>(`select id from inventory_items where name = 'Limón'`)).rows[0].id;
+    const t = op({ type: "inventory.transfer", transfer_id: randomUUID(), item_id: item, from_branch_id: MIRA, to_branch_id: SAN_ISIDRO, qty: 2.5, note: "Reposición" });
+    expect((await apply(mesero, [t]))[0].error).toMatch(/Solo gerencia/);
+    const [a0, b0] = [await stock(MIRA, "Limón"), await stock(SAN_ISIDRO, "Limón")];
+    const r0 = (await apply(dueno, [{ ...t, id: randomUUID() }]))[0]; // el intento del mesero quedó registrado con su id
+    expect(r0.error ?? r0.status).toBe("ok");
+    // Reintento con otro id de operación pero el mismo traslado: no duplica.
+    expect((await apply(dueno, [{ ...t, id: randomUUID() }]))[0].status).toBe("ok");
+    expect(await stock(MIRA, "Limón")).toBeCloseTo(a0 - 2.5, 3);
+    expect(await stock(SAN_ISIDRO, "Limón")).toBeCloseTo(b0 + 2.5, 3);
+    const k = await asUser(db, dueno, (q) =>
+      q<{ branch_name: string; delta: string; note: string }>(
+        `select branch_name, delta, note from inventory_kardex where ref_id = $1 order by delta`, [t.transfer_id]),
+    );
+    expect(k.rows.map((r) => [r.branch_name, Number(r.delta), r.note])).toEqual([
+      ["Miraflores", -2.5, "Reposición"],
+      ["San Isidro", 2.5, "Reposición"],
+    ]);
+    const same = op({ type: "inventory.transfer", transfer_id: randomUUID(), item_id: item, from_branch_id: MIRA, to_branch_id: MIRA, qty: 1, note: "" });
+    expect((await apply(dueno, [same]))[0].error).toMatch(/distintas/);
+    const rivalT = op({ type: "inventory.transfer", transfer_id: randomUUID(), item_id: item, from_branch_id: MIRA, to_branch_id: SAN_ISIDRO, qty: 1, note: "" });
+    expect((await apply(rival, [rivalT], MUELLE))[0].error).toMatch(/ya no existe|válidas/);
+    // El kardex de otro restaurante no se ve.
+    const other = await asUser(db, rival, (q) => q(`select 1 from inventory_kardex where ref_id = $1`, [t.transfer_id]));
+    expect(other.rows).toHaveLength(0);
+  });
+
   it("caja: fondo + ventas en efectivo + movimientos = esperado; el cierre calcula la diferencia", async () => {
     const MIRA = "22222222-0000-0000-0000-000000000001";
     const session = randomUUID();
