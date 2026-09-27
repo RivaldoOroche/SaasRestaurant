@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
-import { PLANS, branchLimitLabel, planInfo } from "@/lib/plans";
+import { PLANS, annualSavings, branchLimitLabel, planInfo } from "@/lib/plans";
 
 export function Suscripcion() {
   const { data: sub } = useSubscription();
@@ -89,9 +89,16 @@ export function Suscripcion() {
             <Card key={t.tier} className={cn(current && "border-accent/50")}>
               <CardBody className="flex flex-col h-full">
                 <h4 className="font-bold">{t.tier}</h4>
-                <p className="text-lg font-mono font-bold mt-1">{formatMoney(t.price)}</p>
-                <p className="text-xs mt-1 font-semibold">{branchLimitLabel(t.maxBranches)}</p>
-                <p className="text-muted text-xs mt-1 flex-1">{t.features}</p>
+                <p className="text-lg font-mono font-bold mt-1">
+                  {formatMoney(t.price)}
+                  <span className="text-xs text-muted font-sans">/mes</span>
+                </p>
+                <p className="text-[11px] text-success">
+                  o {formatMoney(t.annualPrice)}/año · ahorras {formatMoney(annualSavings(t))}
+                </p>
+                <p className="text-xs mt-2 font-semibold">{branchLimitLabel(t.maxBranches)}</p>
+                <p className="text-muted text-xs mt-1">{t.features}</p>
+                <p className="text-muted text-xs mt-1 flex-1">{t.support}</p>
                 {current ? (
                   <p className="text-accent text-xs mt-3">Tu plan actual</p>
                 ) : tooMany ? (
@@ -115,7 +122,8 @@ export function Suscripcion() {
         })}
       </div>
       <p className="text-muted text-xs">
-        El cambio de plan lo confirma Wayra POS y se refleja en tu próxima facturación. Sin permanencia.
+        Precios finales con IGV incluido. El cambio de plan lo confirma Wayra POS y se refleja en tu próxima
+        facturación. Sin permanencia: puedes cancelar cuando quieras.
       </p>
     </div>
   );

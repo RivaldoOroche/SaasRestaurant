@@ -167,7 +167,7 @@ describe("integridad y normalización", () => {
     const { rows } = await asUser(db, higueraOwner, (q) =>
       q<{ mrr: string }>(`select mrr from v_tenants where id = $1`, [HIGUERA]),
     );
-    expect(Number(rows[0].mrr)).toBe(1499);
+    expect(Number(rows[0].mrr)).toBe(349);
   });
 
   it("el inventario es por sucursal y el stock es la suma del kardex", async () => {

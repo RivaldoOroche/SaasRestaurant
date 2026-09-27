@@ -25,7 +25,7 @@ export interface Tables {
     Row: { id: string; user_id: string; tenant_id: string | null; role: AppRole } & Timestamps;
   };
   subscription_plans: {
-    Row: { id: string; tier: PlanTier; price: number; features: string; max_branches: number | null } & Timestamps;
+    Row: { id: string; tier: PlanTier; price: number; annual_price: number | null; features: string; max_branches: number | null } & Timestamps;
   };
   saas_invoices: {
     Row: { id: string; tenant_id: string; folio: string; amount: number; igv: number; method: PayMethod | null; paid: boolean; issued_at: string };

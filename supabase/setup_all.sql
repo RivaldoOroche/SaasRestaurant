@@ -3020,6 +3020,25 @@ alter table business_settings
     check (tax_regime in ('general', 'mype_restaurante'));
 
 -- ==================================================================
+-- Migracion 0035_plan_prices.sql
+-- ==================================================================
+
+-- Precios de los planes alineados al mercado peruano (2026). Precios finales
+-- en soles con IGV incluido; todas las funciones en todos los planes, cambian
+-- las sucursales permitidas y el soporte. annual_price = 10 meses (2 gratis).
+alter table subscription_plans add column if not exists annual_price numeric(10,2);
+
+insert into subscription_plans (tier, price, annual_price, max_branches, features) values
+  ('Básico', 149, 1490, 2, 'Todas las funciones: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT'),
+  ('Pro', 349, 3490, 10, 'Todo lo del Básico + reportes consolidados de todas tus sucursales'),
+  ('Enterprise', 899, 8990, null, 'Todo lo del Pro para cadenas, sin límite de sucursales')
+on conflict (tier) do update set
+  price = excluded.price,
+  annual_price = excluded.annual_price,
+  max_branches = excluded.max_branches,
+  features = excluded.features;
+
+-- ==================================================================
 -- seed.sql
 -- ==================================================================
 
@@ -3043,12 +3062,13 @@ alter table business_settings
 -- 1) Planes de suscripción
 -- ---------------------------------------------------------------------------
 -- max_branches = sucursales además de la sede principal (null = sin límite).
-insert into subscription_plans (tier, price, features, max_branches) values
-  ('Básico', 699,  'POS, cocina, caja, delivery y comprobantes SUNAT', 2),
-  ('Pro', 1499, 'Todo lo del Básico + inventario, recetas y reportes', 10),
-  ('Enterprise', 4800, 'Todo lo del Pro + soporte prioritario', null)
+insert into subscription_plans (tier, price, features, max_branches, annual_price) values
+  ('Básico', 149, 'Todas las funciones: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT', 2, 1490),
+  ('Pro', 349, 'Todo lo del Básico + reportes consolidados de todas tus sucursales', 10, 3490),
+  ('Enterprise', 899, 'Todo lo del Pro para cadenas, sin límite de sucursales', null, 8990)
 on conflict (tier) do update set
-  price = excluded.price, features = excluded.features, max_branches = excluded.max_branches;
+  price = excluded.price, features = excluded.features, max_branches = excluded.max_branches,
+  annual_price = excluded.annual_price;
 
 -- ---------------------------------------------------------------------------
 -- 2) Datos del emisor del SaaS (tu empresa)
