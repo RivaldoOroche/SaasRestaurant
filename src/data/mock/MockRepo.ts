@@ -887,7 +887,8 @@ export class MockRepo implements BackendRepo {
 
   private myPlanRequest: MyPlanRequest | null = null;
   async getSubscription(): Promise<Subscription> {
-    return { plan: "Pro", price: 1499, status: "Activo" };
+    const p = planInfo(this.state.plan);
+    return { plan: p.tier, price: p.price, status: "Activo" };
   }
   async getMyPlanRequest() {
     return this.myPlanRequest ? { ...this.myPlanRequest } : null;

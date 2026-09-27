@@ -3031,9 +3031,9 @@ grant execute on function public.branch_sales(uuid, timestamptz) to authenticate
 -- ---------------------------------------------------------------------------
 -- max_branches = sucursales además de la sede principal (null = sin límite).
 insert into subscription_plans (tier, price, features, max_branches) values
-  ('Básico', 699,  'POS + sede principal + 2 sucursales', 2),
-  ('Pro', 1499, 'POS + inventario + reportes + hasta 10 sucursales', 10),
-  ('Enterprise', 4800, 'Todo + sucursales ilimitadas + soporte prioritario', null)
+  ('Básico', 699,  'POS, cocina, caja, delivery y comprobantes SUNAT', 2),
+  ('Pro', 1499, 'Todo lo del Básico + inventario, recetas y reportes', 10),
+  ('Enterprise', 4800, 'Todo lo del Pro + soporte prioritario', null)
 on conflict (tier) do update set
   price = excluded.price, features = excluded.features, max_branches = excluded.max_branches;
 

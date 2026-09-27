@@ -3,7 +3,6 @@ import {
   useActivityLog,
   useBranchSales,
   useBranches,
-  useBranchActions,
   useStaff,
   useStaffActions,
 } from "@/data/hooks";
@@ -13,12 +12,18 @@ import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
 import type { StaffRole } from "@/data/model";
+import { BranchesCard } from "./sucursales/BranchesCard";
+import { buildTree, flatten } from "@/lib/branchTree";
 
 const ROLE_LABEL: Record<StaffRole, string> = { dueno: "Dueño", admin: "Gerente", mesero: "Mesero" };
 
 export function Sucursales() {
   const { data: log = [] } = useActivityLog();
-  const { data: sales = [] } = useBranchSales();
+  const { data: rawSales = [] } = useBranchSales();
+  const { data: branches = [] } = useBranches();
+  // Mismo orden que el árbol (principal primero, cada sucursal bajo su padre).
+  const order = new Map(flatten(buildTree(branches)).map((b, i) => [b.id, i]));
+  const sales = [...rawSales].sort((a, b) => (order.get(a.branchId) ?? 99) - (order.get(b.branchId) ?? 99));
   const max = Math.max(1, ...sales.map((b) => b.sales));
   const totalSales = Math.round(sales.reduce((s, b) => s + b.sales, 0) * 100) / 100;
 
@@ -80,61 +85,6 @@ export function Sucursales() {
         </CardBody>
       </Card>
     </div>
-  );
-}
-
-function BranchesCard() {
-  const { data: branches = [] } = useBranches();
-  const { addBranch, updateBranch, removeBranch } = useBranchActions();
-  const [name, setName] = useState("");
-  const [city, setCity] = useState("");
-  const [err, setErr] = useState<string | null>(null);
-
-  return (
-    <Card className="mb-4">
-      <CardBody className="space-y-3">
-        <h3 className="font-semibold">Sucursales</h3>
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="flex-1 min-w-[8rem]">
-            <label className="text-xs text-muted">Nombre</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Surco"
-              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm" />
-          </div>
-          <div className="flex-1 min-w-[8rem]">
-            <label className="text-xs text-muted">Ciudad</label>
-            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Lima"
-              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm" />
-          </div>
-          <Button
-            size="sm"
-            disabled={!name.trim() || addBranch.isPending}
-            onClick={() => {
-              addBranch.mutate({ name: name.trim(), city: city.trim() || "—" });
-              setName("");
-              setCity("");
-            }}
-          >
-            Agregar
-          </Button>
-        </div>
-        {err && <p className="text-warning text-xs">{err}</p>}
-        <div className="divide-y divide-border-soft">
-          {branches.map((b) => (
-            <div key={b.id} className="flex items-center gap-2 py-2">
-              <input defaultValue={b.name}
-                onBlur={(e) => e.target.value !== b.name && updateBranch.mutate({ id: b.id, patch: { name: e.target.value } })}
-                className="flex-1 rounded-md bg-chip-bg border border-border px-2 py-1 text-sm" />
-              <input defaultValue={b.city}
-                onBlur={(e) => e.target.value !== b.city && updateBranch.mutate({ id: b.id, patch: { city: e.target.value } })}
-                className="w-32 mob:w-24 rounded-md bg-chip-bg border border-border px-2 py-1 text-sm" />
-              <button
-                onClick={() => { setErr(null); removeBranch.mutate(b.id, { onError: (e) => setErr((e as Error).message) }); }}
-                className="text-warning text-sm px-1 shrink-0" title="Eliminar sucursal" aria-label={`Eliminar sucursal ${b.name}`}>✕</button>
-            </div>
-          ))}
-        </div>
-      </CardBody>
-    </Card>
   );
 }
 

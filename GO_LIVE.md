@@ -32,8 +32,9 @@ completarla. Referencias: `SUPABASE_SETUP.md` (backend), `APP_SETUP.md`
 - [ ] Insertar sus `memberships` (SQL) — ver `SUPABASE_SETUP.md §5`:
   - Plataforma: `role='saas'`, `tenant_id = null`.
   - Dueño tenant: `role='dueno'`, `tenant_id='<uuid>'`.
-- [ ] **Database → Replication**: agregar a `supabase_realtime` las tablas
-      `kitchen_tickets`, `orders`, `restaurant_tables` (Cocina/Mesas en vivo).
+- [ ] **Database → Replication**: verificar que `supabase_realtime` incluye
+      `orders`, `kitchen_tickets`, `restaurant_tables` y `delivery_orders`
+      (la migración 0031 las agrega).
 - [ ] Copiar de **Settings → API**: `Project URL`, `anon key`, `service_role key`.
 
 ---

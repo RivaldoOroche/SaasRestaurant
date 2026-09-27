@@ -1,3 +1,4 @@
+import { PLANS } from "@/lib/plans";
 import type { PlatformRepo } from "./PlatformRepo";
 import type {
   Tenant,
@@ -63,12 +64,8 @@ function seedTickets(): SupportTicket[] {
   ];
 }
 
-const PLAN_PRICE: Record<PlanTier, number> = { Básico: 699, Pro: 1499, Enterprise: 4800 };
-const PLAN_FEATURES: Record<PlanTier, string> = {
-  Básico: "POS + 1 sucursal",
-  Pro: "POS + inventario + reportes + 3 sucursales",
-  Enterprise: "Todo + multi-sucursal + soporte prioritario",
-};
+const PLAN_PRICE = Object.fromEntries(PLANS.map((p) => [p.tier, p.price])) as Record<PlanTier, number>;
+const PLAN_FEATURES = Object.fromEntries(PLANS.map((p) => [p.tier, p.features])) as Record<PlanTier, string>;
 
 function uid(p: string) {
   return `${p}-${Math.random().toString(36).slice(2, 10)}`;

@@ -12,9 +12,9 @@ export interface PlanInfo {
 }
 
 export const PLANS: PlanInfo[] = [
-  { tier: "Básico", price: 699, maxBranches: 2, features: "POS + sede principal + 2 sucursales" },
-  { tier: "Pro", price: 1499, maxBranches: 10, features: "POS + inventario + reportes + hasta 10 sucursales" },
-  { tier: "Enterprise", price: 4800, maxBranches: null, features: "Todo + sucursales ilimitadas + soporte prioritario" },
+  { tier: "Básico", price: 699, maxBranches: 2, features: "POS, cocina, caja, delivery y comprobantes SUNAT" },
+  { tier: "Pro", price: 1499, maxBranches: 10, features: "Todo lo del Básico + inventario, recetas y reportes" },
+  { tier: "Enterprise", price: 4800, maxBranches: null, features: "Todo lo del Pro + soporte prioritario" },
 ];
 
 export function planInfo(tier: string | null | undefined): PlanInfo {

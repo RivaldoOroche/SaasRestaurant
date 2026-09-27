@@ -53,13 +53,14 @@ Hay **dos caminos**. Elige uno:
 ## 3) Aplicar el esquema (migraciones)
 
 Las migraciones están en `supabase/migrations/` y **deben aplicarse en orden**
-(`0001` … `0017`).
+(de `0001` a la última). Alternativa: `supabase/setup_all.sql` trae todas las
+migraciones + el seed en un solo archivo (se regenera con `npm run db:bundle`).
 
 ### Camino A — Dashboard (SQL Editor)
 1. En el dashboard: **SQL Editor → New query**.
 2. Abre cada archivo de `supabase/migrations/` **en orden numérico**, pega su
    contenido y pulsa **Run**. Uno por uno, de `0001_core_schema.sql` hasta
-   `0017_platform_settings.sql`.
+   la última migración de la carpeta.
    - Cada uno debe terminar en "Success". Si un archivo falla, no sigas: revisa
      que aplicaste el anterior.
 
@@ -135,10 +136,13 @@ tarjeta). El `vercel.json` ya incluye el rewrite SPA. Redeploy.
 ## 7) Habilitar Realtime
 
 Para que la **Cocina (KDS)**, mesas y pedidos se actualicen en vivo:
-- **Database → Replication** (o **Realtime**) → agrega a la publicación
-  `supabase_realtime` las tablas: `kitchen_tickets`, `orders`, `restaurant_tables`.
-
-(Con la CLI ya quedan si tu esquema las incluye; si no, actívalas aquí.)
+- La migración `0031_arquitectura.sql` ya agrega a la publicación
+  `supabase_realtime` las tablas `orders`, `kitchen_tickets`,
+  `restaurant_tables` y `delivery_orders`. Verifícalo en **Database →
+  Replication**.
+- La app se suscribe **filtrando por tenant**, y si Realtime se corta, el POS se
+  pone al día solo (lectura incremental cada 60 s y al volver la conexión).
+  Ver `ARQUITECTURA.md`.
 
 ---
 

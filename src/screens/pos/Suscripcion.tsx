@@ -1,44 +1,40 @@
-import { useSubscription, useMyPlanRequest, useSubscriptionActions } from "@/data/hooks";
+import { useSubscription, useMyPlanRequest, useSubscriptionActions, useBranchQuota, useStaff } from "@/data/hooks";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
-
-const USAGE = [
-  { metric: "Sucursales", cur: 3, cap: 3 },
-  { metric: "Usuarios", cur: 12, cap: 15 },
-  { metric: "Pedidos este mes", cur: 8200, cap: 10000 },
-];
-
-const TIERS = [
-  { tier: "Básico", price: 699, features: "POS + 1 sucursal" },
-  { tier: "Pro", price: 1499, features: "POS + inventario + reportes + 3 sucursales" },
-  { tier: "Enterprise", price: 4800, features: "Todo + multi-sucursal + soporte" },
-];
+import { PLANS, branchLimitLabel, planInfo } from "@/lib/plans";
 
 export function Suscripcion() {
   const { data: sub } = useSubscription();
   const { data: pending } = useMyPlanRequest();
   const { requestPlanChange } = useSubscriptionActions();
+  const { data: quota } = useBranchQuota();
+  const { data: staff = [] } = useStaff();
   const plan = sub?.plan ?? "Pro";
-  const price = sub?.price ?? 1499;
+  const price = sub?.price ?? planInfo(plan).price;
+  const usedBranches = quota?.used ?? 0;
+  const usage = [
+    { metric: "Sucursales (además de la principal)", cur: usedBranches, cap: quota?.max ?? null },
+    { metric: "Personal activo", cur: staff.filter((m) => m.active).length, cap: null },
+  ];
 
   return (
     <div className="p-6 mob:p-4 max-w-4xl">
       <ScreenHeader title="Plan" subtitle="Tu suscripción a Wayra POS" />
 
       <Card className="mb-4">
-        <CardBody className="flex items-center justify-between">
+        <CardBody className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-xl font-bold">Plan {plan}</h3>
               <Badge tone={sub?.status === "Suspendido" ? "warning" : "accent"}>{sub?.status ?? "Activo"}</Badge>
             </div>
             <p className="text-muted text-sm mt-0.5">Renueva el 01 de cada mes</p>
           </div>
-          <p className="text-2xl font-mono font-bold">
+          <p className="text-2xl font-mono font-bold whitespace-nowrap">
             {formatMoney(price)}
             <span className="text-sm text-muted font-sans">/mes</span>
           </p>
@@ -61,20 +57,22 @@ export function Suscripcion() {
         <CardBody>
           <h3 className="font-semibold mb-3">Uso del plan</h3>
           <div className="space-y-3">
-            {USAGE.map((u) => (
+            {usage.map((u) => (
               <div key={u.metric}>
                 <div className="flex justify-between text-sm mb-1">
                   <span>{u.metric}</span>
                   <span className="font-mono text-muted">
-                    {u.cur.toLocaleString("es-PE")}/{u.cap.toLocaleString("es-PE")}
+                    {u.cap === null ? `${u.cur} · sin límite` : `${u.cur}/${u.cap}`}
                   </span>
                 </div>
-                <div className="h-2 rounded-full bg-chip-bg overflow-hidden">
-                  <div
-                    className={cn("h-full rounded-full", u.cur / u.cap >= 1 ? "bg-warning" : "bg-accent")}
-                    style={{ width: `${Math.min(100, (u.cur / u.cap) * 100)}%` }}
-                  />
-                </div>
+                {u.cap !== null && (
+                  <div className="h-2 rounded-full bg-chip-bg overflow-hidden">
+                    <div
+                      className={cn("h-full rounded-full", u.cur >= u.cap ? "bg-warning" : "bg-accent")}
+                      style={{ width: `${Math.min(100, (u.cur / Math.max(1, u.cap)) * 100)}%` }}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -83,16 +81,23 @@ export function Suscripcion() {
 
       <p className="text-xs uppercase tracking-wide text-muted mb-2">Cambiar de plan</p>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
-        {TIERS.map((t) => {
+        {PLANS.map((t) => {
           const current = t.tier === plan;
+          // Bajar de plan exige no tener más sucursales activas que las permitidas.
+          const tooMany = t.maxBranches !== null && usedBranches > t.maxBranches;
           return (
             <Card key={t.tier} className={cn(current && "border-accent/50")}>
               <CardBody className="flex flex-col h-full">
                 <h4 className="font-bold">{t.tier}</h4>
                 <p className="text-lg font-mono font-bold mt-1">{formatMoney(t.price)}</p>
+                <p className="text-xs mt-1 font-semibold">{branchLimitLabel(t.maxBranches)}</p>
                 <p className="text-muted text-xs mt-1 flex-1">{t.features}</p>
                 {current ? (
                   <p className="text-accent text-xs mt-3">Tu plan actual</p>
+                ) : tooMany ? (
+                  <p className="text-warning text-xs mt-3">
+                    Tienes {usedBranches} sucursales activas; desactiva {usedBranches - (t.maxBranches ?? 0)} para cambiar a este plan.
+                  </p>
                 ) : (
                   <Button
                     size="sm"
@@ -101,7 +106,7 @@ export function Suscripcion() {
                     disabled={!!pending || requestPlanChange.isPending}
                     onClick={() => requestPlanChange.mutate(t.tier)}
                   >
-                    {t.price > (TIERS.find((x) => x.tier === plan)?.price ?? 0) ? "Solicitar mejora" : "Solicitar cambio"}
+                    {t.price > planInfo(plan).price ? "Solicitar mejora" : "Solicitar cambio"}
                   </Button>
                 )}
               </CardBody>
