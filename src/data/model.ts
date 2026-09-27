@@ -212,6 +212,24 @@ export interface BranchSales {
   orders: number;
 }
 
+/** Cifras de una sucursal en un rango (la app suma cada rama del árbol). */
+export interface BranchReportRow {
+  branchId: string;
+  sales: number;
+  orders: number;
+  cashSales: number;
+  cardSales: number;
+  digitalSales: number;
+  /** Insumos consumidos por las ventas (kardex × costo). */
+  foodCost: number;
+  wasteCost: number;
+  purchases: number;
+  transferIn: number;
+  transferOut: number;
+  /** Suma de diferencias de los cierres de caja (− = faltante). */
+  cashDiff: number;
+}
+
 /** A line being built in the cart before it's persisted to an order. */
 export interface DraftLine {
   itemId: string;

@@ -529,7 +529,7 @@ const OVERLAID = new Set(["getPaidOrders", "getInventory", "getInventoryMovement
 const CACHED = new Set([
   "getCategories", "getMenuItems", "getMenuCatalog", "getExtras", "getPrefs", "getBranches", "getStaff", "getSettings",
   "getCustomers", "getRecipes", "getStaffPins", "getDeliveryZones", "getDrivers", "getRolePermissions", "getSubscription",
-  "getReservations", "getWaitlist", "getActivityLog", "getBranchSales", "getBranchQuota",
+  "getReservations", "getWaitlist", "getActivityLog", "getBranchSales", "getBranchReport", "getBranchQuota",
 ]);
 /** Escrituras administrativas tras las que hay que releer el estado operativo. */
 const REFRESH_AFTER = new Set(["addTable", "updateTable", "removeTable"]);

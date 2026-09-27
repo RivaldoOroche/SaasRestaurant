@@ -113,3 +113,27 @@ test("inventario: crear insumo, registrar compra y trasladar a otra sucursal", a
   await selectBranch(page, "San Isidro");
   await expect(page.getByText("+2.5 atado")).toBeVisible();
 });
+
+test("reportes: consolidado del árbol con rama y detalle", async ({ page }) => {
+  // Una venta en San Isidro.
+  await selectBranch(page, "San Isidro");
+  await page.goto("/pos/mesas");
+  await page.getByRole("button", { name: /Libre/ }).first().click();
+  await page.getByRole("button", { name: /^Agregar / }).first().click();
+  await page.getByRole("complementary", { name: "Ticket del pedido" }).getByRole("button", { name: "Cobrar" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Registrar pago" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Confirmar pago y emitir" }).click();
+  await expect(page.getByRole("dialog").getByRole("button", { name: /Emitir/ })).toBeVisible();
+
+  await page.goto("/pos/reportes");
+  await expect(page.getByRole("heading", { name: "Consolidado por sucursal" })).toBeVisible();
+  const card = page;
+  await expect(card.getByRole("row", { name: /Total empresa/ })).toBeVisible();
+  await card.getByRole("button", { name: /Abrir Miraflores/ }).click();
+  await expect(card.getByRole("row", { name: /Miraflores \(solo este local\)/ })).toBeVisible();
+  const si = card.getByRole("row", { name: /San Isidro/ });
+  await expect(si).not.toContainText("S/ 0.00 0");
+  await si.click();
+  await expect(card.getByText("Detalle · San Isidro")).toBeVisible();
+  await page.screenshot({ path: "/tmp/claude-0/-home-claude-repo/83856eb5-9f83-5c19-bf71-041a9af25c6e/scratchpad/shots/consolidado.png", fullPage: true });
+});

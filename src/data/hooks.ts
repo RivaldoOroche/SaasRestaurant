@@ -201,6 +201,10 @@ export function useInventory() {
   const branchId = useBranchStore((s) => s.branchId);
   return useQuery({ queryKey: ["inventory", branchId], queryFn: () => repo.getInventory(branchId) });
 }
+export function useBranchReport(from: string | null, to: string | null = null) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["branchReport", from, to], queryFn: () => repo.getBranchReport(from, to) });
+}
 export function useInventoryMovements() {
   const repo = useRepo();
   const branchId = useBranchStore((s) => s.branchId);

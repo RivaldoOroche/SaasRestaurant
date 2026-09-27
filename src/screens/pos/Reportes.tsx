@@ -8,7 +8,10 @@ import {
   useRecipes,
   useSettings,
   useTaxRate,
+  useBranches,
 } from "@/data/hooks";
+import { useBranchStore } from "@/store/branch";
+import { ConsolidadoCard } from "./reportes/ConsolidadoCard";
 import { useAuth } from "@/auth/AuthContext";
 import { isAdmin } from "@/lib/roles";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -28,9 +31,6 @@ function net(o: Order): number {
 function collected(o: Order): number {
   return o.paidTotal ?? round2(net(o) * 1.18);
 }
-function sinceDays(days: number): number {
-  return Date.now() - days * 86400000;
-}
 
 export function Reportes() {
   const { data: paidAll = [] } = usePaidOrders();
@@ -45,15 +45,21 @@ export function Reportes() {
 
   const [rango, setRango] = useState<Rango>("mes");
   const [exporting, setExporting] = useState(false);
+  const branchId = useBranchStore((s) => s.branchId);
+  const { data: branches = [] } = useBranches();
+  const branchName = branches.length > 1 ? branches.find((b) => b.id === branchId)?.name : undefined;
+  // Inicio del rango (estable durante el día para reutilizar el caché).
+  const from = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    if (rango !== "hoy") d.setDate(d.getDate() - (rango === "semana" ? 6 : 29));
+    return d.toISOString();
+  }, [rango]);
 
   const paid = useMemo(() => {
-    if (rango === "hoy") {
-      const t0 = new Date().setHours(0, 0, 0, 0);
-      return paidAll.filter((o) => new Date(o.openedAt).getTime() >= t0);
-    }
-    const from = sinceDays(rango === "semana" ? 7 : 30);
-    return paidAll.filter((o) => new Date(o.openedAt).getTime() >= from);
-  }, [paidAll, rango]);
+    const t0 = Date.parse(from);
+    return paidAll.filter((o) => Date.parse(o.closedAt ?? o.openedAt) >= t0);
+  }, [paidAll, from]);
 
   const sales = useMemo(() => round2(paid.reduce((s, o) => s + collected(o), 0)), [paid]);
   const tickets = paid.length;
@@ -118,7 +124,13 @@ export function Reportes() {
     <div className="p-6 mob:p-4 max-w-5xl">
       <ScreenHeader
         title="Reportes"
-        subtitle={admin ? "Resumen del negocio" : `Mi desempeño · ${session?.staff?.name ?? ""}`}
+        subtitle={
+          admin
+            ? branchName
+              ? `Resumen de ${branchName} · el consolidado de todas las sucursales está abajo`
+              : "Resumen del negocio"
+            : `Mi desempeño · ${session?.staff?.name ?? ""}`
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2 no-print">
             <div className="flex rounded-md border border-border overflow-hidden">
@@ -174,6 +186,8 @@ export function Reportes() {
           )}
         </CardBody>
       </Card>
+
+      {admin && <ConsolidadoCard from={from} rangoLabel={RANGO_LABEL[rango]} />}
 
       {admin && (
         <Card>

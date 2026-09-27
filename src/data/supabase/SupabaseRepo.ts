@@ -21,6 +21,7 @@ import type {
   Customer,
   InventoryItem,
   InventoryMovement,
+  BranchReportRow,
   LogEntry,
   BusinessSettings,
   MenuChange,
@@ -465,6 +466,25 @@ export class SupabaseRepo implements BackendRepo {
       const t = byBranch.get(b.id);
       return { branchId: b.id, name: b.name, city: b.city, sales: Number(t?.sales ?? 0), orders: t?.orders ?? 0 };
     });
+  }
+
+  async getBranchReport(from: string | null, to: string | null): Promise<BranchReportRow[]> {
+    const { data, error } = await this.sb.rpc("branch_report", { p_tenant: this.tenantId, p_from: from, p_to: to });
+    if (error) fail(error);
+    return (data ?? []).map((r) => ({
+      branchId: r.branch_id,
+      sales: Number(r.sales),
+      orders: r.orders,
+      cashSales: Number(r.cash_sales),
+      cardSales: Number(r.card_sales),
+      digitalSales: Number(r.digital_sales),
+      foodCost: Number(r.food_cost),
+      wasteCost: Number(r.waste_cost),
+      purchases: Number(r.purchases),
+      transferIn: Number(r.transfer_in),
+      transferOut: Number(r.transfer_out),
+      cashDiff: Number(r.cash_diff),
+    }));
   }
 
   async setMenuPrice(itemId: string, price: number): Promise<void> {

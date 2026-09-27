@@ -315,6 +315,23 @@ describe("sincronización y terminales", () => {
     expect(other.rows).toHaveLength(0);
   });
 
+  it("branch_report: una fila por sucursal con ventas, costo de insumos y traslados; solo miembros", async () => {
+    const rep = async (u: string, tenant = HIGUERA) =>
+      asUser(db, u, (q) =>
+        q<{ branch_id: string; sales: string; orders: number; food_cost: string; transfer_in: string; transfer_out: string }>(
+          `select * from branch_report($1, now() - interval '1 day', null)`, [tenant]),
+      );
+    const { rows } = await rep(dueno);
+    expect(rows.length).toBe(2);
+    const si = rows.find((r) => r.branch_id === SAN_ISIDRO)!;
+    expect(Number(si.sales)).toBeGreaterThan(0); // la venta del primer test
+    expect(Number(si.food_cost)).toBeGreaterThan(0); // descontó pescado
+    expect(Number(si.transfer_in)).toBeGreaterThan(0); // recibió limón
+    const mira = rows.find((r) => r.branch_id !== SAN_ISIDRO)!;
+    expect(Number(mira.transfer_out)).toBeCloseTo(Number(si.transfer_in), 2);
+    expect((await rep(rival)).rows).toHaveLength(0); // otro restaurante no ve nada
+  });
+
   it("caja: fondo + ventas en efectivo + movimientos = esperado; el cierre calcula la diferencia", async () => {
     const MIRA = "22222222-0000-0000-0000-000000000001";
     const session = randomUUID();

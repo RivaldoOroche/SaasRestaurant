@@ -4,6 +4,7 @@ import type {
   MenuItemInput,
   MenuCatalog,
   InventoryMovement,
+  BranchReportRow,
   InventoryReason,
   ModifierExtra,
   ModifierPref,
@@ -148,6 +149,8 @@ export interface Repo {
 
   // Sucursales — ventas agregadas (comparativa del dueño)
   getBranchSales(): Promise<BranchSales[]>;
+  /** Consolidado por sucursal en [from, to) (ISO). */
+  getBranchReport(from: string | null, to: string | null): Promise<BranchReportRow[]>;
 
   // CRM / loyalty
   getCustomers(): Promise<Customer[]>;

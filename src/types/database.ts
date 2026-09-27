@@ -377,6 +377,23 @@ export type Database = {
       pos_snapshot: { Args: { p_tenant: string; p_branch?: string | null; p_since?: string | null }; Returns: unknown };
       pos_terminal: { Args: { p_tenant: string; p_device: string; p_branch?: string | null; p_name?: string }; Returns: unknown };
       branch_quota: { Args: { p_tenant: string }; Returns: unknown };
+      branch_report: {
+        Args: { p_tenant: string; p_from?: string | null; p_to?: string | null };
+        Returns: {
+          branch_id: string;
+          sales: number;
+          orders: number;
+          cash_sales: number;
+          card_sales: number;
+          digital_sales: number;
+          food_cost: number;
+          waste_cost: number;
+          purchases: number;
+          transfer_in: number;
+          transfer_out: number;
+          cash_diff: number;
+        }[];
+      };
       branch_sales: {
         Args: { p_tenant: string; p_from?: string | null };
         Returns: { branch_id: string; sales: number; orders: number }[];

@@ -6,6 +6,7 @@ import type {
   Customer,
   InventoryItem,
   InventoryMovement,
+  BranchReportRow,
   LogEntry,
   BusinessSettings,
   MenuChange,
@@ -781,6 +782,35 @@ export class MockRepo implements BackendRepo {
       const paid = this.state.orders.filter((o) => o.status === "cobrada" && o.branchId === b.id);
       const sales = Math.round(paid.reduce((s, o) => s + (o.paidTotal ?? 0), 0) * 100) / 100;
       return { branchId: b.id, name: b.name, city: b.city, sales, orders: paid.length };
+    });
+  }
+
+  async getBranchReport(from: string | null, to: string | null): Promise<BranchReportRow[]> {
+    const inRange = (at?: string | null) => !!at && (!from || at >= from) && (!to || at < to);
+    const cost = new Map(this.state.inventory.map((i) => [i.id, i.cost ?? 0]));
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    return this.state.branches.map((b) => {
+      const paid = this.state.orders.filter((o) => o.status === "cobrada" && o.branchId === b.id && inRange(o.closedAt ?? o.openedAt));
+      const sum = (f: (o: Order) => boolean) => r2(paid.filter(f).reduce((s, o) => s + (o.paidTotal ?? 0), 0));
+      const mv = this.state.movements.filter((m) => m.branchId === b.id && inRange(m.at));
+      const val = (f: (m: InventoryMovement) => boolean, sign: number) =>
+        r2(mv.filter(f).reduce((s, m) => s + sign * m.delta * (cost.get(m.itemId) ?? 0), 0));
+      return {
+        branchId: b.id,
+        sales: sum(() => true),
+        orders: paid.length,
+        cashSales: sum((o) => o.paidMethod === "efectivo"),
+        cardSales: sum((o) => o.paidMethod === "tarjeta"),
+        digitalSales: sum((o) => !!o.paidMethod && o.paidMethod !== "efectivo" && o.paidMethod !== "tarjeta"),
+        foodCost: val((m) => m.reason === "venta", -1),
+        wasteCost: val((m) => m.reason === "merma", -1),
+        purchases: val((m) => m.reason === "compra", 1),
+        transferIn: val((m) => m.reason === "traslado" && m.delta > 0, 1),
+        transferOut: val((m) => m.reason === "traslado" && m.delta < 0, -1),
+        cashDiff: r2(
+          this.state.cash.filter((c) => c.branchId === b.id && c.status === "cerrada" && inRange(c.closedAt)).reduce((s, c) => s + (c.difference ?? 0), 0),
+        ),
+      };
     });
   }
 
