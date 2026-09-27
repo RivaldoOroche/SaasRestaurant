@@ -97,5 +97,7 @@ y `tenants.mrr` (derivado).
 | Motor offline contra SQL real | `supabase/tests/sync.db.test.ts` |
 | Offline de punta a punta (demo) | `src/data/sync/engine.test.ts`, `e2e/offline.spec.ts` |
 
-`npm run db:bundle` regenera `supabase/setup_all.sql` (una prueba falla si
-quedó desactualizado).
+`npm run db:bundle` regenera `supabase/instalar.sql` (todas las migraciones en un
+script único y reejecutable, con registro en `public.wayra_migraciones` y detección
+de bases instaladas sin registro) y `supabase/demo.sql` (datos de prueba). Una prueba
+falla si quedaron desactualizados y otra instala dos veces seguidas en PGlite.

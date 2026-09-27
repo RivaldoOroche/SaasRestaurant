@@ -30,11 +30,20 @@ Hay **dos caminos**. Elige uno:
 - **A. Dashboard (sin instalar nada)** — copiar/pegar SQL en el navegador. Más simple.
 - **B. CLI** — un comando aplica todo. Mejor para repetir/automatizar.
 
-> **Atajo todo-en-uno**: si solo quieres dejar la base lista rápido, abre el
-> SQL Editor, pega **`supabase/setup_all.sql`** (contiene las 17 migraciones
-> **en orden** + el seed) y pulsa **Run** una sola vez. Luego salta a la
-> [sección 5](#5-crear-las-cuentas-de-acceso) (cuentas de Auth). Los pasos 3 y 4
-> de abajo son la versión detallada archivo por archivo.
+> **Recomendado · un solo script**: abre el SQL Editor, pega
+> **`supabase/instalar.sql`** completo y pulsa **Run**. Instala todas las
+> migraciones en orden, en una sola transacción, y al final muestra una tabla con
+> el estado de cada una. Es **seguro volver a correrlo**:
+> - Cada migración queda registrada en `public.wayra_migraciones` y no se repite.
+> - Si tu base ya tenía migraciones (pegadas a mano o con la CLI), detecta hasta
+>   dónde llegaba y aplica solo las que faltan.
+> - Si algo falla, no queda nada a medias.
+>
+> No crea datos ficticios. Para probar con restaurantes de demostración, corre
+> después **`supabase/demo.sql`** (opcional; trae al final cómo quitarla).
+> Luego salta a la [sección 5](#5-crear-las-cuentas-de-acceso) (cuentas de Auth);
+> el final de `instalar.sql` trae el SQL para hacerte administrador.
+> Los pasos 3 y 4 de abajo son la versión detallada archivo por archivo.
 
 ---
 
@@ -53,8 +62,9 @@ Hay **dos caminos**. Elige uno:
 ## 3) Aplicar el esquema (migraciones)
 
 Las migraciones están en `supabase/migrations/` y **deben aplicarse en orden**
-(de `0001` a la última). Alternativa: `supabase/setup_all.sql` trae todas las
-migraciones + el seed en un solo archivo (se regenera con `npm run db:bundle`).
+(de `0001` a la última). Alternativa recomendada: `supabase/instalar.sql` las trae
+todas en un solo script reejecutable, y `supabase/demo.sql` los datos de prueba
+(ambos se regeneran con `npm run db:bundle`).
 
 ### Camino A — Dashboard (SQL Editor)
 1. En el dashboard: **SQL Editor → New query**.

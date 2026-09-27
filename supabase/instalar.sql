@@ -1,16 +1,275 @@
--- =====================================================================
--- Wayra POS - Script unico de instalacion (todo en uno)
--- =====================================================================
--- Concatena las migraciones (0001 -> ultima) + seed.sql. Pegar UNA vez
--- en el SQL Editor de Supabase y Run. Luego Auth + memberships (SUPABASE_SETUP.md).
--- ARCHIVO GENERADO: no editar a mano (npm run db:bundle).
--- =====================================================================
+-- =============================================================================
+-- Wayra POS · INSTALADOR COMPLETO DE LA BASE DE DATOS (Supabase)
+-- =============================================================================
+-- Contiene las 45 migraciones (0001 → 0045). ARCHIVO GENERADO: no editar a mano
+-- (npm run db:bundle).
+--
+-- CÓMO USARLO
+--   1. Supabase → SQL Editor → New query → pega TODO este archivo → Run.
+--   2. Al final verás una tabla con cada migración y su estado.
+--   3. Crea tu usuario en Authentication → Users y hazte administrador de la
+--      plataforma (último bloque de este archivo).
+--
+-- ES SEGURO VOLVER A CORRERLO
+--   · Cada migración se anota en public.wayra_migraciones y no se repite.
+--   · Si tu base ya tenía migraciones (con la CLI de Supabase o pegadas a mano),
+--     las detecta y las omite (estado «ya existía»).
+--   · Todo corre en una sola transacción: si algo falla, no queda nada a medias.
+--   · Al final verifica que existan las piezas clave; si falta alguna, se
+--     cancela todo y te dice qué falta.
+--
+-- No crea restaurantes ni datos de prueba. Para probar con datos ficticios,
+-- corre después supabase/demo.sql (opcional).
+-- =============================================================================
 
+create table if not exists public.wayra_migraciones (
+  version     text primary key,
+  nombre      text not null,
+  estado      text not null,          -- aplicada | ya existía | registrada por la CLI
+  detalle     text,
+  aplicada_en timestamptz not null default now()
+);
+alter table public.wayra_migraciones enable row level security; -- sin políticas: solo el dueño de la base
+revoke all on public.wayra_migraciones from anon, authenticated;
 
--- ==================================================================
--- Migracion 0001_core_schema.sql
--- ==================================================================
+-- Aplica una migración si no está registrada. Si sus objetos ya existían
+-- (aplicada antes sin registro), se deshace solo ese intento y se anota.
+create or replace function pg_temp.wayra_migrar(p_version text, p_nombre text, p_sql text) returns void
+language plpgsql as $wayra_fn$
+declare
+  v_cli boolean := false;
+begin
+  if exists (select 1 from public.wayra_migraciones where version = p_version) then
+    raise notice '%  omitida (ya registrada)', p_nombre;
+    return;
+  end if;
+  if to_regclass('supabase_migrations.schema_migrations') is not null then
+    execute 'select exists (select 1 from supabase_migrations.schema_migrations where version = $1)' into v_cli using p_version;
+    if v_cli then
+      insert into public.wayra_migraciones (version, nombre, estado) values (p_version, p_nombre, 'registrada por la CLI');
+      raise notice '%  omitida (aplicada con la CLI de Supabase)', p_nombre;
+      return;
+    end if;
+  end if;
+  begin
+    execute p_sql;
+    insert into public.wayra_migraciones (version, nombre, estado) values (p_version, p_nombre, 'aplicada');
+    raise notice '%  aplicada', p_nombre;
+  exception
+    when duplicate_table or duplicate_object or duplicate_column or duplicate_function
+      or duplicate_schema or undefined_column or undefined_table or undefined_object or undefined_function then
+      insert into public.wayra_migraciones (version, nombre, estado, detalle)
+      values (p_version, p_nombre, 'ya existía', sqlerrm);
+      raise notice '%  ya existía (%)', p_nombre, sqlerrm;
+  end;
+end $wayra_fn$;
 
+-- Base ya instalada sin registro: detecta hasta qué migración llegó y da por
+-- aplicadas todas las anteriores (no se re-ejecutan).
+do $wayra_base$
+declare
+  v_base text;
+begin
+  if exists (select 1 from public.wayra_migraciones) or to_regclass('public.tenants') is null then
+    return; -- base nueva o ya registrada
+  end if;
+  create temp table wayra_detect (version text, nombre text, presente boolean) on commit drop;
+  insert into wayra_detect values
+    ('0001', '0001_core_schema.sql', to_regclass('public.subscription_plans') is not null
+      or to_regclass('public.tenants') is not null
+      or to_regclass('public.memberships') is not null
+      or to_regclass('public.saas_invoices') is not null
+      or to_regclass('public.support_tickets') is not null
+      or to_regclass('public.onboarding_links') is not null
+      or to_regclass('public.platform_activity') is not null
+      or to_regclass('public.branches') is not null
+      or to_regclass('public.staff_members') is not null
+      or to_regclass('public.business_settings') is not null
+      or to_regclass('public.menu_categories') is not null
+      or to_regclass('public.menu_items') is not null
+      or to_regclass('public.modifier_extras') is not null
+      or to_regclass('public.modifier_prefs') is not null
+      or to_regclass('public.menu_change_requests') is not null
+      or to_regclass('public.restaurant_tables') is not null
+      or to_regclass('public.reservations') is not null
+      or to_regclass('public.waitlist') is not null
+      or to_regclass('public.customers') is not null
+      or to_regclass('public.orders') is not null
+      or to_regclass('public.order_lines') is not null
+      or to_regclass('public.void_events') is not null
+      or to_regclass('public.kitchen_tickets') is not null
+      or to_regclass('public.ticket_lines') is not null
+      or to_regclass('public.inventory_items') is not null
+      or to_regclass('public.recipes') is not null
+      or to_regclass('public.loyalty_transactions') is not null
+      or to_regclass('public.comprobantes') is not null
+      or to_regclass('public.sunat_outbox') is not null
+      or to_regclass('public.activity_log') is not null
+      or to_regtype('public.app_role') is not null
+      or to_regtype('public.plan_tier') is not null
+      or to_regtype('public.tenant_status') is not null
+      or to_regtype('public.table_status') is not null
+      or to_regtype('public.order_status') is not null
+      or to_regtype('public.kds_column') is not null
+      or to_regtype('public.comprobante_tipo') is not null
+      or to_regtype('public.sunat_status') is not null
+      or to_regtype('public.currency_code') is not null
+      or to_regtype('public.pay_method') is not null),
+    ('0002', '0002_rls.sql', exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'is_platform_admin')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'has_tenant')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'tenant_role')),
+    ('0003', '0003_online_orders.sql', false),
+    ('0004', '0004_order_payment.sql', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'orders' and column_name = 'paid_method')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'orders' and column_name = 'paid_total')),
+    ('0005', '0005_folio_counters.sql', to_regclass('public.folio_counters') is not null),
+    ('0006', '0006_rls_role_gating.sql', exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'can_manage')),
+    ('0007', '0007_security_hardening.sql', exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'next_folio')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'set_comprobante_status')),
+    ('0008', '0008_sunat_credentials.sql', to_regtype('public.sunat_mode') is not null),
+    ('0009', '0009_public_menu.sql', exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'public_menu')),
+    ('0010', '0010_inventory_cost.sql', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'inventory_items' and column_name = 'cost')),
+    ('0011', '0011_payments.sql', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'yape_number')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'plin_number')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'card_provider')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'card_public_key')),
+    ('0012', '0012_payment_credentials.sql', to_regclass('public.payment_credentials') is not null),
+    ('0013', '0013_notas_credito.sql', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'comprobantes' and column_name = 'ref_folio')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'comprobantes' and column_name = 'motivo')),
+    ('0014', '0014_facturacion.sql', to_regclass('public.fiscal_credentials') is not null
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'razon_social')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'ubigeo')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'billing_provider')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'sunat_mode')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'sol_user')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'billing_endpoint')),
+    ('0015', '0015_cdr_xml.sql', exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'set_comprobante_result')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'comprobantes' and column_name = 'signed_xml')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'comprobantes' and column_name = 'cdr')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'comprobantes' and column_name = 'sunat_ticket')),
+    ('0016', '0016_kds_branch.sql', false),
+    ('0017', '0017_platform_settings.sql', to_regclass('public.platform_settings') is not null),
+    ('0018', '0018_subscription_charges.sql', to_regclass('public.subscription_charges') is not null
+      or to_regtype('public.charge_status') is not null),
+    ('0019', '0019_payment_webhooks.sql', to_regclass('public.payment_events') is not null
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'payment_credentials' and column_name = 'public_key')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'payment_credentials' and column_name = 'merchant_id')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'payment_credentials' and column_name = 'webhook_secret')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'payment_credentials' and column_name = 'extra')),
+    ('0020', '0020_libro_reclamaciones.sql', to_regclass('public.complaints') is not null
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'public_tenant_info')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'submit_complaint')),
+    ('0021', '0021_platform_billing.sql', to_regclass('public.platform_fiscal_credentials') is not null
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'platform_settings' and column_name = 'billing_provider')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'platform_settings' and column_name = 'sunat_mode')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'platform_settings' and column_name = 'sol_user')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'platform_settings' and column_name = 'billing_endpoint')),
+    ('0022', '0022_reservas.sql', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'reservations' and column_name = 'phone')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'reservations' and column_name = 'res_date')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'reservations' and column_name = 'status')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'reservations' and column_name = 'notes')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'waitlist' and column_name = 'phone')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'waitlist' and column_name = 'status')),
+    ('0023', '0023_role_permissions.sql', to_regclass('public.role_permissions') is not null),
+    ('0024', '0024_access_log.sql', to_regclass('public.access_log') is not null),
+    ('0025', '0025_contact_messages.sql', to_regclass('public.contact_messages') is not null),
+    ('0026', '0026_plan_change_requests.sql', to_regclass('public.plan_change_requests') is not null
+      or to_regtype('public.plan_req_status') is not null),
+    ('0027', '0027_config_audit.sql', to_regclass('public.config_audit') is not null
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'audit_config')),
+    ('0028', '0028_push_subscriptions.sql', to_regclass('public.push_subscriptions') is not null),
+    ('0029', '0029_delivery.sql', to_regclass('public.delivery_zones') is not null
+      or to_regclass('public.delivery_drivers') is not null
+      or to_regclass('public.delivery_orders') is not null
+      or to_regtype('public.delivery_status') is not null
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'public_delivery_status')),
+    ('0030', '0030_enums_operacion.sql', false),
+    ('0031', '0031_arquitectura.sql', to_regclass('public.inventory_stock') is not null
+      or to_regclass('public.inventory_movements') is not null
+      or to_regclass('public.v_delivery_orders') is not null
+      or to_regtype('public.order_kind') is not null
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'touch_updated_at')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'my_tenant_ids')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'my_managed_tenant_ids')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'root_branch')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'branches_tree_guard')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'branches_delete_guard')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'tenants_create_root')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'plan_max_branches')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'active_child_branches')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'branches_quota_guard')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'tenants_plan_guard')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'branch_quota')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'fill_branch')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'delivery_fill_tenant')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'inventory_apply_movement')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'ticket_lines_fill_tenant')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'order_lines_touch_order')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'initplan_expr')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'branches' and column_name = 'parent_id')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'branches' and column_name = 'active')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'branches' and column_name = 'address')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'branches' and column_name = 'phone')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'branches' and column_name = 'sort')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'branches' and column_name = 'updated_at')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'subscription_plans' and column_name = 'max_branches')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'orders' and column_name = 'kind')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'orders' and column_name = 'updated_at')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'order_lines' and column_name = 'sent_qty')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'delivery_orders' and column_name = 'updated_at')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'inventory_items' and column_name = 'active')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'ticket_lines' and column_name = 'tenant_id')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'restaurant_tables' and column_name = 'updated_at')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'kitchen_tickets' and column_name = 'updated_at')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'customers' and column_name = 'updated_at')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'menu_items' and column_name = 'updated_at')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'reservations' and column_name = 'updated_at')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'waitlist' and column_name = 'updated_at')),
+    ('0032', '0032_pos_ops.sql', to_regclass('public.pos_ops') is not null
+      or to_regclass('public.order_redirects') is not null
+      or to_regclass('public.pos_terminals') is not null
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'format_folio')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'pos_member')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'pos_log')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'pos_open_order')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'order_label')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'pos_send_kitchen')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'pos_deduct_inventory')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'pos_free_table')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'pos_apply')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'pos_terminal')),
+    ('0033', '0033_branch_sales.sql', exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'branch_sales')),
+    ('0034', '0034_tax_regime.sql', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'business_settings' and column_name = 'tax_regime')),
+    ('0035', '0035_plan_prices.sql', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'subscription_plans' and column_name = 'annual_price')),
+    ('0036', '0036_legal_acceptances.sql', to_regclass('public.legal_acceptances') is not null),
+    ('0037', '0037_staff_pin_verifier.sql', exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'staff_members' and column_name = 'pin_verifier')),
+    ('0038', '0038_cash_sessions.sql', to_regclass('public.cash_sessions') is not null
+      or to_regclass('public.cash_movements') is not null
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'cash_movements_touch')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'cash_expected')),
+    ('0039', '0039_staff_branches.sql', to_regclass('public.staff_branches') is not null),
+    ('0040', '0040_carta.sql', to_regclass('public.menu_item_branch') is not null
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'menu_items' and column_name = 'archived')),
+    ('0041', '0041_inventario_traslados.sql', to_regclass('public.inventory_kardex') is not null
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'inventory_movements' and column_name = 'ref_id')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'inventory_movements' and column_name = 'note')),
+    ('0042', '0042_branch_report.sql', exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = 'branch_report')),
+    ('0043', '0043_pos_orden_de_bloqueo.sql', false),
+    ('0044', '0044_plan_locales_adicionales.sql', exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'plan_extra_branches')
+      or exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'plan_monthly_total')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'subscription_plans' and column_name = 'included_branches')
+      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'subscription_plans' and column_name = 'extra_branch_price')),
+    ('0045', '0045_planes_por_local.sql', exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'app' and p.proname = 'plan_limit_message'));
+  select max(version) into v_base from wayra_detect where presente;
+  insert into public.wayra_migraciones (version, nombre, estado, detalle)
+  select version, nombre, 'ya existía', 'base anterior detectada hasta la migración ' || v_base
+  from wayra_detect where version <= v_base;
+  raise notice 'Base existente detectada: tenía hasta la migración %. Se aplican solo las siguientes.', v_base;
+end $wayra_base$;
+
+-- =============================================================================
+-- 0001_core_schema.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0001', '0001_core_schema.sql', $wayra_0001$
 -- Wayra POS core schema.
 -- Multi-tenant, single shared database. Every tenant-scoped table carries
 -- tenant_id; isolation is enforced by RLS (see 0002_rls.sql). Platform-level
@@ -418,11 +677,12 @@ create table activity_log (
   created_at  timestamptz not null default now()
 );
 create index on activity_log (tenant_id);
+$wayra_0001$);
 
--- ==================================================================
--- Migracion 0002_rls.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0002_rls.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0002', '0002_rls.sql', $wayra_0002$
 -- Row-Level Security.
 -- Access is decided by the `memberships` table: a user may read/write a tenant's
 -- rows if they have a membership for that tenant, or if they are a platform
@@ -530,11 +790,12 @@ create policy onboarding_platform on onboarding_links
 alter table platform_activity enable row level security;
 create policy platform_activity_admin on platform_activity
   for all using (app.is_platform_admin()) with check (app.is_platform_admin());
+$wayra_0002$);
 
--- ==================================================================
--- Migracion 0003_online_orders.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0003_online_orders.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0003', '0003_online_orders.sql', $wayra_0003$
 -- Online / delivery orders (Rappi, PedidosYa, WhatsApp, Web). Added in Phase 2.
 create table online_orders (
   id            uuid primary key default gen_random_uuid(),
@@ -554,20 +815,22 @@ create policy tenant_rw on online_orders
   for all
   using (app.has_tenant(tenant_id))
   with check (app.has_tenant(tenant_id));
+$wayra_0003$);
 
--- ==================================================================
--- Migracion 0004_order_payment.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0004_order_payment.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0004', '0004_order_payment.sql', $wayra_0004$
 -- Record how an order was paid, so cash close-out (Caja) can derive expected
 -- totals by method from real transactions instead of hardcoded figures.
 alter table orders add column if not exists paid_method pay_method;
 alter table orders add column if not exists paid_total numeric(12,2);
+$wayra_0004$);
 
--- ==================================================================
--- Migracion 0005_folio_counters.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0005_folio_counters.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0005', '0005_folio_counters.sql', $wayra_0005$
 -- Sequential, unique fiscal folios per tenant + serie (replaces random folios).
 create table folio_counters (
   tenant_id uuid not null references tenants(id) on delete cascade,
@@ -595,11 +858,12 @@ end $$;
 
 -- Enforce folio uniqueness at the DB level as a backstop.
 create unique index if not exists comprobantes_folio_unique on comprobantes (tenant_id, folio);
+$wayra_0005$);
 
--- ==================================================================
--- Migracion 0006_rls_role_gating.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0006_rls_role_gating.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0006', '0006_rls_role_gating.sql', $wayra_0006$
 -- Enforce role restrictions at the security boundary, not just in client nav.
 -- Previously every membership had full read/write on all tenant tables, so a
 -- waiter could edit prices, payroll, settings or delete comprobantes via the API.
@@ -659,11 +923,12 @@ end $$;
 -- Operational tables (orders, order_lines, kitchen_tickets, tables, reservations,
 -- waitlist, customers, loyalty_transactions, void_events, activity_log,
 -- online_orders) keep the original full tenant_rw policy — waiters need them.
+$wayra_0006$);
 
--- ==================================================================
--- Migracion 0007_security_hardening.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0007_security_hardening.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0007', '0007_security_hardening.sql', $wayra_0007$
 -- Security hardening (review follow-up).
 
 -- 1) next_folio must live in `public` to be callable via PostgREST rpc()
@@ -706,11 +971,12 @@ grant execute on function public.set_comprobante_status(uuid, sunat_status, text
 -- 3) The SUNAT outbox is an internal queue (not a fiscal record); members must be
 --    able to remove entries once synced. 0006 dropped its delete permission.
 create policy del_members on sunat_outbox for delete using (app.has_tenant(tenant_id));
+$wayra_0007$);
 
--- ==================================================================
--- Migracion 0008_sunat_credentials.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0008_sunat_credentials.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0008', '0008_sunat_credentials.sql', $wayra_0008$
 -- Credenciales de facturación electrónica por tenant (para producción multi-tenant).
 -- Contiene secretos (clave SOL, certificado, llave privada), así que la tabla queda
 -- CON RLS habilitada y SIN políticas: ningún cliente puede leerla. Solo la Edge
@@ -737,11 +1003,12 @@ create table sunat_credentials (
 
 alter table sunat_credentials enable row level security;
 -- Sin políticas: acceso denegado a clientes; solo service role (Edge Function).
+$wayra_0008$);
 
--- ==================================================================
--- Migracion 0009_public_menu.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0009_public_menu.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0009', '0009_public_menu.sql', $wayra_0009$
 -- Carta pública por slug, sin exponer tablas a anónimos: una función
 -- SECURITY DEFINER devuelve solo lo necesario (nombre, moneda, categorías e
 -- ítems disponibles). Así no filtramos MRR/dueño/estado del tenant.
@@ -768,18 +1035,20 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 grant execute on function public.public_menu(text) to anon, authenticated;
+$wayra_0009$);
 
--- ==================================================================
--- Migracion 0010_inventory_cost.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0010_inventory_cost.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0010', '0010_inventory_cost.sql', $wayra_0010$
 -- Costo por unidad de insumo, para calcular food cost y márgenes por platillo.
 alter table inventory_items add column if not exists cost numeric(12,2);
+$wayra_0010$);
 
--- ==================================================================
--- Migracion 0011_payments.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0011_payments.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0011', '0011_payments.sql', $wayra_0011$
 -- Métodos de pago Yape/Plin y configuración de pagos por tenant.
 alter type pay_method add value if not exists 'yape';
 alter type pay_method add value if not exists 'plin';
@@ -788,11 +1057,12 @@ alter table business_settings add column if not exists yape_number text;
 alter table business_settings add column if not exists plin_number text;
 alter table business_settings add column if not exists card_provider text not null default 'ninguno';
 alter table business_settings add column if not exists card_public_key text;
+$wayra_0011$);
 
--- ==================================================================
--- Migracion 0012_payment_credentials.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0012_payment_credentials.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0012', '0012_payment_credentials.sql', $wayra_0012$
 -- Credenciales secretas de la pasarela de tarjeta por tenant.
 -- Contiene la llave secreta del proveedor, así que se puede ESCRIBIR pero no
 -- LEER desde el cliente: RLS con INSERT/UPDATE para managers y sin SELECT. La
@@ -812,11 +1082,12 @@ create policy set_creds_ins on payment_credentials
 create policy set_creds_upd on payment_credentials
   for update using (app.can_manage(tenant_id)) with check (app.can_manage(tenant_id));
 -- Sin policy de SELECT: el cliente nunca lee la llave secreta.
+$wayra_0012$);
 
--- ==================================================================
--- Migracion 0013_notas_credito.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0013_notas_credito.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0013', '0013_notas_credito.sql', $wayra_0013$
 -- Notas de crédito electrónicas (SUNAT tipo 07) + resumen diario de boletas.
 --
 -- Una nota de crédito referencia un comprobante ya emitido (boleta/factura) y
@@ -834,11 +1105,12 @@ alter table comprobantes add column if not exists motivo    text;
 
 comment on column comprobantes.ref_folio is 'Folio del comprobante que modifica (para notas de crédito).';
 comment on column comprobantes.motivo    is 'Motivo de la nota de crédito.';
+$wayra_0013$);
 
--- ==================================================================
--- Migracion 0014_facturacion.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0014_facturacion.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0014', '0014_facturacion.sql', $wayra_0014$
 -- Configuración de facturación electrónica por tenant.
 --
 -- Datos del emisor (RUC, razón social, dirección, ubigeo) y proveedor de
@@ -873,11 +1145,12 @@ create policy set_fiscal_ins on fiscal_credentials
 create policy set_fiscal_upd on fiscal_credentials
   for update using (app.can_manage(tenant_id)) with check (app.can_manage(tenant_id));
 -- Sin policy de SELECT: el cliente nunca lee las credenciales secretas.
+$wayra_0014$);
 
--- ==================================================================
--- Migracion 0015_cdr_xml.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0015_cdr_xml.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0015', '0015_cdr_xml.sql', $wayra_0015$
 -- Persistencia del resultado SUNAT: XML firmado, CDR (constancia) y ticket.
 --
 -- El XML firmado y el CDR son la evidencia legal del comprobante; se guardan
@@ -906,19 +1179,21 @@ end $$;
 
 grant execute on function public.set_comprobante_result(uuid, sunat_status, text, text, text)
   to authenticated, anon;
+$wayra_0015$);
 
--- ==================================================================
--- Migracion 0016_kds_branch.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0016_kds_branch.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0016', '0016_kds_branch.sql', $wayra_0016$
 -- Sucursal en las comandas de cocina, para filtrar el KDS por sucursal activa.
 alter table kitchen_tickets add column if not exists branch_id uuid references branches(id) on delete set null;
 create index if not exists kitchen_tickets_branch on kitchen_tickets (branch_id);
+$wayra_0016$);
 
--- ==================================================================
--- Migracion 0017_platform_settings.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0017_platform_settings.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0017', '0017_platform_settings.sql', $wayra_0017$
 -- Datos del emisor del SaaS (tu empresa) para facturar a los tenants.
 -- Tabla de una sola fila, accesible solo por el dueño de la plataforma.
 create table if not exists platform_settings (
@@ -936,11 +1211,12 @@ insert into platform_settings (id) values (true) on conflict do nothing;
 alter table platform_settings enable row level security;
 create policy platform_settings_admin on platform_settings
   for all using (app.is_platform_admin()) with check (app.is_platform_admin());
+$wayra_0017$);
 
--- ==================================================================
--- Migracion 0018_subscription_charges.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0018_subscription_charges.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0018', '0018_subscription_charges.sql', $wayra_0018$
 -- Cobros de suscripción con aprobación previa (dunning con validación).
 --
 -- El cobro automático NO ejecuta el cargo directamente: primero genera una
@@ -979,11 +1255,12 @@ create unique index if not exists subscription_charges_open_unique
 alter table subscription_charges enable row level security;
 create policy subcharges_admin on subscription_charges
   for all using (app.is_platform_admin()) with check (app.is_platform_admin());
+$wayra_0018$);
 
--- ==================================================================
--- Migracion 0019_payment_webhooks.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0019_payment_webhooks.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0019', '0019_payment_webhooks.sql', $wayra_0019$
 -- Pasarelas de pago: credenciales extra (Izipay/Niubiz) y webhooks idempotentes.
 
 -- Campos adicionales de credenciales para proveedores más allá de Culqi.
@@ -1015,11 +1292,12 @@ alter table payment_events enable row level security;
 -- exclusiva de la Edge Function (service role), que evita el RLS.
 create policy payment_events_read on payment_events
   for select using (app.has_tenant(tenant_id) or app.is_platform_admin());
+$wayra_0019$);
 
--- ==================================================================
--- Migracion 0020_libro_reclamaciones.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0020_libro_reclamaciones.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0020', '0020_libro_reclamaciones.sql', $wayra_0020$
 -- Libro de Reclamaciones digital (Indecopi) por tenant.
 --
 -- El consumidor presenta una Hoja de Reclamación desde una página pública; el
@@ -1114,11 +1392,12 @@ begin
 end;
 $$;
 grant execute on function public.submit_complaint(text, jsonb) to anon, authenticated;
+$wayra_0020$);
 
--- ==================================================================
--- Migracion 0021_platform_billing.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0021_platform_billing.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0021', '0021_platform_billing.sql', $wayra_0021$
 -- Proveedor de facturación del SaaS (para las facturas de suscripción que la
 -- plataforma emite a los tenants): SUNAT directo u OSE/PSE (Nubefact, etc.).
 
@@ -1148,11 +1427,12 @@ create policy platform_fiscal_ins on platform_fiscal_credentials
   for insert with check (app.is_platform_admin());
 create policy platform_fiscal_upd on platform_fiscal_credentials
   for update using (app.is_platform_admin()) with check (app.is_platform_admin());
+$wayra_0021$);
 
--- ==================================================================
--- Migracion 0022_reservas.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0022_reservas.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0022', '0022_reservas.sql', $wayra_0022$
 -- Reservas y lista de espera: enriquecemos las tablas base con contacto, fecha,
 -- sucursal y estado para poder gestionarlas desde el POS.
 
@@ -1169,11 +1449,12 @@ alter table waitlist add column if not exists status    text not null default 'e
 alter table waitlist add column if not exists branch_id uuid references branches(id) on delete set null;
 alter table waitlist add column if not exists created_at timestamptz not null default now();
 create index if not exists waitlist_tenant_idx on waitlist (tenant_id, created_at);
+$wayra_0022$);
 
--- ==================================================================
--- Migracion 0023_role_permissions.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0023_role_permissions.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0023', '0023_role_permissions.sql', $wayra_0023$
 -- Permisos por rol configurables por el tenant (más allá de los roles fijos).
 -- Cada fila define, para un rol, la lista de pantallas del POS a las que puede
 -- acceder. Si no hay fila para un rol, se usan los permisos por defecto del rol.
@@ -1192,11 +1473,12 @@ create policy role_perms_read on role_permissions
   for select using (app.has_tenant(tenant_id) or app.is_platform_admin());
 create policy role_perms_write on role_permissions
   for all using (app.can_manage(tenant_id)) with check (app.can_manage(tenant_id));
+$wayra_0023$);
 
--- ==================================================================
--- Migracion 0024_access_log.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0024_access_log.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0024', '0024_access_log.sql', $wayra_0024$
 -- Auditoría de accesos: registra los inicios de sesión (para el dueño del SaaS).
 -- El 2FA (TOTP) se maneja con el MFA nativo de Supabase Auth (no requiere tabla).
 
@@ -1217,11 +1499,12 @@ create policy access_log_insert on access_log
   for insert with check (auth.uid() = user_id);
 create policy access_log_read on access_log
   for select using (app.is_platform_admin() or auth.uid() = user_id);
+$wayra_0024$);
 
--- ==================================================================
--- Migracion 0025_contact_messages.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0025_contact_messages.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0025', '0025_contact_messages.sql', $wayra_0025$
 -- Mensajes de contacto de la landing (solicitudes de demo / leads).
 -- La Edge Function `contacto` los inserta con el service role; solo la
 -- plataforma los lee. No hay policy de insert para el cliente.
@@ -1244,11 +1527,12 @@ create policy contact_read_admin on contact_messages
   for select using (app.is_platform_admin());
 create policy contact_update_admin on contact_messages
   for update using (app.is_platform_admin()) with check (app.is_platform_admin());
+$wayra_0025$);
 
--- ==================================================================
--- Migracion 0026_plan_change_requests.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0026_plan_change_requests.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0026', '0026_plan_change_requests.sql', $wayra_0026$
 -- Autoservicio de suscripción: el dueño del restaurante solicita un cambio de
 -- plan y la plataforma lo aprueba (consistente con el modelo de aprobación).
 
@@ -1278,11 +1562,12 @@ create policy planreq_read on plan_change_requests
   for select using (app.has_tenant(tenant_id) or app.is_platform_admin());
 create policy planreq_admin_upd on plan_change_requests
   for update using (app.is_platform_admin()) with check (app.is_platform_admin());
+$wayra_0026$);
 
--- ==================================================================
--- Migracion 0027_config_audit.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0027_config_audit.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0027', '0027_config_audit.sql', $wayra_0027$
 -- Auditoría de cambios sensibles de configuración.
 -- Se implementa con triggers de base de datos para capturar TODA modificación,
 -- sin importar por qué ruta de código llegue (app, Edge Function, SQL directo).
@@ -1422,11 +1707,12 @@ drop trigger if exists audit_platform_fiscal_credentials on platform_fiscal_cred
 create trigger audit_platform_fiscal_credentials
   after insert or update or delete on platform_fiscal_credentials
   for each row execute function app.audit_config('none', 'sol_pass,cert_pem,key_pem,api_token');
+$wayra_0027$);
 
--- ==================================================================
--- Migracion 0028_push_subscriptions.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0028_push_subscriptions.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0028', '0028_push_subscriptions.sql', $wayra_0028$
 -- Notificaciones push (Web Push / VAPID). Guarda la suscripción del navegador
 -- de cada usuario para enviarle notificaciones (comanda lista, cobro aprobado,
 -- alertas de SUNAT, etc.). El envío lo hace la Edge Function push-enviar con
@@ -1455,11 +1741,12 @@ create policy push_sub_own_del on push_subscriptions
   for delete using (auth.uid() = user_id);
 create policy push_sub_read on push_subscriptions
   for select using (auth.uid() = user_id or app.is_platform_admin());
+$wayra_0028$);
 
--- ==================================================================
--- Migracion 0029_delivery.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0029_delivery.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0029', '0029_delivery.sql', $wayra_0029$
 -- Delivery: zonas de reparto, repartidores propios y pedidos a domicilio
 -- (canales propios —teléfono, WhatsApp, web— y agregadores —Rappi, PedidosYa—).
 -- El cliente sigue su pedido con un enlace público basado en un token secreto.
@@ -1578,22 +1865,24 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 grant execute on function public.public_delivery_status(text) to anon, authenticated;
+$wayra_0029$);
 
--- ==================================================================
--- Migracion 0030_enums_operacion.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0030_enums_operacion.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0030', '0030_enums_operacion.sql', $wayra_0030$
 -- Valores de enum que usa la migración 0031. Van en un archivo aparte porque
 -- Postgres no permite usar un valor de enum en la misma transacción en que se
 -- agrega (cada migración corre en su propia transacción).
 
 -- Pedidos de delivery pagados en la app del agregador (Rappi, PedidosYa).
 alter type pay_method add value if not exists 'app';
+$wayra_0030$);
 
--- ==================================================================
--- Migracion 0031_arquitectura.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0031_arquitectura.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0031', '0031_arquitectura.sql', $wayra_0031$
 -- =============================================================================
 -- 0031 · Arquitectura multi-sucursal, normalización y rendimiento
 --
@@ -2264,11 +2553,12 @@ begin
     end if;
   end loop;
 end $$;
+$wayra_0031$);
 
--- ==================================================================
--- Migracion 0032_pos_ops.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0032_pos_ops.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0032', '0032_pos_ops.sql', $wayra_0032$
 -- =============================================================================
 -- 0032 · Operaciones del POS atómicas, idempotentes y aptas para offline
 --
@@ -2984,11 +3274,12 @@ begin
 end $$;
 
 grant execute on function public.pos_terminal(uuid, text, uuid, text) to authenticated;
+$wayra_0032$);
 
--- ==================================================================
--- Migracion 0033_branch_sales.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0033_branch_sales.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0033', '0033_branch_sales.sql', $wayra_0033$
 -- Ventas por sucursal agregadas en la base (antes: el cliente bajaba hasta 2000
 -- pedidos y sumaba; con más ventas el resultado quedaba corto e iba lento).
 -- Usa el índice parcial orders_paid_idx (tenant_id, closed_at) where cobrada.
@@ -3005,11 +3296,12 @@ language sql stable security definer set search_path = public, app as $$
 $$;
 
 grant execute on function public.branch_sales(uuid, timestamptz) to authenticated;
+$wayra_0033$);
 
--- ==================================================================
--- Migracion 0034_tax_regime.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0034_tax_regime.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0034', '0034_tax_regime.sql', $wayra_0034$
 -- Régimen de impuesto del restaurante. Los precios de la carta incluyen el
 -- impuesto (Ley 29571); el POS desglosa base e IGV según el régimen:
 --   general          → tax_rate configurado (18 %).
@@ -3018,11 +3310,12 @@ grant execute on function public.branch_sales(uuid, timestamptz) to authenticate
 alter table business_settings
   add column if not exists tax_regime text not null default 'general'
     check (tax_regime in ('general', 'mype_restaurante'));
+$wayra_0034$);
 
--- ==================================================================
--- Migracion 0035_plan_prices.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0035_plan_prices.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0035', '0035_plan_prices.sql', $wayra_0035$
 -- Precios de los planes alineados al mercado peruano (2026). Precios finales
 -- en soles con IGV incluido; todas las funciones en todos los planes, cambian
 -- las sucursales permitidas y el soporte. annual_price = 10 meses (2 gratis).
@@ -3037,11 +3330,12 @@ on conflict (tier) do update set
   annual_price = excluded.annual_price,
   max_branches = excluded.max_branches,
   features = excluded.features;
+$wayra_0035$);
 
--- ==================================================================
--- Migracion 0036_legal_acceptances.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0036_legal_acceptances.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0036', '0036_legal_acceptances.sql', $wayra_0036$
 -- Aceptación de documentos legales (Términos, Privacidad, Encargo de
 -- tratamiento) con su versión: prueba de la manifestación de voluntad del
 -- cliente (Código Civil arts. 141 y 1374) y base para pedir re-aceptación
@@ -3064,11 +3358,12 @@ create policy legal_acc_insert on legal_acceptances for insert
   with check (user_id = (select auth.uid()));
 create policy legal_acc_read on legal_acceptances for select
   using (user_id = (select auth.uid()) or (select app.is_platform_admin()));
+$wayra_0036$);
 
--- ==================================================================
--- Migracion 0037_staff_pin_verifier.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0037_staff_pin_verifier.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0037', '0037_staff_pin_verifier.sql', $wayra_0037$
 -- Verificador del PIN del personal para ingresar sin internet: PBKDF2-SHA256
 -- (sal = id del trabajador), calculado en el equipo al definir el PIN. El PIN
 -- nunca se guarda. pin_hash (SHA-256 sin sal, trivial de revertir con 4
@@ -3076,11 +3371,12 @@ create policy legal_acc_read on legal_acceptances for select
 alter table staff_members add column if not exists pin_verifier text;
 update staff_members set pin_hash = null where pin_hash is not null;
 comment on column staff_members.pin_hash is 'Obsoleto: reemplazado por pin_verifier (0037).';
+$wayra_0037$);
 
--- ==================================================================
--- Migracion 0038_cash_sessions.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0038_cash_sessions.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0038', '0038_cash_sessions.sql', $wayra_0038$
 -- =============================================================================
 -- 0038 · Turnos de caja por sucursal (apertura → movimientos → cierre)
 --
@@ -3284,11 +3580,12 @@ begin
     alter publication supabase_realtime add table public.cash_sessions;
   end if;
 end $$;
+$wayra_0038$);
 
--- ==================================================================
--- Migracion 0039_staff_branches.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0039_staff_branches.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0039', '0039_staff_branches.sql', $wayra_0039$
 -- Personal por sucursal: a qué sucursales puede entrar cada persona.
 -- Sin filas = todas las sucursales (así un restaurante de un solo local no
 -- tiene que configurar nada). El dueño siempre ve todas.
@@ -3308,11 +3605,12 @@ create policy staff_branches_read on staff_branches for select using (
 create policy staff_branches_write on staff_branches for all using (
   (select app.is_platform_admin()) or tenant_id = any ((select app.my_managed_tenant_ids())::uuid[]))
   with check ((select app.is_platform_admin()) or tenant_id = any ((select app.my_managed_tenant_ids())::uuid[]));
+$wayra_0039$);
 
--- ==================================================================
--- Migracion 0040_carta.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0040_carta.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0040', '0040_carta.sql', $wayra_0040$
 -- =============================================================================
 -- 0040 · Carta administrable y por sucursal
 --   · Platos archivables (no se borran si tienen ventas: el historial los usa).
@@ -3367,11 +3665,12 @@ language sql stable security definer set search_path = public as $$
   from (select id, name from tenants where slug = p_slug) t
   left join business_settings bs on bs.tenant_id = t.id;
 $$;
+$wayra_0040$);
 
--- ==================================================================
--- Migracion 0041_inventario_traslados.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0041_inventario_traslados.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0041', '0041_inventario_traslados.sql', $wayra_0041$
 -- =============================================================================
 -- 0041 · Inventario: compras, mermas y traslados entre sucursales
 --   · Cada movimiento puede llevar una nota y una referencia (ref_id) que une
@@ -3448,11 +3747,12 @@ from inventory_movements m
 join branches b on b.id = m.branch_id
 join inventory_items i on i.id = m.item_id;
 grant select on public.inventory_kardex to authenticated;
+$wayra_0041$);
 
--- ==================================================================
--- Migracion 0042_branch_report.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0042_branch_report.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0042', '0042_branch_report.sql', $wayra_0042$
 -- =============================================================================
 -- 0042 · Reporte consolidado por sucursal (para sumar por rama del árbol)
 --   Una fila por sucursal con ventas, medios de pago, costo de insumos
@@ -3522,11 +3822,12 @@ language sql stable security definer set search_path = public, app as $$
 $$;
 
 grant execute on function public.branch_report(uuid, timestamptz, timestamptz) to authenticated;
+$wayra_0042$);
 
--- ==================================================================
--- Migracion 0043_pos_orden_de_bloqueo.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0043_pos_orden_de_bloqueo.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0043', '0043_pos_orden_de_bloqueo.sql', $wayra_0043$
 -- =============================================================================
 -- 0043 · Orden de bloqueo único en las operaciones del POS (sin deadlocks)
 --
@@ -3578,11 +3879,12 @@ language sql security definer set search_path = public, app as $$
   order by x.inventory_id
   on conflict (order_id, item_id) where reason = 'venta' do nothing;
 $$;
+$wayra_0043$);
 
--- ==================================================================
--- Migracion 0044_plan_locales_adicionales.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0044_plan_locales_adicionales.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0044', '0044_plan_locales_adicionales.sql', $wayra_0044$
 -- =============================================================================
 -- 0044 · Enterprise con locales incluidos + precio por local adicional
 --   Enterprise: S/ 899 incluye 25 locales (principal + 24 sucursales); cada
@@ -3652,11 +3954,12 @@ begin
   );
 end $$;
 grant execute on function public.branch_quota(uuid) to authenticated;
+$wayra_0044$);
 
--- ==================================================================
--- Migracion 0045_planes_por_local.sql
--- ==================================================================
-
+-- =============================================================================
+-- 0045_planes_por_local.sql
+-- =============================================================================
+select pg_temp.wayra_migrar('0045', '0045_planes_por_local.sql', $wayra_0045$
 -- =============================================================================
 -- 0045 · Planes pensados para la realidad peruana: casi todos los restaurantes
 -- tienen un solo local y muy pocos pasan de 4 (ver PRECIOS.md).
@@ -3732,267 +4035,52 @@ begin
   end if;
   return new;
 end $$;
+$wayra_0045$);
 
--- ==================================================================
--- seed.sql
--- ==================================================================
+-- =============================================================================
+-- Verificación final: si falta algo, se cancela TODO el script.
+-- =============================================================================
+do $wayra_check$
+declare
+  faltan text[] := '{}';
+  t text;
+begin
+  foreach t in array array['tenants', 'branches', 'memberships', 'staff_members', 'orders', 'order_lines',
+    'kitchen_tickets', 'comprobantes', 'cash_sessions', 'cash_movements', 'menu_items', 'menu_item_branch',
+    'inventory_items', 'inventory_movements', 'inventory_stock', 'recipes', 'subscription_plans',
+    'subscription_charges', 'legal_acceptances', 'v_tenants', 'inventory_kardex'] loop
+    if to_regclass('public.' || t) is null then faltan := faltan || t; end if;
+  end loop;
+  foreach t in array array['public.pos_apply(uuid,text,jsonb)', 'public.pos_snapshot(uuid,uuid,timestamptz)',
+    'public.branch_quota(uuid)', 'public.branch_report(uuid,timestamptz,timestamptz)', 'public.public_menu(text)',
+    'app.plan_monthly_total(uuid)'] loop
+    if to_regprocedure(t) is null then faltan := faltan || t; end if;
+  end loop;
+  if not exists (select 1 from information_schema.columns where table_name = 'v_tenants' and column_name = 'plan_total') then
+    faltan := faltan || 'v_tenants.plan_total'::text;
+  end if;
+  if (select count(*) from subscription_plans) < 3 then faltan := faltan || 'planes (Básico, Pro, Enterprise)'::text; end if;
+  if array_length(faltan, 1) > 0 then
+    raise exception 'Instalación incompleta. Falta: %', array_to_string(faltan, ', ')
+      using hint = 'Revisa en la tabla de resultados qué migraciones figuran como «ya existía»: tu base tenía una versión anterior. Escríbenos con ese detalle.';
+  end if;
+  raise notice 'Wayra POS: base de datos lista.';
+end $wayra_check$;
 
--- ============================================================================
--- Wayra POS — datos de prueba (seed) para un proyecto Supabase nuevo.
--- Ejecuta este archivo UNA VEZ, después de aplicar todas las migraciones
--- (supabase/migrations). Es idempotente donde hay claves únicas; para volver a
--- sembrar desde cero, mejor recrea la base (o borra los datos del tenant demo).
+-- Resultado (lo que ves en el SQL Editor al terminar):
+select version, nombre, estado, coalesce(detalle, '') as detalle, aplicada_en
+from public.wayra_migraciones order by version;
+
+-- =============================================================================
+-- PASO 2 · Tu cuenta de administrador de la plataforma (una sola vez)
+-- =============================================================================
+-- 1. Authentication → Users → Add user → tu correo y contraseña.
+-- 2. Nueva consulta en el SQL Editor, cambia el correo y ejecuta:
 --
--- Los usuarios de Auth NO se pueden crear por SQL: créalos en el dashboard
--- (Authentication → Users) y luego inserta sus `memberships` (ver la sección
--- final de este archivo y SUPABASE_SETUP.md).
--- ============================================================================
-
--- IDs fijos para poder referenciarlos entre tablas.
---   Tenant demo:            11111111-1111-1111-1111-111111111111
---   Sucursal Miraflores:    22222222-0000-0000-0000-000000000001
---   Sucursal San Isidro:    22222222-0000-0000-0000-000000000002
-
--- ---------------------------------------------------------------------------
--- 1) Planes de suscripción
--- ---------------------------------------------------------------------------
--- max_branches = sucursales además de la sede principal (null = sin límite).
--- Casi todos los restaurantes tienen un local: Básico = 1 local; Pro = 2 incluidos
--- (+ S/ 119 c/u, hasta 5); Enterprise = 6 incluidos (+ S/ 99 c/u, sin tope).
-insert into subscription_plans (tier, price, features, max_branches, annual_price, included_branches, extra_branch_price) values
-  ('Básico', 159, 'Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT (Wayra no cobra por comprobante)', 0, 1590, null, null),
-  ('Pro', 299, 'Todo lo del Básico para 2 locales (hasta 5): reportes consolidados, traslados de insumos y personal por local', 4, 2990, 1, 119),
-  ('Enterprise', 899, 'Para cadenas: 6 locales incluidos, S/ 99 por local adicional y asesor dedicado', null, 8990, 5, 99)
-on conflict (tier) do update set
-  price = excluded.price, features = excluded.features, max_branches = excluded.max_branches,
-  annual_price = excluded.annual_price, included_branches = excluded.included_branches,
-  extra_branch_price = excluded.extra_branch_price;
-
--- ---------------------------------------------------------------------------
--- 2) Datos del emisor del SaaS (tu empresa)
--- ---------------------------------------------------------------------------
-insert into platform_settings (id, razon_social, ruc, direccion, billing_email)
-values (true, 'Wayra POS S.A.C.', '20601234567', 'Av. Javier Prado 1234, San Isidro, Lima', 'facturacion@wayrapos.pe')
-on conflict (id) do update set
-  razon_social = excluded.razon_social, ruc = excluded.ruc,
-  direccion = excluded.direccion, billing_email = excluded.billing_email;
-
--- ---------------------------------------------------------------------------
--- 3) Tenants (el demo + otros para poblar la consola SaaS)
--- ---------------------------------------------------------------------------
--- Cada alta crea sola su sede principal (trigger tenants_create_root). El MRR
--- no se guarda: se deriva del plan en la vista v_tenants.
-insert into tenants (id, name, slug, owner_name, plan, status, since) values
-  ('11111111-1111-1111-1111-111111111111', 'La Higuera', 'la-higuera', 'Mónica R.', 'Pro', 'Activo', '2025-03-01'),
-  ('a0000000-0000-0000-0000-000000000002', 'Cevichería El Muelle', 'cevicheria-el-muelle', 'Andrés Ríos', 'Enterprise', 'Activo', '2024-06-01'),
-  ('a0000000-0000-0000-0000-000000000003', 'Sushi Nami', 'sushi-nami', 'Keiko Tanaka', 'Pro', 'Activo', '2025-11-01'),
-  ('a0000000-0000-0000-0000-000000000004', 'Tacos El Farol', 'tacos-el-farol', 'Raúl Méndez', 'Básico', 'Activo', '2025-01-01'),
-  ('a0000000-0000-0000-0000-000000000005', 'Café Aurora', 'cafe-aurora', 'Paula Vega', 'Pro', 'Prueba', '2026-02-01'),
-  ('a0000000-0000-0000-0000-000000000006', 'Brasas del Sur', 'brasas-del-sur', 'Jorge Salas', 'Básico', 'Suspendido', '2025-09-01')
-on conflict (id) do nothing;
-
--- ---------------------------------------------------------------------------
--- 4) Configuración del negocio del tenant demo
--- ---------------------------------------------------------------------------
-insert into business_settings
-  (tenant_id, name, currency, tax_rate, ruc, address, razon_social, ubigeo,
-   yape_number, plin_number, card_provider, billing_provider, sunat_mode)
-values
-  ('11111111-1111-1111-1111-111111111111', 'La Higuera', 'PEN', 18,
-   '20512345678', 'Av. La Mar 1234, Miraflores, Lima', 'LA HIGUERA S.A.C.', '150122',
-   '987 654 321', '987 654 321', 'ninguno', 'ninguno', 'beta')
-on conflict (tenant_id) do nothing;
-
--- ---------------------------------------------------------------------------
--- 5) Sucursales del tenant demo (árbol: Miraflores es la sede principal y
---    San Isidro depende de ella). IDs fijos para asignar mesas.
--- ---------------------------------------------------------------------------
-update branches
-set id = '22222222-0000-0000-0000-000000000001', name = 'Miraflores', city = 'Lima',
-    address = 'Av. La Mar 1234, Miraflores'
-where tenant_id = '11111111-1111-1111-1111-111111111111' and parent_id is null
-  and id <> '22222222-0000-0000-0000-000000000001';
-insert into branches (id, tenant_id, parent_id, name, city, address) values
-  ('22222222-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
-   '22222222-0000-0000-0000-000000000001', 'San Isidro', 'Lima', 'Calle Las Begonias 450, San Isidro')
-on conflict (id) do nothing;
-
--- ---------------------------------------------------------------------------
--- 6) Personal (staff). El PIN se define desde la app (se guarda hasheado).
--- ---------------------------------------------------------------------------
-insert into staff_members (tenant_id, name, initials, role) values
-  ('11111111-1111-1111-1111-111111111111', 'Mónica R.', 'MR', 'dueno'),
-  ('11111111-1111-1111-1111-111111111111', 'Iker Solís', 'IS', 'admin'),
-  ('11111111-1111-1111-1111-111111111111', 'Ana Ruiz', 'AR', 'mesero'),
-  ('11111111-1111-1111-1111-111111111111', 'Carlos Vega', 'CV', 'mesero')
-on conflict do nothing;
-
--- ---------------------------------------------------------------------------
--- 7) Carta: categorías + platos
--- ---------------------------------------------------------------------------
-insert into menu_categories (tenant_id, key, name, icon, subtitle, sort) values
-  ('11111111-1111-1111-1111-111111111111', 'entradas', 'Entradas', '🥑', 'Para empezar a compartir', 1),
-  ('11111111-1111-1111-1111-111111111111', 'ceviches', 'Ceviches', '🐟', 'Frescos del día', 2),
-  ('11111111-1111-1111-1111-111111111111', 'segundos', 'Segundos', '🍲', 'Criollos de la casa', 3),
-  ('11111111-1111-1111-1111-111111111111', 'postres', 'Postres', '🍮', 'Dulces limeños', 4),
-  ('11111111-1111-1111-1111-111111111111', 'bebidas', 'Barra', '🍹', 'Piscos y refrescos', 5)
-on conflict do nothing;
-
-insert into menu_items (tenant_id, category_id, name, description, price, emoji, badge, is_spicy, is_gf, is_meat, sort)
-select '11111111-1111-1111-1111-111111111111', c.id, v.name, v.descr, v.price, v.emoji, v.badge, v.spicy, v.gf, v.meat, v.sort
-from (values
-  ('entradas', 'Causa limeña', 'Papa amarilla, palta, pollo', 28.0, '🥔', null, false, true, false, 1),
-  ('entradas', 'Anticuchos', 'Corazón de res a la parrilla, papa dorada', 34.0, '🍢', null, true, true, true, 2),
-  ('ceviches', 'Ceviche clásico', 'Pescado fresco, limón, ají limo, camote', 42.0, '🐟', 'Popular', true, true, false, 1),
-  ('ceviches', 'Tiradito nikkei', 'Láminas de pescado, crema de rocoto', 46.0, '🐟', null, true, true, false, 2),
-  ('segundos', 'Lomo saltado', 'Lomo de res, cebolla, tomate, papas fritas', 48.0, '🥩', 'Chef', false, false, true, 1),
-  ('segundos', 'Ají de gallina', 'Gallina deshilachada en crema de ají amarillo', 38.0, '🍗', null, true, true, false, 2),
-  ('postres', 'Suspiro a la limeña', 'Manjar blanco y merengue al oporto', 22.0, '🍮', null, false, true, false, 1),
-  ('bebidas', 'Pisco sour', 'Pisco quebranta, limón, clara de huevo', 26.0, '🍸', 'Popular', false, true, false, 1),
-  ('bebidas', 'Chicha morada', 'Maíz morado, piña, canela y clavo', 14.0, '🟣', null, false, true, false, 2)
-) as v(catkey, name, descr, price, emoji, badge, spicy, gf, meat, sort)
-join menu_categories c on c.key = v.catkey and c.tenant_id = '11111111-1111-1111-1111-111111111111'
-on conflict do nothing;
-
--- Modificadores (extras y preferencias)
-insert into modifier_extras (tenant_id, key, name, price) values
-  ('11111111-1111-1111-1111-111111111111', 'extra-camote', 'Camote extra', 5),
-  ('11111111-1111-1111-1111-111111111111', 'extra-choclo', 'Choclo extra', 4),
-  ('11111111-1111-1111-1111-111111111111', 'doble-pisco', 'Doble de pisco', 8)
-on conflict do nothing;
-insert into modifier_prefs (tenant_id, key, name) values
-  ('11111111-1111-1111-1111-111111111111', 'sin-cebolla', 'Sin cebolla'),
-  ('11111111-1111-1111-1111-111111111111', 'sin-aji', 'Sin ají'),
-  ('11111111-1111-1111-1111-111111111111', 'termino-medio', 'Término medio')
-on conflict do nothing;
-
--- ---------------------------------------------------------------------------
--- 8) Mesas — 1..12 en Miraflores, 13..20 en San Isidro
--- ---------------------------------------------------------------------------
-insert into restaurant_tables (tenant_id, branch_id, zone, number, seats, status)
-select
-  '11111111-1111-1111-1111-111111111111',
-  case when n <= 12 then '22222222-0000-0000-0000-000000000001'::uuid
-       else '22222222-0000-0000-0000-000000000002'::uuid end,
-  z.zone, n, case when z.zone = 'Barra' then 2 else 4 end, 'libre'
-from (values ('Terraza', 1, 6), ('Salón principal', 7, 16), ('Barra', 17, 20)) as z(zone, lo, hi)
-cross join lateral generate_series(z.lo, z.hi) as n
-on conflict (branch_id, number) do nothing;
-
--- ---------------------------------------------------------------------------
--- 9) Inventario (con costo por unidad para food cost)
--- ---------------------------------------------------------------------------
--- Catálogo de insumos (compartido por todas las sucursales) + stock inicial de
--- cada sucursal como movimiento de kardex (el stock es la suma de movimientos).
-insert into inventory_items (tenant_id, name, unit, par, cost) values
-  ('11111111-1111-1111-1111-111111111111', 'Pescado fresco', 'kg', 20, 28.00),
-  ('11111111-1111-1111-1111-111111111111', 'Lomo de res', 'kg', 12, 32.00),
-  ('11111111-1111-1111-1111-111111111111', 'Papa amarilla', 'kg', 25, 3.50),
-  ('11111111-1111-1111-1111-111111111111', 'Ají amarillo', 'kg', 8, 9.00),
-  ('11111111-1111-1111-1111-111111111111', 'Culantro', 'atado', 10, 1.50),
-  ('11111111-1111-1111-1111-111111111111', 'Pisco', 'bot', 6, 45.00),
-  ('11111111-1111-1111-1111-111111111111', 'Limón', 'kg', 15, 5.00)
-on conflict do nothing;
-
-insert into inventory_movements (tenant_id, branch_id, item_id, delta, reason, actor)
-select '11111111-1111-1111-1111-111111111111', b.branch_id, inv.id, v.qty * b.factor, 'inicial', 'Seed'
-from (values
-  ('Pescado fresco', 18), ('Lomo de res', 15), ('Papa amarilla', 40), ('Ají amarillo', 6),
-  ('Culantro', 8), ('Pisco', 12), ('Limón', 22)
-) as v(insumo, qty)
-join inventory_items inv on inv.name = v.insumo and inv.tenant_id = '11111111-1111-1111-1111-111111111111'
-cross join (values
-  ('22222222-0000-0000-0000-000000000001'::uuid, 1.0),
-  ('22222222-0000-0000-0000-000000000002'::uuid, 0.5)
-) as b(branch_id, factor)
-where not exists (select 1 from inventory_movements m where m.item_id = inv.id);
-
--- ---------------------------------------------------------------------------
--- 10) Recetas (food cost) — enlaza plato ↔ insumo por nombre
--- ---------------------------------------------------------------------------
-insert into recipes (tenant_id, menu_item_id, inventory_id, qty_per_unit)
-select '11111111-1111-1111-1111-111111111111', mi.id, inv.id, r.qty
-from (values
-  ('Ceviche clásico', 'Pescado fresco', 0.25),
-  ('Ceviche clásico', 'Limón', 0.10),
-  ('Ceviche clásico', 'Culantro', 0.05),
-  ('Tiradito nikkei', 'Pescado fresco', 0.20),
-  ('Tiradito nikkei', 'Ají amarillo', 0.03),
-  ('Lomo saltado', 'Lomo de res', 0.30),
-  ('Lomo saltado', 'Papa amarilla', 0.20),
-  ('Ají de gallina', 'Ají amarillo', 0.06),
-  ('Causa limeña', 'Papa amarilla', 0.25),
-  ('Pisco sour', 'Pisco', 0.08),
-  ('Pisco sour', 'Limón', 0.05)
-) as r(plato, insumo, qty)
-join menu_items mi on mi.name = r.plato and mi.tenant_id = '11111111-1111-1111-1111-111111111111'
-join inventory_items inv on inv.name = r.insumo and inv.tenant_id = '11111111-1111-1111-1111-111111111111'
-on conflict do nothing;
-
--- ---------------------------------------------------------------------------
--- 11) CRM (clientes de lealtad)
--- ---------------------------------------------------------------------------
-insert into customers (tenant_id, name, phone, visits, spent, points, tier) values
-  ('11111111-1111-1111-1111-111111111111', 'Lucía Fernández', '987 654 321', 14, 1820, 182, 'Oro'),
-  ('11111111-1111-1111-1111-111111111111', 'Diego Rojas', '956 112 233', 6, 640, 64, 'Plata'),
-  ('11111111-1111-1111-1111-111111111111', 'Valeria Chávez', '999 888 777', 2, 180, 18, 'Bronce')
-on conflict do nothing;
-
--- ---------------------------------------------------------------------------
--- 12) Consola SaaS: facturas, tickets y bitácora de plataforma
--- ---------------------------------------------------------------------------
-insert into saas_invoices (tenant_id, folio, amount, igv, method, paid) values
-  ('11111111-1111-1111-1111-111111111111', 'NP-F001-1001', 1499, 228.66, 'tarjeta', true),
-  ('a0000000-0000-0000-0000-000000000002', 'NP-F001-1002', 4800, 732.20, 'tarjeta', true),
-  ('a0000000-0000-0000-0000-000000000003', 'NP-F001-1003', 1499, 228.66, 'transferencia', true),
-  ('a0000000-0000-0000-0000-000000000004', 'NP-F001-1004', 699, 106.63, 'tarjeta', true),
-  ('a0000000-0000-0000-0000-000000000006', 'NP-F001-1005', 699, 106.63, 'tarjeta', false)
-on conflict do nothing;
-
-insert into support_tickets (tenant_id, subject, priority, status) values
-  ('a0000000-0000-0000-0000-000000000003', 'Impresora no responde', 'Alta', 'Abierto'),
-  ('a0000000-0000-0000-0000-000000000002', 'Duda sobre reportes por mesero', 'Media', 'Abierto'),
-  ('a0000000-0000-0000-0000-000000000004', 'Solicitud de nueva sucursal', 'Baja', 'Abierto'),
-  ('11111111-1111-1111-1111-111111111111', 'Capacitación de personal', 'Baja', 'Resuelto')
-on conflict do nothing;
-
-insert into platform_activity (actor, message) values
-  ('Plataforma', 'Tenant Café Aurora creado · plan Pro (prueba 14 días)'),
-  ('Plataforma', 'Suscripción de Brasas del Sur suspendida por falta de pago'),
-  ('Plataforma', 'Plan Pro actualizado (precio S/ 1499)')
-on conflict do nothing;
-
--- ---------------------------------------------------------------------------
--- 13) Comprobantes de ejemplo (para que el Monitor SUNAT no salga vacío)
--- ---------------------------------------------------------------------------
-insert into comprobantes (tenant_id, folio, tipo, buyer_ruc, buyer_name, subtotal, igv, total, reference, status)
-values
-  ('11111111-1111-1111-1111-111111111111', 'B001-1001', 'Boleta', null, 'CLIENTES VARIOS', 40.00, 7.20, 47.20, 'Mesa 7', 'aceptada'),
-  ('11111111-1111-1111-1111-111111111111', 'F001-1001', 'Factura', '20512345678', 'CONTOSO SAC', 180.00, 32.40, 212.40, 'Mesa 3', 'aceptada')
-on conflict do nothing;
-
--- Contadores de folio coherentes con los comprobantes de ejemplo.
-insert into folio_counters (tenant_id, serie, last) values
-  ('11111111-1111-1111-1111-111111111111', 'B001', 1001),
-  ('11111111-1111-1111-1111-111111111111', 'F001', 1001)
-on conflict (tenant_id, serie) do nothing;
-
--- ============================================================================
--- 14) Cuentas de acceso (se hace en el dashboard, NO por SQL)
--- ----------------------------------------------------------------------------
--- 1. Authentication → Users → Add user (email + password) para:
---      - el dueño de la plataforma (tú, SaaS)
---      - el dueño del tenant demo (Mónica / La Higuera)
--- 2. Copia el UUID de cada usuario y ejecuta:
+--    insert into memberships (user_id, tenant_id, role)
+--    select id, null, 'saas' from auth.users where email = 'tu-correo@ejemplo.com'
+--    on conflict do nothing;
 --
---   -- Dueño de la plataforma (ve la consola SaaS):
---   insert into memberships (user_id, tenant_id, role)
---   values ('<uid-plataforma>', null, 'saas');
---
---   -- Dueño del tenant demo (ve el POS de La Higuera):
---   insert into memberships (user_id, tenant_id, role)
---   values ('<uid-monica>', '11111111-1111-1111-1111-111111111111', 'dueno');
---
--- El staff (Gerente/Mesero) entra por PIN en el dispositivo del local; sus PIN
--- se definen desde Dueño → Personal (se guardan hasheados).
--- ============================================================================
+-- 3. Entra a la app con ese correo: verás la consola SaaS. Desde «Tenants»
+--    creas cada restaurante y le envías su enlace de activación.
+-- =============================================================================

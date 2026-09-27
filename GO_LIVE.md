@@ -26,9 +26,10 @@ completarla. Referencias: `SUPABASE_SETUP.md` (backend), `APP_SETUP.md`
 ## 2) Provisionar Supabase (backend)
 
 - [ ] Crear proyecto en https://supabase.com (elegir región cercana).
-- [ ] **SQL Editor → pegar `supabase/setup_all.sql` → Run** (24 migraciones + seed).
-      Debe terminar en *Success*.
-- [ ] **Auth → Users**: crear tu cuenta de **plataforma (SaaS)** y el **dueño demo**.
+- [ ] **SQL Editor → pegar `supabase/instalar.sql` → Run** (todas las migraciones; se
+      puede volver a correr sin riesgo). Debe terminar mostrando la tabla de migraciones.
+      **No** corras `supabase/demo.sql` en producción (son datos ficticios).
+- [ ] **Auth → Users**: crear tu cuenta de **plataforma (SaaS)**.
 - [ ] Insertar sus `memberships` (SQL) — ver `SUPABASE_SETUP.md §5`:
   - Plataforma: `role='saas'`, `tenant_id = null`.
   - Dueño tenant: `role='dueno'`, `tenant_id='<uuid>'`.
@@ -174,7 +175,7 @@ e integraciones de delivery (Rappi/PedidosYa).
 ## Delivery (sin pasos extra de backend)
 
 Las tablas y la función pública de seguimiento vienen en la migración `0029_delivery.sql`
-(incluida en `setup_all.sql`). Antes de tomar pedidos, en **Delivery → Zonas y repartidores**:
+(incluida en `instalar.sql`). Antes de tomar pedidos, en **Delivery → Zonas y repartidores**:
 
 - [ ] Crear las **zonas de reparto** con su costo de envío y tiempo estimado.
 - [ ] Registrar a los **repartidores** (celular válido) y activar a los que estén de turno.

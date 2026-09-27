@@ -30,7 +30,7 @@ en `app.wayrapos.pe`.
    por la URL de tu Edge Function: `https://<PROJECT>.functions.supabase.co/contacto`.
    Sin configurar, el formulario cae a `mailto:` (sigue funcionando).
    - Despliega la función: `supabase functions deploy contacto`.
-   - Aplica la migración `0025_contact_messages.sql` (ya incluida en `setup_all.sql`).
+   - Aplica la migración `0025_contact_messages.sql` (ya incluida en `supabase/instalar.sql`).
 4. **Analítica** (opcional): en `consent.js`, pon tu ID de GA4 en `ANALYTICS_ID`
    (`G-XXXX`). Si lo dejas vacío, no se carga analítica.
 5. **Libro de Reclamaciones**: enlaza tu Libro de Reclamaciones digital (obligatorio
