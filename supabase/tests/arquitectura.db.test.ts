@@ -193,7 +193,7 @@ describe("integridad y normalización", () => {
     const pub = await db.query<{ tablename: string }>(
       `select tablename from pg_publication_tables where pubname = 'supabase_realtime' order by 1`,
     );
-    expect(pub.rows.map((r) => r.tablename)).toEqual(["delivery_orders", "kitchen_tickets", "orders", "restaurant_tables"]);
+    expect(pub.rows.map((r) => r.tablename)).toEqual(["cash_sessions", "delivery_orders", "kitchen_tickets", "orders", "restaurant_tables"]);
   });
 
   it("todas las políticas usan InitPlan (sin funciones evaluadas por fila)", async () => {

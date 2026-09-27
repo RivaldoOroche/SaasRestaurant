@@ -20,9 +20,9 @@ export function useRepo() {
 }
 
 /** Consultas que se leen de la vista local (instantáneas, funcionan sin red). */
-const VIEW_KEYS = ["tables", "order", "openOrders", "kitchen", "delivery"];
+const VIEW_KEYS = ["tables", "order", "openOrders", "kitchen", "delivery", "cash"];
 /** Consultas remotas que cambian cuando el servidor confirma operaciones. */
-const SYNCED_KEYS = ["paidOrders", "comprobantes", "inventory", "branchSales", "activityLog", "customers"];
+const SYNCED_KEYS = ["cash", "paidOrders", "comprobantes", "inventory", "branchSales", "activityLog", "customers"];
 
 /**
  * Mantiene las pantallas al día: la vista local cambia al instante con cada
@@ -195,6 +195,31 @@ export function useActivityLog() {
 export function useComprobantes() {
   const repo = useRepo();
   return useQuery({ queryKey: ["comprobantes"], queryFn: () => repo.getComprobantes() });
+}
+/** Turnos de caja de la sucursal activa (el primero abierto, si hay). */
+export function useCashSessions() {
+  const repo = useRepo();
+  const branchId = useBranchStore((s) => s.branchId);
+  return useQuery({ queryKey: ["cash", branchId], queryFn: () => repo.getCashSessions(branchId) });
+}
+export function useCashActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const branchId = useBranchStore((s) => s.branchId);
+  const inv = () => qc.invalidateQueries({ queryKey: ["cash"] });
+  return {
+    open: useMutation({ mutationFn: (openingFloat: number) => repo.openCash(branchId, openingFloat), onSuccess: inv }),
+    move: useMutation({
+      mutationFn: (v: { sessionId: string; kind: "ingreso" | "egreso"; amount: number; reason: string }) =>
+        repo.cashMovement(v.sessionId, v.kind, v.amount, v.reason),
+      onSuccess: inv,
+    }),
+    close: useMutation({
+      mutationFn: (v: { sessionId: string; counted: Record<string, number>; notes: string; expected: Record<string, number> }) =>
+        repo.closeCash(v.sessionId, v.counted, v.notes, v.expected),
+      onSuccess: inv,
+    }),
+  };
 }
 export function useComprobanteDocs(id: string | null) {
   const repo = useRepo();

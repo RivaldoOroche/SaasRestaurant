@@ -285,4 +285,29 @@ describe("sincronización y terminales", () => {
     expect((await adj(dueno))[0].status).toBe("ok");
     expect(await stock(SAN_ISIDRO, "Limón")).toBeCloseTo(before + 5, 3);
   });
+
+  it("caja: fondo + ventas en efectivo + movimientos = esperado; el cierre calcula la diferencia", async () => {
+    const MIRA = "22222222-0000-0000-0000-000000000001";
+    const session = randomUUID();
+    const r = await apply(mesero, [op({ type: "cash.open", session_id: session, branch_id: MIRA, opening_float: 200 })]);
+    expect(r[0].status).toBe("ok");
+    // Una segunda caja abierta en la misma sucursal se rechaza.
+    const dup = await apply(mesero, [op({ type: "cash.open", session_id: randomUUID(), branch_id: MIRA, opening_float: 0 })]);
+    expect(dup[0].error).toMatch(/Ya hay una caja abierta/);
+
+    const orderId = randomUUID();
+    await apply(mesero, [
+      op({ type: "order.open", order_id: orderId, table_id: await tableId(11) }),
+      op({ type: "line.add", line_id: randomUUID(), order_id: orderId, name: "Lomo", qty: 1, unit_price: 48 }),
+      op({ type: "order.pay", order_id: orderId, method: "efectivo", total: 48 }),
+      op({ type: "cash.move", session_id: session, movement_id: randomUUID(), kind: "egreso", amount: 30, reason: "Hielo" }),
+    ]);
+    const [closed] = await apply(mesero, [
+      op({ type: "cash.close", session_id: session, counted: { efectivo: 215 }, notes: "", expected: { efectivo: 0 } }),
+    ]);
+    // El servidor ignora el esperado del equipo: 200 + 48 - 30 = 218; contado 215 → falta 3.
+    expect(closed.result).toMatchObject({ expected: { efectivo: 218 }, difference: -3 });
+    const row = await db.query<{ status: string }>(`select status from cash_sessions where id = $1`, [session]);
+    expect(row.rows[0].status).toBe("cerrada");
+  });
 });

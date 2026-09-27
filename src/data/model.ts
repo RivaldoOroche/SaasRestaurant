@@ -141,6 +141,34 @@ export interface KitchenTicket {
   branchId?: string | null;
 }
 
+/** Movimiento de efectivo dentro de un turno de caja (gasto, retiro, sencillo). */
+export interface CashMovement {
+  id: string;
+  kind: "ingreso" | "egreso";
+  amount: number;
+  reason: string;
+  actor: string;
+  at: string;
+}
+
+/** Turno de caja de una sucursal: apertura con fondo → movimientos → cierre. */
+export interface CashSession {
+  id: string;
+  branchId: string | null;
+  status: "abierta" | "cerrada";
+  openedAt: string;
+  openedBy: string;
+  openingFloat: number;
+  movements: CashMovement[];
+  closedAt?: string | null;
+  closedBy?: string | null;
+  /** Esperado por método (efectivo incluye fondo y movimientos). */
+  expected?: Record<string, number> | null;
+  counted?: Record<string, number> | null;
+  difference?: number | null;
+  notes?: string;
+}
+
 /** Ventas agregadas por sucursal (comparativa del dueño). */
 export interface BranchSales {
   branchId: string;

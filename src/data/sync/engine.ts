@@ -75,6 +75,7 @@ export function mergeSnapshot(base: PosState, snap: PosSnapshot): PosState {
       orders: snap.orders.filter((o) => OPEN(o.status)),
       tickets: snap.tickets.filter((k) => k.col !== "entregado"),
       deliveries: snap.deliveries,
+      cash: (snap.cash ?? []).filter((c) => c.status === "abierta"),
     };
   }
   const upsert = <T extends { id: string }>(list: T[], changed: T[]) => {
@@ -94,6 +95,7 @@ export function mergeSnapshot(base: PosState, snap: PosSnapshot): PosState {
     orders: upsert(base.orders, snap.orders).filter((o) => OPEN(o.status)),
     tickets: upsert(base.tickets, snap.tickets).filter((k) => k.col !== "entregado"),
     deliveries: upsert(base.deliveries, snap.deliveries),
+    cash: upsert(base.cash ?? [], snap.cash ?? []).filter((c) => c.status === "abierta"),
   };
 }
 

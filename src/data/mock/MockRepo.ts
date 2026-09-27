@@ -32,8 +32,9 @@ import { deliveryTotals, isAggregator } from "@/lib/delivery";
 import { applyOp, OpError, type ReduceCtx } from "../pos/reduce";
 import type { OpResult, PosOp, PosSnapshot } from "../pos/ops";
 import { planInfo, quotaExceededMessage } from "@/lib/plans";
+import { cashDifference, cashExpected } from "@/lib/cash";
 import { stubSunatGateway } from "../sunat/gateway";
-import type { Branch, BranchSales, StaffMember, StaffRole, StaffPin } from "../model";
+import type { Branch, BranchSales, CashSession, StaffMember, StaffRole, StaffPin } from "../model";
 import { pinVerifier } from "@/lib/pin";
 import {
   CATEGORIES,
@@ -80,6 +81,8 @@ interface MockState {
   drivers: DeliveryDriver[];
   deliveries: DeliveryOrder[];
   deliverySeq: number;
+  /** Turnos de caja (abiertos y el historial de cerrados). */
+  cash: CashSession[];
   plan: string;
   /** Operaciones ya aplicadas (idempotencia, como pos_ops). */
   applied: Record<string, OpResult>;
@@ -141,6 +144,7 @@ function freshState(): MockState {
     recipes: JSON.parse(JSON.stringify(RECIPES)) as Record<string, RecipeLine[]>,
     ...seedDelivery(),
     plan: "Pro",
+    cash: [],
     applied: {},
     aliases: [],
   };
@@ -475,6 +479,7 @@ export class MockRepo implements BackendRepo {
       deliveries: s.deliveries.filter(
         (d) => !["entregado", "cancelado"].includes(d.status) || new Date(d.createdAt) >= start,
       ),
+      cash: s.cash.filter((c) => c.status === "abierta"),
     };
   }
 
@@ -588,7 +593,28 @@ export class MockRepo implements BackendRepo {
       case "cpe.emit":
         Object.assign(result, this.emitFromOp(op));
         break;
+      case "cash.close": {
+        // Como el servidor: el esperado sale de las ventas del turno, no del equipo.
+        const c = this.state.cash.find((x) => x.id === op.session_id);
+        if (!c) break;
+        c.expected = cashExpected(c, this.state.orders, op.at);
+        c.difference = cashDifference(c.expected, op.counted);
+        Object.assign(result, { expected: c.expected, difference: c.difference });
+        this.pushLog(who, `Cerró caja · diferencia S/ ${c.difference.toFixed(2)}`);
+        break;
+      }
+      case "cash.open":
+        this.pushLog(who, `Abrió caja con fondo S/ ${op.opening_float.toFixed(2)}`);
+        break;
     }
+  }
+
+  async getCashSessions(branchId?: string | null): Promise<CashSession[]> {
+    return this.state.cash
+      .filter((c) => !branchId || c.branchId === branchId)
+      .sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1))
+      .slice(0, 30)
+      .map((c) => structuredClone(c));
   }
 
   async terminal(): Promise<TerminalInfo> {

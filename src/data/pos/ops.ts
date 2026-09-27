@@ -8,6 +8,7 @@
 //     aplica una sola vez aunque llegue repetida.
 // Los campos van en snake_case porque viajan tal cual al SQL (0032_pos_ops).
 import type {
+  CashSession,
   ComprobanteTipo,
   DeliveryChannel,
   DeliveryOrder,
@@ -81,6 +82,16 @@ export type PosOpBody =
       ticket_id?: string;
     }
   | { type: "inventory.adjust"; item_id: string; branch_id: string | null; delta: number; reason: string }
+  | { type: "cash.open"; session_id: string; branch_id: string | null; opening_float: number }
+  | { type: "cash.move"; session_id: string; movement_id: string; kind: "ingreso" | "egreso"; amount: number; reason: string }
+  | {
+      type: "cash.close";
+      session_id: string;
+      counted: Record<string, number>;
+      notes: string;
+      /** Estimación del equipo (el servidor recalcula el esperado con sus datos). */
+      expected: Record<string, number>;
+    }
   | {
       type: "cpe.emit";
       cpe_id: string;
@@ -118,6 +129,8 @@ export interface PosState {
   tickets: KitchenTicket[];
   /** Delivery activo y el terminado hoy. */
   deliveries: DeliveryOrder[];
+  /** Turnos de caja abiertos (y los recién cerrados hasta sincronizar). */
+  cash: CashSession[];
 }
 
 /** Estado devuelto por el servidor: completo o solo lo cambiado desde `since`. */
@@ -128,7 +141,7 @@ export interface PosSnapshot extends PosState {
   tableIds?: string[] | null;
 }
 
-export const emptyPosState = (): PosState => ({ tables: [], orders: [], tickets: [], deliveries: [] });
+export const emptyPosState = (): PosState => ({ tables: [], orders: [], tickets: [], deliveries: [], cash: [] });
 
 export function uuid(): string {
   const c = globalThis.crypto as Crypto & { randomUUID?: () => string };
@@ -178,5 +191,11 @@ export function describeOp(op: PosOp): string {
       return `Ajuste de inventario (${op.delta > 0 ? "+" : ""}${op.delta})`;
     case "cpe.emit":
       return `${op.tipo} por S/ ${op.total.toFixed(2)}`;
+    case "cash.open":
+      return `Abrir caja (fondo S/ ${op.opening_float.toFixed(2)})`;
+    case "cash.move":
+      return `${op.kind === "ingreso" ? "Ingreso" : "Egreso"} de caja S/ ${op.amount.toFixed(2)}`;
+    case "cash.close":
+      return "Cerrar caja";
   }
 }

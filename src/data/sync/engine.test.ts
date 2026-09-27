@@ -188,4 +188,23 @@ describe("operación sin conexión", () => {
     const list = await pos.getComprobantes();
     expect(list.find((c) => c.id === cpe.id)).toMatchObject({ folio: cpe.folio, status: "aceptada" });
   });
+
+  it("caja sin conexión: abrir, gasto, cobrar y cerrar; el servidor recalcula el esperado", async () => {
+    const server = new MockRepo();
+    const pos = device(server);
+    const mesa = (await pos.getTables()).find((t) => t.status === "libre")!;
+    setOnline(false);
+    await pos.openCash(mesa.branchId ?? null, 100);
+    const [session] = await pos.getCashSessions(mesa.branchId);
+    expect(session).toMatchObject({ status: "abierta", openingFloat: 100 });
+    await pos.cashMovement(session.id, "egreso", 20, "Gas");
+    const order = await pos.openOrder(mesa.id);
+    await pos.addLine(order.id, line);
+    await pos.payOrder({ orderId: order.id, method: "efectivo", total: 84 });
+    await pos.closeCash(session.id, { efectivo: 164 }, "", { efectivo: 164 });
+    setOnline(true);
+    await pos.syncNow();
+    const [closed] = await server.getCashSessions(mesa.branchId);
+    expect(closed).toMatchObject({ status: "cerrada", expected: { efectivo: 164 }, difference: 0 });
+  });
 });

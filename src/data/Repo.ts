@@ -6,6 +6,7 @@ import type {
   RestaurantTable,
   Branch,
   BranchQuota,
+  CashSession,
   BranchSales,
   StaffMember,
   StaffRole,
@@ -182,6 +183,13 @@ export interface Repo {
   updateWaitlist(id: string, patch: Partial<WaitlistEntry>): Promise<void>;
   removeWaitlist(id: string): Promise<void>;
 
+  // Caja
+  /** Turnos de caja de la sucursal (el abierto y el historial reciente). */
+  getCashSessions(branchId?: string | null): Promise<CashSession[]>;
+  openCash(branchId: string | null, openingFloat: number): Promise<void>;
+  cashMovement(sessionId: string, kind: "ingreso" | "egreso", amount: number, reason: string): Promise<void>;
+  closeCash(sessionId: string, counted: Record<string, number>, notes: string, expected: Record<string, number>): Promise<void>;
+
   // Documentos legales (evidencia de aceptación por versión)
   /** Versiones aceptadas por el usuario actual: { terminos: "2026-09", ... }. */
   getLegalAcceptances(): Promise<Record<string, string>>;
@@ -264,6 +272,9 @@ export type PosMethod =
   | "setDeliveryStatus"
   | "adjustInventory"
   | "emitComprobante"
+  | "openCash"
+  | "cashMovement"
+  | "closeCash"
   | "subscribe"
   | "syncStatus"
   | "onSyncStatus"

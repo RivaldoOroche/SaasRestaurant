@@ -10,6 +10,7 @@
 import type { DeliveryDriver, DeliveryOrder, DeliveryZone, KdsColumn, KitchenTicket, Order } from "../model";
 import { deliveryTotals, isAggregator, kitchenLabel, transitionPatch } from "@/lib/delivery";
 import type { PosOp, PosState } from "./ops";
+import { cashDifference } from "@/lib/cash";
 
 /** Rechazo de negocio (el servidor respondería lo mismo). */
 export class OpError extends Error {}
@@ -289,6 +290,52 @@ export function applyOp(s: PosState, op: PosOp, ctx: ReduceCtx): Record<string, 
       }
       if (op.to === "cancelado") s.tickets = s.tickets.filter((k) => k.orderId !== d.id);
       return {};
+    }
+
+    case "cash.open": {
+      s.cash ??= [];
+      if (s.cash.some((c) => c.id === op.session_id)) return {};
+      if (s.cash.some((c) => c.status === "abierta" && (c.branchId ?? null) === (op.branch_id ?? null))) {
+        throw new OpError("Ya hay una caja abierta en esta sucursal.");
+      }
+      s.cash.push({
+        id: op.session_id,
+        branchId: op.branch_id,
+        status: "abierta",
+        openedAt: op.at,
+        openedBy: op.actor,
+        openingFloat: Math.max(0, op.opening_float),
+        movements: [],
+      });
+      return {};
+    }
+
+    case "cash.move": {
+      const c = (s.cash ?? []).find((x) => x.id === op.session_id);
+      if (!c) throw new OpError("La caja ya no existe.");
+      if (c.status !== "abierta") throw new OpError("La caja ya fue cerrada.");
+      if (!(op.amount > 0)) throw new OpError("El monto debe ser mayor a cero.");
+      if (!c.movements.some((m) => m.id === op.movement_id)) {
+        c.movements.push({ id: op.movement_id, kind: op.kind, amount: round2(op.amount), reason: op.reason, actor: op.actor, at: op.at });
+      }
+      return {};
+    }
+
+    case "cash.close": {
+      const c = (s.cash ?? []).find((x) => x.id === op.session_id);
+      if (!c) throw new OpError("La caja ya no existe.");
+      if (c.status === "cerrada") return {};
+      const diff = cashDifference(op.expected, op.counted);
+      Object.assign(c, {
+        status: "cerrada",
+        closedAt: op.at,
+        closedBy: op.actor,
+        expected: op.expected,
+        counted: op.counted,
+        difference: diff,
+        notes: op.notes,
+      });
+      return { expected: op.expected, difference: diff };
     }
 
     // No cambian el estado operativo (inventario y comprobantes se consultan aparte).

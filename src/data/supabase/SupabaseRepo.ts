@@ -7,6 +7,7 @@ import type {
   ModifierPref,
   Branch,
   BranchQuota,
+  CashSession,
   BranchSales,
   StaffMember,
   StaffRole,
@@ -246,6 +247,18 @@ export class SupabaseRepo implements BackendRepo {
     });
     if (error) fail(error);
     return data as OpResult[];
+  }
+
+  async getCashSessions(branchId?: string | null): Promise<CashSession[]> {
+    let q = this.db
+      .from("cash_sessions")
+      .select("*, movements:cash_movements(*)")
+      .order("opened_at", { ascending: false })
+      .limit(30);
+    if (branchId) q = q.eq("branch_id", branchId);
+    const { data, error } = await q;
+    if (error) fail(error);
+    return ((data ?? []) as CashDto[]).map(mapCash);
   }
 
   async terminal(deviceId: string): Promise<TerminalInfo> {
@@ -1108,6 +1121,7 @@ interface SnapshotDto {
     driver_name: string | null;
     created_at: string;
   })[];
+  cash?: CashDto[];
 }
 
 export function mapSnapshot(d: SnapshotDto): PosSnapshot {
@@ -1163,6 +1177,48 @@ export function mapSnapshot(d: SnapshotDto): PosSnapshot {
       lines: k.lines,
     })),
     deliveries: d.deliveries.map(mapDelivery),
+    cash: (d.cash ?? []).map(mapCash),
+  };
+}
+
+type CashDto = {
+  id: string;
+  branch_id: string;
+  status: CashSession["status"];
+  opened_at: string;
+  opened_by: string;
+  opening_float: number;
+  closed_at: string | null;
+  closed_by: string | null;
+  expected: Record<string, number> | null;
+  counted: Record<string, number> | null;
+  difference: number | null;
+  notes: string;
+  movements?: { id: string; kind: "ingreso" | "egreso"; amount: number; reason: string; actor: string; at?: string; created_at?: string }[];
+};
+
+function mapCash(c: CashDto): CashSession {
+  return {
+    id: c.id,
+    branchId: c.branch_id,
+    status: c.status,
+    openedAt: c.opened_at,
+    openedBy: c.opened_by,
+    openingFloat: Number(c.opening_float),
+    closedAt: c.closed_at,
+    closedBy: c.closed_by,
+    expected: c.expected,
+    counted: c.counted,
+    difference: c.difference == null ? null : Number(c.difference),
+    notes: c.notes,
+    movements: (c.movements ?? []).map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      amount: Number(m.amount),
+      reason: m.reason,
+      actor: m.actor,
+      at: m.at ?? m.created_at ?? "",
+    })),
   };
 }
 

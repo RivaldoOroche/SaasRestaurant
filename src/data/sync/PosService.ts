@@ -3,6 +3,7 @@
 // se delega al backend, guardando las lecturas para poder abrir la app sin red.
 import type { BackendRepo, PayInput, PosMethod, Repo, TerminalInfo } from "../Repo";
 import type {
+  CashSession,
   Comprobante,
   DeliveryDriver,
   DeliveryOrder,
@@ -320,6 +321,27 @@ class PosService {
     });
   }
 
+  // ---- Caja ----------------------------------------------------------------
+  /** Historial del servidor + turnos locales (abiertos o cerrados sin sincronizar). */
+  async getCashSessions(branchId?: string | null): Promise<CashSession[]> {
+    const remote = await this.cachedRead("getCashSessions", [branchId ?? null], () => this.backend.getCashSessions(branchId)).catch(
+      () => [] as CashSession[],
+    );
+    const local = (await this.view()).cash.filter(byBranch(branchId));
+    const localIds = new Set(local.map((c) => c.id));
+    // Lo local manda (incluye movimientos pendientes de enviar).
+    return [...local, ...remote.filter((c) => !localIds.has(c.id))].sort((a, b) => (a.openedAt < b.openedAt ? 1 : -1));
+  }
+  async openCash(branchId: string | null, openingFloat: number): Promise<void> {
+    await this.run({ type: "cash.open", session_id: uuid(), branch_id: branchId, opening_float: openingFloat });
+  }
+  async cashMovement(sessionId: string, kind: "ingreso" | "egreso", amount: number, reason: string): Promise<void> {
+    await this.run({ type: "cash.move", session_id: sessionId, movement_id: uuid(), kind, amount, reason });
+  }
+  async closeCash(sessionId: string, counted: Record<string, number>, notes: string, expected: Record<string, number>): Promise<void> {
+    await this.run({ type: "cash.close", session_id: sessionId, counted, notes, expected });
+  }
+
   async adjustInventory(itemId: string, delta: number, who: string, branchId?: string | null): Promise<void> {
     await this.engine.submit(
       makeOp({ type: "inventory.adjust", item_id: itemId, branch_id: branchId ?? null, delta, reason: "ajuste" }, who || actor()),
@@ -428,9 +450,9 @@ const POS_METHODS: PosMethod[] = [
   "getTables", "getOpenOrders", "getOpenOrderForTable", "openOrder", "addLine", "setLineQty", "removeLine",
   "voidLine", "clearOrder", "transferOrder", "mergeOrder", "sendToKitchen", "payOrder", "getKitchenTickets",
   "advanceTicket", "getDeliveryOrders", "createDeliveryOrder", "setDeliveryStatus", "adjustInventory",
-  "emitComprobante", "subscribe", "syncStatus", "onSyncStatus", "dismissRejected", "syncNow",
+  "emitComprobante", "openCash", "cashMovement", "closeCash", "subscribe", "syncStatus", "onSyncStatus", "dismissRejected", "syncNow",
 ];
-const OVERLAID = new Set(["getPaidOrders", "getInventory", "getComprobantes"]);
+const OVERLAID = new Set(["getPaidOrders", "getInventory", "getComprobantes", "getCashSessions"]);
 /** Lecturas que conviene tener sin conexión (abrir la app y tomar pedidos). */
 const CACHED = new Set([
   "getCategories", "getMenuItems", "getExtras", "getPrefs", "getBranches", "getStaff", "getSettings",
