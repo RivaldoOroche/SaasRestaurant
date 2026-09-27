@@ -10,6 +10,7 @@ import {
 } from "@/lib/push";
 import { useAuth } from "@/auth/AuthContext";
 import { useBranchStore } from "@/store/branch";
+import { effectiveRate, GENERAL_RATE } from "@/lib/tax";
 import type { DraftLine, NewDeliveryInput, DeliveryStatus, DeliveryZone, DeliveryDriver } from "./model";
 import type { BranchInput, PayInput } from "./Repo";
 
@@ -181,6 +182,11 @@ export function useMenuChanges() {
 export function useSettings() {
   const repo = useRepo();
   return useQuery({ queryKey: ["settings"], queryFn: () => repo.getSettings() });
+}
+/** Tasa de impuesto vigente (%, IGV+IPM) según el régimen del restaurante. */
+export function useTaxRate(): number {
+  const { data } = useSettings();
+  return effectiveRate(data?.taxRegime, data?.taxRate ?? GENERAL_RATE);
 }
 export function useActivityLog() {
   const repo = useRepo();

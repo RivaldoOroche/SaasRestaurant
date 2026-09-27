@@ -17,7 +17,7 @@ const TERMINOS = {
   body: [
     ["Aceptación", "Al usar el sistema de pedidos, pagos y carta digital, aceptas estos términos y las políticas del establecimiento."],
     ["Uso del servicio", "El servicio permite realizar pedidos, pagos y recibir comprobantes electrónicos. El establecimiento es responsable de los productos y servicios ofrecidos."],
-    ["Precios e impuestos", "Los precios incluyen IGV (18%) salvo indicación distinta. Los comprobantes se emiten conforme a la normativa de SUNAT."],
+    ["Precios e impuestos", "Los precios mostrados son precios finales e incluyen el IGV correspondiente (Ley 29571). Los comprobantes se emiten conforme a la normativa de SUNAT."],
     ["Pagos", "Los pagos con tarjeta se procesan mediante pasarelas autorizadas (Culqi, Izipay, Niubiz). Yape/Plin se validan contra el número del establecimiento."],
     ["Reclamos", "Puedes registrar un reclamo o queja en el Libro de Reclamaciones digital del establecimiento."],
     ["Limitación de responsabilidad", "Wayra POS provee la plataforma tecnológica; la relación de consumo es entre el cliente y el establecimiento."],

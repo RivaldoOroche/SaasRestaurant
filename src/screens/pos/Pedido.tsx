@@ -10,6 +10,7 @@ import {
   useOrderActions,
   useFloorActions,
   useSettings,
+  useTaxRate,
 } from "@/data/hooks";
 import { useAuth } from "@/auth/AuthContext";
 import { usePos } from "@/store/pos";
@@ -19,6 +20,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { useConnection } from "@/store/connection";
 import { printThermal } from "@/lib/printThermal";
+import { splitIncluded, formatRate } from "@/lib/tax";
 import { useT } from "@/i18n";
 import { cn } from "@/lib/cn";
 import type { MenuItem, DraftLine, Order } from "@/data/model";
@@ -73,7 +75,7 @@ function PedidoActive({
   const actions = useOrderActions(tableId);
   const floor = useFloorActions();
   const { data: settings } = useSettings();
-  const taxRate = (settings?.taxRate ?? 18) / 100;
+  const taxRate = useTaxRate() / 100;
   const { session } = useAuth();
   const actorName = session?.staff?.name ?? "POS";
 
@@ -128,9 +130,9 @@ function PedidoActive({
   }
 
   const lines = order?.lines ?? [];
-  const subtotal = round2(lines.reduce((s, l) => s + (l.unitPrice + l.extraPrice) * l.qty, 0));
-  const igv = round2(subtotal * taxRate);
-  const total = round2(subtotal + igv);
+  // Los precios de la carta ya incluyen IGV: el total es la suma; se desglosa la base.
+  const total = round2(lines.reduce((s, l) => s + (l.unitPrice + l.extraPrice) * l.qty, 0));
+  const { base: subtotal, tax: igv } = splitIncluded(total, taxRate * 100);
   const canSend = lines.length > 0;
   // Solo lo que aún no fue a cocina (la siguiente comanda lleva únicamente lo nuevo).
   const pendingKitchen = lines.filter((l) => l.qty > (l.sentQty ?? 0));
@@ -326,8 +328,8 @@ function PedidoActive({
         </div>
 
         <div className="p-4 border-t border-border space-y-1.5 mob:pb-[calc(1rem+env(safe-area-inset-bottom))]">
-          <Row label={t("pedido.subtotal")} value={formatMoney(subtotal)} />
-          <Row label={`IGV (${Math.round(taxRate * 100)}%)`} value={formatMoney(igv)} />
+          <Row label="Op. gravada" value={formatMoney(subtotal)} />
+          <Row label={`IGV incluido (${formatRate(taxRate * 100)})`} value={formatMoney(igv)} />
           <div className="flex justify-between items-center pt-1">
             <span className="font-bold">{t("pedido.total")}</span>
             <span className="font-mono font-bold text-lg">{formatMoney(total)}</span>

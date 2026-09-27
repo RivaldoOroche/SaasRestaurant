@@ -152,6 +152,7 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   name: "La Higuera",
   currency: "PEN",
   taxRate: 18,
+  taxRegime: "general",
   tipPresets: [10, 15, 18],
   onlineOrders: true,
   autoTip: true,

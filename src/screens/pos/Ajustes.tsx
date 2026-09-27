@@ -4,6 +4,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
+import { effectiveRate, formatRate, TAX_REGIME_LABEL, type TaxRegime } from "@/lib/tax";
 import { generateConfigPdf } from "@/lib/configPdf";
 import { ConfigChecklist } from "@/components/ConfigChecklist";
 import { useLang } from "@/i18n";
@@ -60,11 +61,25 @@ export function Ajustes() {
               </div>
             </Field>
 
-            <Field label={`IGV (${settings.taxRate}%)`}>
-              <div className="flex items-center gap-2">
-                <StepBtn onClick={() => updateSettings.mutate({ taxRate: Math.max(0, settings.taxRate - 1) })}>−</StepBtn>
-                <span className="w-12 text-center font-mono">{settings.taxRate}%</span>
-                <StepBtn onClick={() => updateSettings.mutate({ taxRate: Math.min(25, settings.taxRate + 1) })}>+</StepBtn>
+            <Field label={`Impuesto (IGV + IPM): ${formatRate(effectiveRate(settings.taxRegime, settings.taxRate))} vigente`}>
+              <div className="space-y-2">
+                {(["general", "mype_restaurante"] as TaxRegime[]).map((r) => (
+                  <label key={r} className="flex items-start gap-2 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name="tax-regime"
+                      className="mt-1"
+                      checked={(settings.taxRegime ?? "general") === r}
+                      onChange={() => updateSettings.mutate({ taxRegime: r })}
+                    />
+                    <span>{TAX_REGIME_LABEL[r]}</span>
+                  </label>
+                ))}
+                <p className="text-xs text-muted">
+                  Los precios de tu carta ya incluyen el impuesto: el POS solo desglosa la base y el IGV en el
+                  comprobante. La tasa reducida (10,5 % en 2026) es para MYPE cuya actividad principal es restaurante
+                  (70 % o más de sus ingresos); confírmalo con tu contador.
+                </p>
               </div>
             </Field>
 
@@ -497,13 +512,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function StepBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick} className="h-9 w-9 rounded-md bg-chip-bg border border-border">
-      {children}
-    </button>
-  );
-}
 
 function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
   return (

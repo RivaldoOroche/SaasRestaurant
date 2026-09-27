@@ -1,4 +1,5 @@
 import { numeroALetras } from "@/lib/numeroALetras";
+import { formatRate } from "@/lib/tax";
 import { formatMoney, type Currency } from "@/lib/money";
 import { Qr } from "@/components/Qr";
 import { useLang, translate } from "@/i18n";
@@ -149,7 +150,7 @@ export function ComprobanteDoc({
             <Row label={bl("comp.discount")} value={"− " + formatMoney(discount, currency)} />
           )}
           <Row label={bl("comp.taxable")} value={formatMoney(subtotal, currency)} />
-          <Row label={`I.G.V. (${Math.round(taxRate * 100)}%)`} value={formatMoney(igv, currency)} />
+          <Row label={`I.G.V. (${formatRate(Math.round(taxRate * 1000) / 10)})`} value={formatMoney(igv, currency)} />
           <div className="flex justify-between border-t border-[#1a1c2b] pt-1 font-bold text-[13px]">
             <span>{bl("comp.total")}</span>
             <span>{formatMoney(total, currency)}</span>

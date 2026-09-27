@@ -3,6 +3,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { computeCheckout, equalSplit } from "@/lib/checkout";
+import { formatRate } from "@/lib/tax";
 import { useOrderActions, useCustomers, useSunatActions, useSettings, useRepo } from "@/data/hooks";
 import { useConnection } from "@/store/connection";
 import { cn } from "@/lib/cn";
@@ -172,8 +173,8 @@ export function CobroModal({
         {stage === "cuenta" && (
           <div className="space-y-4">
             <div className="rounded-lg bg-surface-alt border border-border-soft p-3 space-y-1">
-              <Row label={t("cobro.subtotal")} value={formatMoney(result.subtotal)} />
-              <Row label={`IGV (${Math.round(taxRate * 100)}%)`} value={formatMoney(result.igv)} />
+              <Row label="Op. gravada" value={formatMoney(result.subtotal)} />
+              <Row label={`IGV incluido (${formatRate(taxRate * 100)})`} value={formatMoney(result.igv)} />
               {result.discAmt > 0 && <Row label={t("cobro.discount")} value={"− " + formatMoney(result.discAmt)} />}
               {result.tipAmt > 0 && <Row label={t("cobro.tip")} value={formatMoney(result.tipAmt)} />}
               {result.redeemApplied > 0 && (

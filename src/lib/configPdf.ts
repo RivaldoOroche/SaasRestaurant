@@ -154,7 +154,7 @@ export async function generateConfigPdf(s: BusinessSettings): Promise<void> {
   kv("Dirección fiscal", s.direccionFiscal ?? "");
   kv("Ubigeo", s.ubigeo ?? "");
   kv("Moneda", s.currency);
-  kv("IGV", `${s.taxRate}%`);
+  kv("IGV (IGV + IPM)", s.taxRegime === "mype_restaurante" ? "Tasa reducida MYPE restaurante (Ley 31556 / 32219)" : `${s.taxRate}%`);
   y += 6;
 
   // --- Facturación electrónica ---

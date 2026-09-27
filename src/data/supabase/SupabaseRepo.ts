@@ -618,6 +618,7 @@ export class SupabaseRepo implements BackendRepo {
       slug: t?.slug ?? undefined,
       currency: (data?.currency ?? "PEN") as BusinessSettings["currency"],
       taxRate: Number(data?.tax_rate ?? 18),
+      taxRegime: (data?.tax_regime ?? "general") as BusinessSettings["taxRegime"],
       tipPresets: data?.tip_presets ?? [10, 15, 18],
       onlineOrders: data?.online_orders ?? true,
       autoTip: data?.auto_tip ?? true,
@@ -640,6 +641,7 @@ export class SupabaseRepo implements BackendRepo {
     if (patch.name !== undefined) row.name = patch.name;
     if (patch.currency !== undefined) row.currency = patch.currency;
     if (patch.taxRate !== undefined) row.tax_rate = patch.taxRate;
+    if (patch.taxRegime !== undefined) row.tax_regime = patch.taxRegime;
     if (patch.tipPresets !== undefined) row.tip_presets = patch.tipPresets;
     if (patch.onlineOrders !== undefined) row.online_orders = patch.onlineOrders;
     if (patch.autoTip !== undefined) row.auto_tip = patch.autoTip;

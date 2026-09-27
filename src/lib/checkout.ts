@@ -9,13 +9,12 @@ import { round2 } from "./money";
  *   tipAmt  = netAmt * tipPct             (tip is computed on the POST-discount net)
  *   grand   = netAmt + tipAmt
  *
- * The receipt subtotal/IGV split is reverse-derived from the discounted net
- * (subtotal = netAmt / (1 + taxRate)), not scaled pro-rata from the original
- * numbers. This convention is under review for Phase 3 (see plan); Phase 1 keeps
- * it to match the prototype exactly.
+ * Los precios de la carta incluyen el impuesto: el desglose del comprobante se
+ * obtiene del neto con descuento (subtotal = netAmt / (1 + taxRate)); la
+ * propina no forma parte del comprobante. Tasa vigente: lib/tax.
  */
 export interface CheckoutInput {
-  /** Tax-inclusive gross (cart subtotal + IGV). */
+  /** Total con IGV incluido: suma de los precios de la carta (que ya lo incluyen, Ley 29571). */
   amount: number;
   /** IGV rate as a fraction, e.g. 0.18. */
   taxRate: number;

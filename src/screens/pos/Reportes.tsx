@@ -7,6 +7,7 @@ import {
   useInventory,
   useRecipes,
   useSettings,
+  useTaxRate,
 } from "@/data/hooks";
 import { useAuth } from "@/auth/AuthContext";
 import { isAdmin } from "@/lib/roles";
@@ -40,7 +41,7 @@ export function Reportes() {
   const { data: settings } = useSettings();
   const { session } = useAuth();
   const admin = isAdmin(session?.role ?? "mesero");
-  const taxRate = (settings?.taxRate ?? 18) / 100;
+  const taxRate = useTaxRate() / 100;
 
   const [rango, setRango] = useState<Rango>("mes");
   const [exporting, setExporting] = useState(false);

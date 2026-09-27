@@ -8,6 +8,15 @@ import type { Comprobante } from "../model";
  * que firma el UBL y lo envía a SUNAT (beta por defecto). Se activa con
  * VITE_SUNAT_MODE=beta; en otro caso se usa el stub.
  */
+const KNOWN_RATES = [0.18, 0.12, 0.105, 0.1];
+
+/** Tasa del comprobante a partir de sus montos, ajustada a la tasa legal más cercana. */
+export function rateOf(c: Pick<Comprobante, "subtotal" | "igv">): number {
+  if (!c.subtotal) return 0.18;
+  const r = c.igv / c.subtotal;
+  return KNOWN_RATES.reduce((best, k) => (Math.abs(k - r) < Math.abs(best - r) ? k : best), 0.18);
+}
+
 export function makeFunctionGateway(sb: SupabaseClient<Database>, tenantId?: string): SunatGateway {
   return {
     async submit(c: Comprobante): Promise<SunatResult> {
@@ -23,6 +32,8 @@ export function makeFunctionGateway(sb: SupabaseClient<Database>, tenantId?: str
         subtotal: c.subtotal,
         igv: c.igv,
         total: c.total,
+        // Tasa del comprobante (18 % general o la reducida MYPE restaurante).
+        igvTasa: rateOf(c),
       };
       if (c.tipo === "NotaCredito") {
         body.refFolio = c.refFolio ?? "";

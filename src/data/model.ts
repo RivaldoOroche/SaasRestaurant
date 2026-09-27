@@ -195,7 +195,9 @@ export interface BusinessSettings {
   name: string;
   slug?: string; // identificador público del tenant (para carta / libro de reclamaciones)
   currency: import("@/lib/money").Currency;
-  taxRate: number; // percent, e.g. 18
+  taxRate: number; // percent, e.g. 18 (régimen general)
+  /** Régimen de impuesto; la tasa efectiva la calcula lib/tax. */
+  taxRegime?: import("@/lib/tax").TaxRegime;
   tipPresets: number[];
   onlineOrders: boolean;
   autoTip: boolean;
