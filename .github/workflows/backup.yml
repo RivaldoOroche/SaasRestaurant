@@ -1,0 +1,77 @@
+name: Respaldo diario de la base (con prueba de restauración)
+
+# 02:17 hora de Lima (07:17 UTC), fuera del horario de los restaurantes.
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch: {}
+
+concurrency: backup
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    outputs:
+      file: ${{ steps.dump.outputs.file }}
+    env:
+      HAS_S3: ${{ secrets.BACKUP_S3_BUCKET != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cliente de Postgres 16 (misma versión que Supabase)
+        run: sudo apt-get update -q && sudo apt-get install -y -q postgresql-client-16
+      - name: Volcado cifrado
+        id: dump
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          OUT_DIR: backups
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ] || [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "Faltan los secrets SUPABASE_DB_URL / BACKUP_PASSPHRASE — omito el respaldo."; exit 0
+          fi
+          PATH="/usr/lib/postgresql/16/bin:$PATH" scripts/backup/backup.sh
+          echo "file=$(ls backups/*.gpg | xargs -n1 basename)" >> "$GITHUB_OUTPUT"
+      - name: Guardar en GitHub (35 días)
+        if: steps.dump.outputs.file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-db
+          path: backups/
+          retention-days: 35
+      - name: Copia fuera de GitHub (S3 / R2 compatibles, opcional)
+        if: steps.dump.outputs.file != '' && env.HAS_S3 == 'true'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_S3_REGION }}
+          BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+        run: |
+          aws s3 cp backups/ "s3://$BUCKET/wayra/" --recursive ${ENDPOINT:+--endpoint-url "$ENDPOINT"}
+
+  restore-check:
+    needs: backup
+    if: needs.backup.outputs.file != ''
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: respaldo-db
+          path: backups
+      - name: Restaurar y verificar
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          RESTORE_DB_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q postgresql-client-16
+          export PATH="/usr/lib/postgresql/16/bin:$PATH"
+          BACKUP_FILE="backups/${{ needs.backup.outputs.file }}" scripts/backup/restore-check.sh

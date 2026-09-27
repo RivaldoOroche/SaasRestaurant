@@ -49,6 +49,7 @@ import { TENANT_NAV, SAAS_NAV, homePathForRole, type NavEntry } from "@/lib/role
 import { useTheme } from "@/store/theme";
 
 import type { ComponentType } from "react";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 /** Screens implemented so far; the rest fall back to a gated placeholder. */
 const SCREENS: Record<string, ComponentType> = {
@@ -150,10 +151,12 @@ function Shell() {
 
 export function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Shell />
-      </BrowserRouter>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <BrowserRouter>
+          <Shell />
+        </BrowserRouter>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

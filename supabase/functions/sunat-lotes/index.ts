@@ -13,6 +13,7 @@ import { construirResumenDiario, construirComunicacionBaja } from "../_shared/su
 import { firmarUBL } from "../_shared/sunat/sign.ts";
 import { zipStore } from "../_shared/sunat/zip.ts";
 import type { ResumenLinea, BajaLinea } from "../_shared/sunat/types.ts";
+import { withMonitoring } from "../_shared/monitor/index.ts";
 
 const BETA = "https://e-beta.sunat.gob.pe/ol-ti-itcpfegem-beta/billService";
 const PROD = "https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService";
@@ -162,4 +163,4 @@ function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { ...cors, "Content-Type": "application/json" } });
 }
 
-(globalThis as { Deno?: { serve: (h: (r: Request) => Promise<Response>) => void } }).Deno?.serve(handler);
+(globalThis as { Deno?: { serve: (h: (r: Request) => Promise<Response>) => void } }).Deno?.serve(withMonitoring("sunat-lotes", handler));

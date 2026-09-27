@@ -8,6 +8,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { emitirComprobante, type EmisorConfig } from "../_shared/sunat/emisor.ts";
 import type { Comprobante } from "../_shared/sunat/types.ts";
+import { withMonitoring } from "../_shared/monitor/index.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -150,4 +151,4 @@ export default async function handler(req: Request): Promise<Response> {
   }
 }
 
-(globalThis as { Deno?: { serve: (h: (r: Request) => Promise<Response>) => void } }).Deno?.serve(handler);
+(globalThis as { Deno?: { serve: (h: (r: Request) => Promise<Response>) => void } }).Deno?.serve(withMonitoring("saas-cobrar", handler));

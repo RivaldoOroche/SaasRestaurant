@@ -13,6 +13,8 @@ import type { AppRole } from "@/types/database";
 import { clearPairing, getPairing, setPairing, type DevicePairing } from "./device";
 import { matchPin, pinLockSeconds, registerPinFailure, resetPinFailures } from "@/lib/pin";
 import { getRepo } from "@/data";
+import { setObservabilityContext } from "@/lib/observability";
+import { deviceId } from "@/data/sync/kv";
 
 const mockMode = USE_MOCK || !supabase;
 
@@ -27,6 +29,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(loadSession());
     setReady(true);
   }, []);
+
+  // Contexto de los reportes de error: ids opacos, nunca nombres ni correos.
+  useEffect(() => {
+    setObservabilityContext({
+      tenantId: session?.tenantId ?? null,
+      role: session?.role ?? null,
+      userId: session?.staff?.id ?? null,
+      deviceId: deviceId(),
+    });
+  }, [session, pairing]);
 
   const update = useCallback((s: Session | null) => {
     setSession(s);

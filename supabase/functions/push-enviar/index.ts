@@ -9,6 +9,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendWebPush, type PushSubscription } from "../_shared/push/webpush.ts";
+import { withMonitoring } from "../_shared/monitor/index.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -74,4 +75,4 @@ export default async function handler(req: Request): Promise<Response> {
   }
 }
 
-(globalThis as { Deno?: { serve: (h: (r: Request) => Promise<Response>) => void } }).Deno?.serve(handler);
+(globalThis as { Deno?: { serve: (h: (r: Request) => Promise<Response>) => void } }).Deno?.serve(withMonitoring("push-enviar", handler));

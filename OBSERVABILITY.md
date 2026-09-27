@@ -4,28 +4,47 @@ Guía operativa para saber **cuándo algo falla** y **cómo recuperarte**.
 
 ---
 
-## 1. Errores del frontend
+## 1. Errores del frontend (Sentry)
 
-La app instala manejadores globales de error (`src/lib/observability.ts`,
-llamado en `main.tsx`). Sin configuración, registra en consola. Para enviarlos a
-un colector, define en el entorno (Vercel → Environment Variables):
+`src/lib/observability.ts` (se inicia en `main.tsx`):
 
-```
-VITE_ERROR_WEBHOOK=https://<tu-endpoint-de-ingesta>
-```
+| Variable (Vercel → Environment Variables) | Para qué |
+| --- | --- |
+| `VITE_SENTRY_DSN` | Activa Sentry (proyecto *React*). Sin ella, Sentry ni siquiera se descarga. |
+| `VITE_SENTRY_TRACES` | Muestreo de rendimiento (por defecto `0.05` = 5 %). |
+| `VITE_APP_ENV` | `production` / `staging`. |
+| `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` | (Build) suben los *source maps* a Sentry y los borran del sitio publicado. |
+| `VITE_ERROR_WEBHOOK` | Opcional: además, un beacon JSON a un endpoint propio. |
 
-Puede ser un endpoint de **Sentry** (proyecto Browser), Logflare, o uno propio.
-Para Sentry completo (breadcrumbs, releases, source maps): añade
-`@sentry/browser`, inicialízalo en `initObservability()` y sube los source maps
-en el build de Vercel.
+Qué llega a Sentry:
+
+- Errores no controlados, promesas rechazadas y **fallos de pantalla**
+  (`ErrorBoundary`: el usuario ve «Algo salió mal · Recargar» en vez de una
+  página en blanco; su cola de pedidos no se pierde).
+- **Operaciones rechazadas** al sincronizar (aviso de nivel *warning*: p. ej. un
+  cobro que el servidor no aceptó) y el rastro de cortes/recuperaciones de red.
+- Etiquetas: `tenant`, `branch`, `role`, `device` y la versión (`release` = commit).
+
+Privacidad (Ley 29733): `sendDefaultPii: false`, sin IP, sin cabeceras ni
+*query strings*; los mensajes pasan por `scrub()` que oculta correos, RUC, DNI y
+celulares. El usuario se identifica solo por un id opaco. Sentry figura como
+subencargado en la Política de privacidad (`src/legal/entity.ts`).
+
+Alertas sugeridas en Sentry: *New issue* → correo/Slack; *Operación rechazada*
+> 10 en 1 h; errores en `/pos/pedido` o `/pos/caja` → prioridad alta.
 
 ## 2. Errores del backend (Edge Functions)
 
-Cada función devuelve errores con `try/catch`. Para agregarlos:
+Las 10 funciones se sirven con `withMonitoring("<nombre>", handler)`
+(`supabase/functions/_shared/monitor`), sin dependencias:
 
-- **Logs de Supabase**: Dashboard → Edge Functions → Logs (por función).
-- **Sentry para Deno**: importa `https://deno.land/x/sentry` en las funciones
-  críticas (`sunat-emitir`, `pago-tarjeta`, `saas-cobrar`) y captura en el catch.
+- Excepciones no controladas → se reportan y el cliente recibe
+  «Error interno. Ya fue reportado.» (500).
+- Respuestas **5xx** (p. ej. SUNAT u OSE caído) → se reportan con su mensaje.
+- Configura el secret: `supabase secrets set SENTRY_DSN=... APP_ENV=production APP_VERSION=<commit>`.
+- No se envían cuerpos ni cabeceras de la petición (datos personales/credenciales).
+
+Los logs de cada función siguen en Dashboard → Edge Functions → Logs.
 
 ## 3. Alertas de negocio (ya tienes los datos)
 
@@ -44,23 +63,39 @@ cobros fallidos o tenants suspendidos.
 
 ## 4. Respaldos (backups)
 
-- **Point-in-Time Recovery (PITR)**: en Supabase (planes Pro+) actívalo en
-  Dashboard → Database → Backups. Permite restaurar a cualquier segundo.
-- **Backups diarios**: Supabase los toma automáticamente; verifica la retención
-  de tu plan.
-- **Export manual / off-site** (recomendado además del automático):
+Tres capas, de la más rápida a la más independiente:
 
-  ```bash
-  # Volcado completo a un archivo (guárdalo fuera de Supabase, p. ej. S3):
-  supabase db dump --db-url "$SUPABASE_DB_URL" -f backup-$(date +%F).sql
-  ```
+1. **PITR de Supabase** (plan Pro + add-on): restaura a cualquier segundo.
+   Dashboard → Database → Backups. Ideal ante un borrado accidental.
+2. **Backups diarios de Supabase** (automáticos, 7 días en Pro).
+3. **Respaldo propio, cifrado y fuera de Supabase** — ya configurado en
+   `.github/workflows/backup.yml`, todos los días a las 02:17 (Lima):
+   - `scripts/backup/backup.sh`: `pg_dump` (esquemas `public`, `app`, `auth`),
+     verificado con `pg_restore --list`, cifrado AES-256 (`gpg`) + `sha256`.
+   - Se guarda 35 días como artefacto de GitHub y, si configuras un bucket,
+     también en S3 / Cloudflare R2.
+   - **Prueba de restauración automática en cada corrida**
+     (`scripts/backup/restore-check.sh`): restaura en un Postgres 16 limpio y
+     verifica restaurantes, sedes principales, pedidos, comprobantes y las
+     funciones `pos_apply` / `pos_snapshot`. Si falla, el workflow queda en
+     rojo y GitHub te avisa por correo.
 
-  Programa esto en un GitHub Action semanal y sube el `.sql` cifrado a tu
-  almacenamiento.
+   Secrets del repositorio (Settings → Secrets → Actions):
 
-- **Prueba de restauración**: al menos una vez por trimestre, restaura un backup
-  en un proyecto de staging y valida que la app levanta. Un backup no probado no
-  es un backup.
+   | Secret | Valor |
+   | --- | --- |
+   | `SUPABASE_DB_URL` | Cadena del *Session pooler* (Dashboard → Connect). |
+   | `BACKUP_PASSPHRASE` | Clave larga; guárdala también en tu gestor de contraseñas: sin ella el respaldo no se puede abrir. |
+   | `BACKUP_S3_BUCKET`, `BACKUP_S3_KEY_ID`, `BACKUP_S3_SECRET`, `BACKUP_S3_REGION`, `BACKUP_S3_ENDPOINT` | Opcionales (R2: `ENDPOINT=https://<cuenta>.r2.cloudflarestorage.com`, `REGION=auto`). |
+
+   Restaurar a mano (p. ej. a un proyecto nuevo):
+
+   ```bash
+   gpg --decrypt wayra-<fecha>.dump.gpg > wayra.dump
+   pg_restore --no-owner --no-privileges -d "$NUEVA_DB_URL" wayra.dump
+   ```
+
+   Probado en local: volcado 56 KB (datos demo), restauración y verificación OK.
 
 ## 5. Uptime
 

@@ -17,6 +17,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { emitirComprobante } from "../_shared/sunat/emisor.ts";
 import type { EmisorConfig } from "../_shared/sunat/emisor.ts";
 import type { Comprobante, NotaCreditoRef } from "../_shared/sunat/types.ts";
+import { withMonitoring } from "../_shared/monitor/index.ts";
 
 /** Configuración de facturación resuelta para un tenant. */
 interface TenantFiscal {
@@ -178,4 +179,4 @@ function json(obj: unknown, status = 200): Response {
 }
 
 // Deno runtime entrypoint (ignored by Vitest/Node).
-(globalThis as { Deno?: { serve: (h: (r: Request) => Promise<Response>) => void } }).Deno?.serve(handler);
+(globalThis as { Deno?: { serve: (h: (r: Request) => Promise<Response>) => void } }).Deno?.serve(withMonitoring("sunat-emitir", handler));

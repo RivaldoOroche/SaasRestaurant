@@ -15,6 +15,7 @@ import { applyOp, OpError, type ReduceCtx } from "../pos/reduce";
 import { emptyPosState, type OpResult, type PosOp, type PosSnapshot, type PosState } from "../pos/ops";
 import type { DeliveryDriver, DeliveryZone } from "../model";
 import type { KV } from "./kv";
+import { breadcrumb, captureWarning } from "@/lib/observability";
 
 export interface PosBackend {
   /** Estado completo (since = null) o cambios desde `since` (hora del servidor). */
@@ -273,6 +274,7 @@ export class SyncEngine {
               }
             } else {
               this.rejected.push({ op, error: r.error ?? "Rechazada", at: new Date().toISOString() });
+              captureWarning(`Operación rechazada: ${op.type}`, { error: r.error, queuedAt: op.at });
             }
           }
           const done = new Set(batch.map((op) => op.id));
@@ -320,6 +322,7 @@ export class SyncEngine {
   /** Reintento automático con espera creciente (2 s → 60 s) mientras falle la red. */
   private networkFailed(e: unknown) {
     this.status.lastError = (e as Error)?.message ?? String(e);
+    if (this.status.online) breadcrumb("sync", "Sin conexión con el servidor", { pending: this.pending.length });
     this.status.online = false;
     this.changed();
     if (this.retryTimer) return;
@@ -333,6 +336,7 @@ export class SyncEngine {
   private networkOk() {
     this.retryDelay = 2000;
     if (!this.status.online || this.status.lastError) {
+      breadcrumb("sync", "Conexión recuperada", { pending: this.pending.length });
       this.status.online = true;
       this.status.lastError = null;
       this.changed();
