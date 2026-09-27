@@ -35,6 +35,11 @@ export default tseslint.config(
     },
   },
   {
+    // Scripts de mantenimiento y tests de base de datos (Node).
+    files: ["scripts/**/*.{js,mjs,ts}", "supabase/tests/**/*.ts", "e2e/**/*.ts"],
+    languageOptions: { globals: { ...globals.node } },
+  },
+  {
     // Edge Functions (Deno) + módulos compartidos del backend.
     files: ["supabase/functions/**/*.ts"],
     languageOptions: {
