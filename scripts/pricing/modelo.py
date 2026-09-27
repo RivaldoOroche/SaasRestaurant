@@ -1,56 +1,160 @@
-# Modelo de costos y márgenes de Wayra POS (ver PRECIOS.md). Uso: python3 scripts/pricing/modelo.py
-# Edita los supuestos de arriba (tipo de cambio, mezcla de planes, locales por cliente, costo por comprobante).
+# Modelo de costos y márgenes de Wayra POS (ver PRECIOS.md).
+# Uso: python3 scripts/pricing/modelo.py
+# Todos los montos en soles (S/) por mes. Edita los SUPUESTOS y vuelve a correrlo.
 import math
-TC=3.44; IGV=0.18
-PLANS={"Básico":dict(price=149,loc=1.3,share=0.6),"Pro":dict(price=349,loc=3.5,share=0.3),"Enterprise":dict(price=899,loc=12,share=0.1)}
-CPE_PER_LOCAL=1800  # comprobantes/mes por local (60/día)
-def fixed(n, locales):
-    usd = 25 + (5 if n<=100 else 50 if n<=400 else 100)   # Supabase Pro + cómputo
-    usd += 100 if n>100 else 0                            # PITR 7 días
-    usd += 20 + 26 + (20 if n>=50 else 0) + 14.4 + 1.25 + 1  # Vercel, Sentry, Resend, Workspace, dominio, R2
-    pen = usd*TC*(1+IGV)  # servicios no domiciliados: IGV (crédito fiscal, lo contamos como costo conservador)
-    agents = max(1, math.ceil(locales/250))
-    support = agents*2800
-    return pen, support, 400  # infra, soporte, contador
-def gateway(price, card_share=0.6):
-    fee=(price*0.042+0.30*TC)*(1+IGV)
-    return card_share*fee
-def run(n, cpe_cost=0.0, mix=None, label=""):
-    mix = mix or PLANS
-    rev_gross=rev_net=var=0; loc=0
-    for p,d in mix.items():
-        t=n*d["share"]; loc+=t*d["loc"]
-        rev_gross+=t*d["price"]; rev_net+=t*d["price"]/(1+IGV)
-        var+=t*(gateway(d["price"]) + d["loc"]*CPE_PER_LOCAL*cpe_cost + 60/24)  # pasarela, OSE, onboarding amortizado
-    infra,sup,cont=fixed(n,loc)
-    cost=infra+sup+cont+var
-    profit=rev_net-cost
-    return dict(n=n,loc=round(loc),gross=rev_gross,net=rev_net,infra=infra,sup=sup,var=var,cost=cost,profit=profit,margin=profit/rev_net)
-for cpe in (0.0,0.02):
-    print(f"\n== Comprobantes: S/ {cpe:.2f} c/u ({'SUNAT directo' if cpe==0 else 'OSE'})")
-    print(f"{'rest.':>6} {'locales':>7} {'venta c/IGV':>11} {'neto':>9} {'infra':>7} {'soporte':>8} {'variable':>9} {'utilidad':>9} {'margen':>7}")
-    for n in (10,25,50,100,200,300,500):
-        r=run(n,cpe)
-        print(f"{r['n']:>6} {r['loc']:>7} {r['gross']:>11,.0f} {r['net']:>9,.0f} {r['infra']:>7,.0f} {r['sup']:>8,.0f} {r['var']:>9,.0f} {r['profit']:>9,.0f} {r['margin']:>7.0%}")
-# break-even
-for cpe in (0.0,0.02):
-    n=1
-    while run(n,cpe)['profit']<0: n+=1
-    print(f"Punto de equilibrio (CPE {cpe}): {n} restaurantes")
-# unit economics per plan
-print("\n== Por cliente (100 clientes, SUNAT directo)")
-for p,d in PLANS.items():
-    net=d['price']/1.18; g=gateway(d['price']); sup=2800/250*d['loc']; inf=fixed(100,1)[0]/100; ose=d['loc']*CPE_PER_LOCAL*0.02
-    print(f"{p:10} precio {d['price']:>4} neto {net:6.1f} pasarela {g:5.1f} soporte {sup:5.1f} infra {inf:4.1f} onboarding 2.5 → contribución {net-g-sup-inf-2.5:6.1f} ({(net-g-sup-inf-2.5)/net:.0%}); con OSE -{ose:.0f} → {net-g-sup-inf-2.5-ose:6.1f}")
-# per-local price comparison
-print("\n== Precio por local (neto sin IGV)")
-for p,d in PLANS.items():
-    print(f"{p}: S/ {d['price']/1.18/d['loc']:.0f} por local promedio; en el tope de sucursales: S/ {d['price']/1.18/({'Básico':3,'Pro':11,'Enterprise':30}[p]):.0f}")
-print("\n== Con equipo y marketing (S/ 10,000 fijos extra: 2 sueldos S/ 4,000 + S/ 2,000 marketing)")
-for cpe in (0.0,0.02):
-    n=1
-    while run(n,cpe)['profit']<10000: n+=1
-    print(f"Equilibrio (CPE {cpe}): {n} restaurantes")
-# enterprise chain of 30 locales
-d=dict(price=899,loc=30); net=899/1.18; sup=2800/250*30
-print(f"\nCadena de 30 locales en Enterprise: neto {net:.0f}, soporte {sup:.0f}, OSE si lo pagáramos {30*1800*0.02:.0f}")
+
+# ─────────────────────────── SUPUESTOS ───────────────────────────
+TC = 3.44          # soles por dólar (sept. 2026)
+IGV = 0.18
+UIT = 5500         # 2026
+
+# Cargas laborales sobre el sueldo bruto, REMYPE pequeña empresa:
+# EsSalud 9 % + ½ gratificación (+9 %) + ½ CTS + 15 días de vacaciones + vida ley.
+CARGA_LABORAL = 0.27
+
+PLANES = {  # precio con IGV, locales promedio por cliente, % de clientes
+    "Básico":     dict(precio=149, locales=1.3, mezcla=0.60),
+    "Pro":        dict(precio=349, locales=3.5, mezcla=0.30),
+    "Enterprise": dict(precio=899, locales=12,  mezcla=0.10),
+}
+
+COMPROBANTES_POR_LOCAL = 1800   # al mes (~60 al día)
+COSTO_POR_COMPROBANTE = 0.0     # 0 con SUNAT directo; ~0.02 si pagáramos un OSE
+PAGO_CON_TARJETA = 0.6          # el resto paga con Yape/transferencia o anual
+MOROSIDAD = 0.03                # cobros que no se recuperan
+CHURN_MENSUAL = 0.03            # clientes que se van cada mes (hay que reponerlos)
+COMISION_VENTA = 0.5            # fracción del primer mes que gana el vendedor por cliente nuevo
+LOCALES_POR_AGENTE = 250        # locales que atiende una persona de soporte
+
+# Personal (sueldo bruto mensual)
+SUELDO_RESPONSABLE_SOPORTE = 2500  # lidera soporte y puesta en marcha
+SUELDO_ASISTENTE_SOPORTE = 1800    # uno más cada LOCALES_POR_AGENTE locales
+GUARDIA_FINDE_NOCHE = 600          # bono por cubrir noches y fines de semana (los restaurantes trabajan ahí)
+SUELDO_DESARROLLADOR = 6500        # semi senior: mantenimiento, SUNAT, mejoras
+SUELDO_VENDEDOR = 1500             # base (más comisión)
+SUELDO_GERENTE = 4000              # sueldo del fundador / gerente general
+
+# Otros gastos fijos
+CONTADOR = 500
+INTERNET_CELULARES = 250
+EQUIPOS = (3 * 3500 + 1500) / 36   # 3 laptops + tablet e impresora térmica de demo, en 3 años
+LEGAL = (535 + 1500) / 24          # registro de marca Indecopi + abogado para textos legales, en 2 años
+HERRAMIENTAS = 150                 # helpdesk, diseño, WhatsApp Business API, varios
+BANCO = 30
+CONTINGENCIA = 0.10                # sobre los gastos fijos
+
+# ─────────────────────── ESCENARIOS DE EQUIPO ───────────────────────
+ESCENARIOS = {
+    # Los fundadores programan y venden sin sueldo; se contrata al responsable de soporte desde el día 1.
+    "Arranque": dict(dev=False, vendedor=False, gerente=False, marketing=1500, oficina=0),
+    # Equipo completo con sueldos de mercado para todos, incluido el fundador.
+    "Equipo completo": dict(dev=True, vendedor=True, gerente=True, marketing=3000, oficina=600),
+}
+
+
+def infra_usd(n):
+    usd = 25 + (5 if n <= 100 else 50 if n <= 400 else 100)  # Supabase Pro + cómputo
+    usd += 100 if n > 100 else 0                              # PITR 7 días
+    usd += 20 + 26 + (20 if n >= 50 else 0) + 14.4 + 1.25 + 1  # Vercel, Sentry, Resend, Workspace, dominio, R2
+    return usd
+
+
+def costo(sueldo):
+    return sueldo * (1 + CARGA_LABORAL)
+
+
+def run(n, esc, planes=PLANES, cpe=None):
+    cpe = COSTO_POR_COMPROBANTE if cpe is None else cpe
+    e = ESCENARIOS[esc]
+    clientes = {p: n * d["mezcla"] for p, d in planes.items()}
+    locales = sum(clientes[p] * d["locales"] for p, d in planes.items())
+    bruto = sum(clientes[p] * d["precio"] for p, d in planes.items())
+    neto = bruto / (1 + IGV)
+
+    # Variables
+    pasarela = sum(clientes[p] * PAGO_CON_TARJETA * (d["precio"] * 0.042 + 0.30 * TC) * (1 + IGV) for p, d in planes.items())
+    comprobantes = locales * COMPROBANTES_POR_LOCAL * cpe
+    morosidad = neto * MOROSIDAD
+    nuevos = n * CHURN_MENSUAL  # solo para reponer bajas; el crecimiento se paga con marketing
+    comisiones = nuevos * COMISION_VENTA * neto / max(n, 1) if e["vendedor"] else 0
+    puesta_en_marcha = nuevos * 2 * costo(SUELDO_RESPONSABLE_SOPORTE) / 160  # 2 h por cliente nuevo
+    variables = pasarela + comprobantes + morosidad + comisiones + puesta_en_marcha
+
+    # Personal
+    agentes_extra = max(0, math.ceil(locales / LOCALES_POR_AGENTE) - 1)
+    soporte = costo(SUELDO_RESPONSABLE_SOPORTE) + agentes_extra * costo(SUELDO_ASISTENTE_SOPORTE) + GUARDIA_FINDE_NOCHE * (1 + agentes_extra)
+    otros_sueldos = (costo(SUELDO_DESARROLLADOR) if e["dev"] else 0) + (costo(SUELDO_VENDEDOR) if e["vendedor"] else 0) + (costo(SUELDO_GERENTE) if e["gerente"] else 0)
+
+    infra = infra_usd(n) * TC * (1 + IGV)  # IGV de no domiciliados (recuperable; lo contamos como costo)
+    admin = CONTADOR + INTERNET_CELULARES + EQUIPOS + LEGAL + HERRAMIENTAS + BANCO + e["oficina"]
+    fijos = (infra + soporte + otros_sueldos + admin + e["marketing"]) * (1 + CONTINGENCIA)
+
+    antes_ir = neto - variables - fijos
+    anual = antes_ir * 12
+    ir = 0 if anual <= 0 else (min(anual, 15 * UIT) * 0.10 + max(0, anual - 15 * UIT) * 0.295) / 12  # Régimen MYPE Tributario
+    return dict(n=n, locales=locales, bruto=bruto, neto=neto, variables=variables, soporte=soporte,
+                otros_sueldos=otros_sueldos, infra=infra, admin=admin + e["marketing"], fijos=fijos,
+                antes_ir=antes_ir, ir=ir, utilidad=antes_ir - ir)
+
+
+def equilibrio(esc, planes=PLANES, cpe=None):
+    n = 1
+    while run(n, esc, planes, cpe)["antes_ir"] < 0 and n < 5000:
+        n += 1
+    return n
+
+
+if __name__ == "__main__":
+    for esc in ESCENARIOS:
+        print(f"\n══ Escenario: {esc} (equilibrio: {equilibrio(esc)} clientes)")
+        print(f"{'clientes':>8} {'locales':>7} {'neto':>8} {'variable':>8} {'soporte':>8} {'sueldos':>8} {'infra':>6} {'admin+mkt':>9} {'antes IR':>9} {'IR':>6} {'utilidad':>9} {'margen':>6}")
+        for n in (25, 50, 100, 150, 200, 300, 500):
+            r = run(n, esc)
+            print(f"{n:>8} {r['locales']:>7.0f} {r['neto']:>8,.0f} {r['variables']:>8,.0f} {r['soporte']:>8,.0f} {r['otros_sueldos']:>8,.0f} {r['infra']:>6,.0f} {r['admin']:>9,.0f} {r['antes_ir']:>9,.0f} {r['ir']:>6,.0f} {r['utilidad']:>9,.0f} {r['utilidad'] / r['neto']:>6.0%}")
+
+    print("\n══ Costo mensual del personal (sueldo → costo empresa con cargas REMYPE)")
+    for nombre, s in [("Responsable de soporte", SUELDO_RESPONSABLE_SOPORTE), ("Asistente de soporte", SUELDO_ASISTENTE_SOPORTE),
+                      ("Desarrollador", SUELDO_DESARROLLADOR), ("Vendedor (base)", SUELDO_VENDEDOR), ("Gerente / fundador", SUELDO_GERENTE)]:
+        print(f"  {nombre:24} S/ {s:>6,} → S/ {costo(s):>7,.0f}")
+
+    print("\n══ Sensibilidad: clientes para cubrir costos según precios")
+    alternativas = {
+        "Actual 149 / 349 / 899": PLANES,
+        "Básico 129 / 349 / 899": {**PLANES, "Básico": {**PLANES["Básico"], "precio": 129}},
+        "Básico 119 / 299 / 799": {"Básico": {**PLANES["Básico"], "precio": 119}, "Pro": {**PLANES["Pro"], "precio": 299}, "Enterprise": {**PLANES["Enterprise"], "precio": 799}},
+        "Básico 169 / 399 / 999": {"Básico": {**PLANES["Básico"], "precio": 169}, "Pro": {**PLANES["Pro"], "precio": 399}, "Enterprise": {**PLANES["Enterprise"], "precio": 999}},
+    }
+    for nombre, pl in alternativas.items():
+        print(f"  {nombre:24} arranque {equilibrio('Arranque', pl):>4} · equipo completo {equilibrio('Equipo completo', pl):>4}"
+              f" · utilidad con 300 clientes (equipo): S/ {run(300, 'Equipo completo', pl)['utilidad']:>7,.0f}")
+    print(f"\n  Si pagáramos el OSE (S/ 0.02 por comprobante): equilibrio con equipo completo = {equilibrio('Equipo completo', cpe=0.02)} clientes")
+
+
+def plan_por_etapas(nuevos_por_mes=10, meses=36):
+    """Contratar a medida que se crece: soporte desde el día 1, desarrollador desde 60
+    clientes, vendedor desde 90 y sueldo del fundador desde 150."""
+    n, caja, peor, mes_eq = 0, 0.0, 0.0, None
+    filas = []
+    for m in range(1, meses + 1):
+        n = n * (1 - CHURN_MENSUAL) + nuevos_por_mes
+        ESCENARIOS["_etapa"] = dict(dev=n >= 60, vendedor=n >= 90, gerente=n >= 150,
+                                    marketing=1500 if n < 90 else 3000, oficina=0 if n < 150 else 600)
+        r = run(round(n), "_etapa")
+        caja += r["utilidad"]
+        peor = min(peor, caja)
+        if mes_eq is None and r["antes_ir"] > 0 and n >= 150:
+            mes_eq = m
+        if m in (6, 12, 18, 24, 36):
+            filas.append((m, round(n), r["utilidad"], caja))
+    del ESCENARIOS["_etapa"]
+    return filas, peor, mes_eq
+
+
+if __name__ == "__main__":
+    for ritmo in (10, 15):
+        filas, peor, mes_eq = plan_por_etapas(ritmo)
+        print(f"\n══ Crecimiento por etapas: {ritmo} clientes nuevos al mes (churn {CHURN_MENSUAL:.0%})")
+        for m, n, u, c in filas:
+            print(f"  mes {m:>2}: {n:>3} clientes · resultado del mes S/ {u:>8,.0f} · acumulado S/ {c:>9,.0f}")
+        print(f"  Capital necesario (peor momento de caja): S/ {-peor:,.0f}"
+              + (f" · rentable con equipo completo desde el mes {mes_eq}" if mes_eq else ""))
