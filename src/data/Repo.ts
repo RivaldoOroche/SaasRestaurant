@@ -179,6 +179,11 @@ export interface Repo {
   updateWaitlist(id: string, patch: Partial<WaitlistEntry>): Promise<void>;
   removeWaitlist(id: string): Promise<void>;
 
+  // Documentos legales (evidencia de aceptación por versión)
+  /** Versiones aceptadas por el usuario actual: { terminos: "2026-09", ... }. */
+  getLegalAcceptances(): Promise<Record<string, string>>;
+  acceptLegal(docs: { document: string; version: string }[]): Promise<void>;
+
   // Suscripción (autoservicio del tenant)
   getSubscription(): Promise<Subscription>;
   getMyPlanRequest(): Promise<MyPlanRequest | null>;

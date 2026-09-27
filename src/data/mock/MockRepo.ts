@@ -885,6 +885,26 @@ export class MockRepo implements BackendRepo {
     this.persist();
   }
 
+  // Demo: la aceptación se guarda en el navegador.
+  async getLegalAcceptances(): Promise<Record<string, string>> {
+    try {
+      return JSON.parse(localStorage.getItem("wayra-legal-accepted") ?? "{}") as Record<string, string>;
+    } catch {
+      return {};
+    }
+  }
+  async acceptLegal(docs: { document: string; version: string }[]) {
+    const cur = await this.getLegalAcceptances();
+    for (const d of docs) cur[d.document] = d.version;
+    try {
+      localStorage.setItem("wayra-legal-accepted", JSON.stringify(cur));
+    } catch {
+      /* ignore */
+    }
+    this.pushLog("Dueño", `Aceptó documentos legales (${docs.map((d) => d.document).join(", ")})`);
+    this.persist();
+  }
+
   private myPlanRequest: MyPlanRequest | null = null;
   async getSubscription(): Promise<Subscription> {
     const p = planInfo(this.state.plan);

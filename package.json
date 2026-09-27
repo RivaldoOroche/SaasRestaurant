@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "db:bundle": "node scripts/build-setup-sql.mjs"
+    "db:bundle": "node scripts/build-setup-sql.mjs",
+    "legal:build": "node scripts/build-legal-html.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

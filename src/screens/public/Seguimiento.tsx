@@ -127,6 +127,9 @@ export function Seguimiento() {
           {active && `${t("trk.auto")} · `}
           {t("carta.poweredBy")} <span className="text-accent font-semibold">Wayra POS</span>
         </p>
+        <p className="text-center text-muted text-xs mt-6">
+          <a href="/legal/comensales" className="underline">Aviso de privacidad</a>
+        </p>
       </main>
     </div>
   );

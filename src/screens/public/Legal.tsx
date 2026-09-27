@@ -1,54 +1,87 @@
 import { useParams, Link } from "react-router-dom";
+import { LEGAL_DOCS, type LegalDocId } from "@/legal/documents";
+import { LEGAL_ENTITY } from "@/legal/entity";
+import { cn } from "@/lib/cn";
 
-const PRIVACIDAD = {
-  title: "Política de Privacidad",
-  body: [
-    ["Responsable del tratamiento", "Wayra POS S.A.C. y el restaurante que opera el punto de venta tratan tus datos personales conforme a la Ley N° 29733 de Protección de Datos Personales y su reglamento."],
-    ["Datos que recopilamos", "Datos de contacto (nombre, correo, teléfono), datos de consumo (pedidos, comprobantes) y, cuando aplique, datos de pago procesados por la pasarela (nunca almacenamos el número completo de tarjeta)."],
-    ["Finalidad", "Emitir comprobantes electrónicos ante SUNAT, procesar pagos, gestionar el programa de lealtad, atender reclamos y mejorar el servicio."],
-    ["Conservación", "Conservamos los datos el tiempo necesario para las finalidades descritas y los plazos legales tributarios."],
-    ["Tus derechos (ARCO)", "Puedes ejercer tus derechos de acceso, rectificación, cancelación y oposición escribiendo al correo de contacto del establecimiento."],
-    ["Seguridad", "Aplicamos medidas técnicas y organizativas: cifrado en tránsito, control de acceso por roles y credenciales secretas de solo escritura."],
-  ],
+const ORDER: LegalDocId[] = ["terminos", "privacidad", "encargo", "cookies", "comensales"];
+const SHORT: Record<LegalDocId, string> = {
+  terminos: "Términos",
+  privacidad: "Privacidad",
+  encargo: "Encargo de datos",
+  cookies: "Cookies",
+  comensales: "Aviso a comensales",
 };
 
-const TERMINOS = {
-  title: "Términos y Condiciones",
-  body: [
-    ["Aceptación", "Al usar el sistema de pedidos, pagos y carta digital, aceptas estos términos y las políticas del establecimiento."],
-    ["Uso del servicio", "El servicio permite realizar pedidos, pagos y recibir comprobantes electrónicos. El establecimiento es responsable de los productos y servicios ofrecidos."],
-    ["Precios e impuestos", "Los precios mostrados son precios finales e incluyen el IGV correspondiente (Ley 29571). Los comprobantes se emiten conforme a la normativa de SUNAT."],
-    ["Pagos", "Los pagos con tarjeta se procesan mediante pasarelas autorizadas (Culqi, Izipay, Niubiz). Yape/Plin se validan contra el número del establecimiento."],
-    ["Reclamos", "Puedes registrar un reclamo o queja en el Libro de Reclamaciones digital del establecimiento."],
-    ["Limitación de responsabilidad", "Wayra POS provee la plataforma tecnológica; la relación de consumo es entre el cliente y el establecimiento."],
-  ],
-};
-
+/** Centro legal: documentos versionados, legibles en celular e imprimibles. */
 export function Legal() {
-  const { doc = "privacidad" } = useParams();
-  const page = doc === "terminos" ? TERMINOS : PRIVACIDAD;
+  const { doc = "terminos" } = useParams();
+  const page = LEGAL_DOCS[(doc in LEGAL_DOCS ? doc : "terminos") as LegalDocId];
+  const updated = new Date(`${page.updated}T12:00:00`).toLocaleDateString("es-PE", { day: "numeric", month: "long", year: "numeric" });
+
   return (
-    <div className="min-h-screen bg-bg text-ink p-6">
-      <div className="mx-auto max-w-2xl">
-        <h1 className="text-2xl font-bold mb-1">{page.title}</h1>
-        <p className="text-muted text-xs mb-5">Última actualización: {new Date().toLocaleDateString("es-PE")}</p>
-        <div className="space-y-4">
-          {page.body.map(([h, p]) => (
-            <section key={h}>
-              <h2 className="font-semibold">{h}</h2>
-              <p className="text-muted text-sm">{p}</p>
+    <div className="min-h-screen bg-bg text-ink">
+      <nav aria-label="Documentos legales" className="border-b border-border bg-surface-alt no-print overflow-x-auto">
+        <div className="mx-auto max-w-3xl px-4 flex gap-1 py-2">
+          {ORDER.map((id) => (
+            <Link
+              key={id}
+              to={`/legal/${id}`}
+              aria-current={id === page.id ? "page" : undefined}
+              className={cn(
+                "rounded-md px-3 py-1.5 text-sm whitespace-nowrap",
+                id === page.id ? "bg-accent/20 text-accent font-semibold" : "text-muted hover:text-ink",
+              )}
+            >
+              {SHORT[id]}
+            </Link>
+          ))}
+        </div>
+      </nav>
+
+      <main className="mx-auto max-w-3xl px-4 py-6 print-area">
+        <h1 className="text-2xl font-bold">{page.title}</h1>
+        <p className="text-muted text-xs mt-1">
+          Versión {page.version} · vigente desde el {updated} · {LEGAL_ENTITY.razonSocial}
+        </p>
+        <p className="mt-4 rounded-md bg-accent/10 border border-accent/30 p-3 text-sm">
+          <strong>En resumen: </strong>
+          {page.summary}
+        </p>
+
+        <ol className="mt-5 text-sm text-muted space-y-0.5 no-print" aria-label="Contenido">
+          {page.sections.map((s, i) => (
+            <li key={s.h}>
+              <a href={`#s${i}`} className="hover:text-accent">
+                {s.h}
+              </a>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-6 space-y-6">
+          {page.sections.map((s, i) => (
+            <section key={s.h} id={`s${i}`} aria-labelledby={`h${i}`}>
+              <h2 id={`h${i}`} className="font-semibold text-lg">
+                {s.h}
+              </h2>
+              {s.p.map((t, j) => (
+                <p key={j} className="text-sm leading-relaxed mt-2 text-ink/90">
+                  {t}
+                </p>
+              ))}
             </section>
           ))}
         </div>
-        <div className="mt-6 flex gap-3 text-sm">
-          <Link className="underline text-accent" to="/legal/privacidad">
-            Privacidad
-          </Link>
-          <Link className="underline text-accent" to="/legal/terminos">
-            Términos
-          </Link>
+
+        <div className="mt-8 flex flex-wrap gap-3 text-sm no-print">
+          <button onClick={() => window.print()} className="rounded-md border border-border bg-chip-bg px-3 py-2 hover:border-accent/60">
+            🖨 Imprimir o guardar PDF
+          </button>
+          <a className="rounded-md border border-border bg-chip-bg px-3 py-2 hover:border-accent/60" href={`mailto:${LEGAL_ENTITY.emailLegal}`}>
+            ✉ Consultas: {LEGAL_ENTITY.emailLegal}
+          </a>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

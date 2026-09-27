@@ -14,6 +14,7 @@ async function login(page: Page, pin: string) {
   await page.addInitScript(() => {
     localStorage.setItem("wayra-tour-seen", JSON.stringify({ dueno: true, saas: true, admin: true, mesero: true }));
     localStorage.setItem("wayra-install-dismissed", "1");
+    localStorage.setItem("wayra-legal-accepted", JSON.stringify({ terminos: "2026-09", privacidad: "2026-09", encargo: "2026-09" }));
   });
   await page.goto("/login");
   for (const d of pin) await page.getByRole("button", { name: d, exact: true }).click();

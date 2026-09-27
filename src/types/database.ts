@@ -304,6 +304,9 @@ export interface Tables {
   inventory_movements: {
     Row: { id: string; tenant_id: string; branch_id: string; item_id: string; delta: number; reason: string; order_id: string | null; actor: string; created_at: string };
   };
+  legal_acceptances: {
+    Row: { id: string; user_id: string; tenant_id: string | null; document: string; version: string; user_agent: string | null; accepted_at: string };
+  };
   pos_terminals: {
     Row: { id: string; tenant_id: string; branch_id: string; device_id: string; name: string; serie_boleta: string; serie_factura: string; created_at: string; last_seen_at: string };
   };

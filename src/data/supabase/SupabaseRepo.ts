@@ -840,6 +840,34 @@ export class SupabaseRepo implements BackendRepo {
     const { data: plan } = await this.sb.from("subscription_plans").select("price").eq("tier", data?.plan ?? "Pro").maybeSingle();
     return { plan: data?.plan ?? "Pro", price: Number(plan?.price ?? 0), status: data?.status ?? "Activo" };
   }
+  async getLegalAcceptances(): Promise<Record<string, string>> {
+    const { data: u } = await this.sb.auth.getUser();
+    if (!u.user) return {};
+    const { data, error } = await this.sb
+      .from("legal_acceptances")
+      .select("document, version, accepted_at")
+      .eq("user_id", u.user.id)
+      .order("accepted_at");
+    if (error) fail(error);
+    // La más reciente por documento.
+    return Object.fromEntries((data ?? []).map((r) => [r.document, r.version]));
+  }
+  async acceptLegal(docs: { document: string; version: string }[]): Promise<void> {
+    const { data: u } = await this.sb.auth.getUser();
+    if (!u.user) throw new Error("No hay sesión activa.");
+    const { error } = await this.sb.from("legal_acceptances").upsert(
+      docs.map((d) => ({
+        user_id: u.user!.id,
+        tenant_id: this.tenantId,
+        document: d.document,
+        version: d.version,
+        user_agent: typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 200) : null,
+      })),
+      { onConflict: "user_id,tenant_id,document,version", ignoreDuplicates: true },
+    );
+    if (error) fail(error);
+  }
+
   async getMyPlanRequest(): Promise<MyPlanRequest | null> {
     const { data } = await this.sb
       .from("plan_change_requests")

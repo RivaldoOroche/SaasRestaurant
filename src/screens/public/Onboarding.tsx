@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/Button";
 import { WayraMark } from "@/components/brand/Logo";
 import { supabase, isBackendConfigured } from "@/lib/supabase";
+import { ACCEPTANCE_DOCS } from "@/legal/documents";
 
 /** Página pública de alta de un tenant desde el link firmado. */
 export function Onboarding() {
@@ -16,6 +17,8 @@ export function Onboarding() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [acepta, setAcepta] = useState(false);
+  const [marketing, setMarketing] = useState(false);
 
   const bonito = slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -23,6 +26,10 @@ export function Onboarding() {
     setErr(null);
     if (!email || password.length < 8) {
       setErr("Ingresa un correo y una contraseña de al menos 8 caracteres.");
+      return;
+    }
+    if (!acepta) {
+      setErr("Para crear tu cuenta, marca que aceptas los términos y la política de privacidad.");
       return;
     }
     setBusy(true);
@@ -34,7 +41,16 @@ export function Onboarding() {
         return;
       }
       const { data, error } = await supabase.functions.invoke("onboarding-complete", {
-        body: { token, email, password, ownerName },
+        body: {
+          token,
+          email,
+          password,
+          ownerName,
+          acceptedLegal: [
+            ...ACCEPTANCE_DOCS.map((d) => ({ document: d.id, version: d.version })),
+            ...(marketing ? [{ document: "marketing", version: "2026-09" }] : []),
+          ],
+        },
       });
       if (error) throw new Error(error.message);
       const r = data as { success?: boolean; error?: string };
@@ -104,12 +120,34 @@ export function Onboarding() {
                   className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
                 />
               </Field>
+              <label className="flex items-start gap-2 text-sm">
+                <input type="checkbox" className="mt-1" checked={acepta} onChange={(e) => setAcepta(e.target.checked)} />
+                <span>
+                  Leí y acepto los{" "}
+                  <a href="/legal/terminos" target="_blank" rel="noreferrer" className="text-accent underline">
+                    Términos del servicio
+                  </a>
+                  , la{" "}
+                  <a href="/legal/privacidad" target="_blank" rel="noreferrer" className="text-accent underline">
+                    Política de privacidad
+                  </a>{" "}
+                  y el{" "}
+                  <a href="/legal/encargo" target="_blank" rel="noreferrer" className="text-accent underline">
+                    Acuerdo de encargo de datos
+                  </a>
+                  .
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm text-muted">
+                <input type="checkbox" className="mt-1" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} />
+                <span>Quiero recibir novedades y consejos de Wayra POS por correo (opcional).</span>
+              </label>
               {err && <p className="text-warning text-xs">{err}</p>}
-              <Button className="w-full" onClick={submit} disabled={busy}>
+              <Button className="w-full" onClick={submit} disabled={busy || !acepta}>
                 {busy ? "Activando…" : "Crear mi cuenta"}
               </Button>
               <p className="text-muted text-[11px] text-center">
-                Al continuar aceptas los términos del servicio Wayra POS.
+                14 días gratis, sin tarjeta y sin permanencia. Puedes cancelar cuando quieras.
               </p>
             </div>
           )}

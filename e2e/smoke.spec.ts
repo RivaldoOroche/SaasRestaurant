@@ -19,7 +19,10 @@ test.describe("Wayra POS — humo (modo mock)", () => {
 
   test("móvil: barra inferior con menú «Más» que navega y se cierra", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.addInitScript(() => localStorage.setItem("wayra-tour-seen", JSON.stringify({ dueno: true })));
+    await page.addInitScript(() => {
+    localStorage.setItem("wayra-tour-seen", JSON.stringify({ dueno: true }));
+    localStorage.setItem("wayra-legal-accepted", JSON.stringify({ terminos: "2026-09", privacidad: "2026-09", encargo: "2026-09" }));
+  });
     await page.goto("/login");
     for (let i = 0; i < 4; i++) await page.getByRole("button", { name: "1", exact: true }).click();
     const nav = page.getByRole("navigation", { name: "Navegación principal" });

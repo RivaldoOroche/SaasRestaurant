@@ -142,7 +142,10 @@ export function LibroReclamaciones() {
             {busy ? "Registrando…" : "Registrar reclamo"}
           </Button>
           <p className="text-[11px] text-muted text-center">
-            Tus datos se usan solo para atender este reclamo, conforme a la Ley 29733 de Protección de Datos Personales.
+            Tus datos se usan solo para atender este reclamo, conforme a la Ley 29733 de Protección de Datos Personales.{" "}
+            <a href="/legal/comensales" target="_blank" rel="noreferrer" className="underline">
+              Aviso de privacidad
+            </a>
           </p>
         </section>
       </div>

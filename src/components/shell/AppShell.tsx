@@ -10,6 +10,7 @@ import { useConnection } from "@/store/connection";
 import { Tour } from "@/components/tour/Tour";
 import { PwaPrompts } from "@/components/pwa/PwaPrompts";
 import { SyncBanner, SyncPanel } from "./SyncStatus";
+import { LegalGate } from "./LegalGate";
 
 export function AppShell() {
   const { session, exitTenant } = useAuth();
@@ -54,6 +55,7 @@ export function AppShell() {
       </main>
       <MobileTabBar />
       {session && session.role !== "saas" && <SyncPanel />}
+      {session?.role === "dueno" && !session.impersonating && <LegalGate />}
       <Tour />
       <PwaPrompts />
     </div>

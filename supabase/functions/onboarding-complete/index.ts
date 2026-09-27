@@ -3,7 +3,9 @@
 // vincula al tenant (membership rol 'dueno'), asegura business_settings y siembra
 // datos mínimos (mesas + una categoría). Requiere service role.
 //
-//   body: { token, email, password, ownerName }  ->  { success, tenantId?, error? }
+//   body: { token, email, password, ownerName, acceptedLegal? }  ->  { success, tenantId?, error? }
+//   acceptedLegal: [{ document, version }] — Términos, Privacidad y Encargo aceptados
+//   en el formulario (si el alta la hace la plataforma, el dueño acepta al entrar).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { enviarEmail } from "../_shared/notificaciones/mailer.ts";
@@ -29,7 +31,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
   try {
-    const { token, email, password, ownerName, mustChangePassword } = await req.json();
+    const { token, email, password, ownerName, mustChangePassword, acceptedLegal } = await req.json();
     if (!token || !email || !password) return json({ error: "Faltan token, email o contraseña" }, 400);
     if (String(password).length < 8) return json({ error: "La contraseña debe tener al menos 8 caracteres" }, 400);
 
@@ -65,6 +67,20 @@ export default async function handler(req: Request): Promise<Response> {
     // 3) Vincular como dueño.
     const { error: mErr } = await admin.from("memberships").insert({ user_id: userId, tenant_id: tenantId, role: "dueno" });
     if (mErr) return json({ error: `No se pudo vincular el usuario: ${mErr.message}` }, 400);
+
+    // 3b) Evidencia de aceptación de los documentos legales (versión incluida).
+    const accepted = Array.isArray(acceptedLegal) ? acceptedLegal : [];
+    if (accepted.length) {
+      await admin.from("legal_acceptances").insert(
+        accepted.map((a: { document: string; version: string }) => ({
+          user_id: userId,
+          tenant_id: tenantId,
+          document: a.document,
+          version: a.version,
+          user_agent: req.headers.get("user-agent")?.slice(0, 200) ?? null,
+        })),
+      );
+    }
 
     // 4) Asegurar business_settings.
     await admin.from("business_settings").upsert({ tenant_id: tenantId, name: tenant?.name ?? "Mi negocio" });

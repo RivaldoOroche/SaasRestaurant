@@ -80,6 +80,14 @@ export function CartaPublica() {
           {t("carta.pricesNote")}
           <br />
           {t("carta.poweredBy")} <span className="text-accent font-semibold">Wayra POS</span>
+          <br />
+          <a href="/legal/comensales" className="underline">Aviso de privacidad</a>
+          {slug && (
+            <>
+              {" · "}
+              <a href={`/libro/${slug}`} className="underline">Libro de Reclamaciones</a>
+            </>
+          )}
         </footer>
       </main>
     </div>
