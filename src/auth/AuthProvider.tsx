@@ -45,7 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const user = MOCK_USERS.find((u) => u.pin === pin);
         if (!user) return fail();
         resetPinFailures();
-        update(sessionFromMockUser(user));
+        const s = sessionFromMockUser(user);
+        // Sucursales asignadas en Personal (demo).
+        if (s.tenantId && s.staff) {
+          const pins = await getRepo(s.tenantId).getStaffPins().catch(() => []);
+          s.staff.branchIds = pins.find((p) => p.name === user.name)?.branchIds ?? [];
+        }
+        update(s);
         return null;
       }
       // Equipo vinculado: el PIN se verifica en el propio equipo (funciona sin red).
@@ -67,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role: who.role,
         tenantId: p.tenantId,
         tenantName: p.tenantName,
-        staff: { id: who.id, name: who.name, initials: who.initials, role: who.role },
+        staff: { id: who.id, name: who.name, initials: who.initials, role: who.role, branchIds: who.branchIds ?? [] },
         userEmail: p.email,
         impersonating: false,
       });

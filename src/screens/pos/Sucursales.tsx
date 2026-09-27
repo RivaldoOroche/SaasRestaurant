@@ -11,7 +11,8 @@ import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/cn";
-import type { StaffRole } from "@/data/model";
+import type { StaffMember, StaffRole } from "@/data/model";
+import { Modal } from "@/components/ui/Modal";
 import { BranchesCard } from "./sucursales/BranchesCard";
 import { buildTree, flatten } from "@/lib/branchTree";
 
@@ -90,6 +91,14 @@ export function Sucursales() {
 
 function StaffCard() {
   const { data: staff = [] } = useStaff();
+  const { data: branches = [] } = useBranches();
+  const [assigning, setAssigning] = useState<StaffMember | null>(null);
+  const branchSummary = (ids: string[]) =>
+    ids.length === 0
+      ? "Todas"
+      : ids.length === 1
+        ? branches.find((b) => b.id === ids[0])?.name ?? "1 sucursal"
+        : `${ids.length} sucursales`;
   const { addStaff, updateStaff, setStaffPin } = useStaffActions();
   const [name, setName] = useState("");
   const [role, setRole] = useState<StaffRole>("mesero");
@@ -163,6 +172,15 @@ function StaffCard() {
                   <option key={r} value={r}>{ROLE_LABEL[r]}</option>
                 ))}
               </select>
+              {branches.length > 1 && m.role !== "dueno" && (
+                <button
+                  onClick={() => setAssigning(m)}
+                  className="text-xs rounded-full border border-border bg-chip-bg px-2 py-0.5 hover:border-accent/60 shrink-0"
+                  title="Sucursales donde trabaja"
+                >
+                  🏬 {branchSummary(m.branchIds ?? [])}
+                </button>
+              )}
               <button onClick={() => resetPin(m.id)} className="text-accent text-xs hover:underline shrink-0" title="Cambiar PIN">
                 PIN
               </button>
@@ -180,6 +198,54 @@ function StaffCard() {
           Cada persona entra con su PIN en los equipos del local (vinculados al ingresar una vez con tu correo), incluso sin internet. El PIN nunca se guarda: solo un verificador cifrado.
         </p>
       </CardBody>
+      {assigning && (
+        <AssignBranches
+          member={assigning}
+          onClose={() => setAssigning(null)}
+          onSave={(ids) => {
+            updateStaff.mutate({ id: assigning.id, patch: { branchIds: ids } });
+            setAssigning(null);
+          }}
+        />
+      )}
     </Card>
+  );
+}
+
+/** Elegir en qué sucursales trabaja una persona (ninguna marcada = todas). */
+function AssignBranches({ member, onClose, onSave }: { member: StaffMember; onClose: () => void; onSave: (ids: string[]) => void }) {
+  const { data: branches = [] } = useBranches();
+  const [sel, setSel] = useState<string[]>(member.branchIds ?? []);
+  const all = sel.length === 0;
+  const tree = flatten(buildTree(branches.filter((b) => b.active !== false)));
+  const toggle = (id: string) => setSel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
+  return (
+    <Modal open onClose={onClose} labelledBy="assign-title">
+      <div className="p-5 space-y-3">
+        <h2 id="assign-title" className="text-lg font-bold">
+          ¿Dónde trabaja {member.name}?
+        </h2>
+        <p className="text-sm text-muted">Al entrar con su PIN solo verá y operará en estas sucursales.</p>
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" checked={all} onChange={() => setSel([])} />
+          Todas las sucursales
+        </label>
+        <div className="space-y-1.5 pl-1">
+          {tree.map((b) => (
+            <label key={b.id} className="flex items-center gap-2 text-sm" style={{ paddingLeft: `${b.depth * 1.1}rem` }}>
+              <input type="checkbox" checked={sel.includes(b.id)} onChange={() => toggle(b.id)} />
+              {b.name}
+              {!b.parentId && <span className="text-xs text-muted">(principal)</span>}
+            </label>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button onClick={() => onSave(sel)}>Guardar</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }

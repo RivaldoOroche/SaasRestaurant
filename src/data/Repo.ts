@@ -91,7 +91,7 @@ export interface Repo {
   // Personal (staff_members)
   getStaff(): Promise<StaffMember[]>;
   addStaff(input: { name: string; role: StaffRole; pin: string }): Promise<void>;
-  updateStaff(id: string, patch: Partial<{ name: string; role: StaffRole; active: boolean }>): Promise<void>;
+  updateStaff(id: string, patch: Partial<{ name: string; role: StaffRole; active: boolean; branchIds: string[] }>): Promise<void>;
   setStaffPin(id: string, pin: string): Promise<void>;
   /** Personal activo con su verificador de PIN (se guarda en el equipo para entrar sin red). */
   getStaffPins(): Promise<StaffPin[]>;

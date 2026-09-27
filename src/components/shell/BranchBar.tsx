@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useBranches } from "@/data/hooks";
+import { useAuth } from "@/auth/AuthContext";
 import { useBranchStore } from "@/store/branch";
 import { buildTree, flatten, indentedName } from "@/lib/branchTree";
 
@@ -8,8 +9,17 @@ export function BranchBar() {
   const { data: branches = [] } = useBranches();
   const branchId = useBranchStore((s) => s.branchId);
   const setBranch = useBranchStore((s) => s.setBranch);
+  const { session } = useAuth();
+  // Personal asignado a ciertas sucursales solo ve esas (el dueño, todas).
+  const allowedKey = session?.role !== "dueno" ? (session?.staff?.branchIds ?? []).join(",") : "";
   // En el orden del árbol: la principal primero y cada sucursal bajo su padre.
-  const options = useMemo(() => flatten(buildTree(branches.filter((b) => b.active !== false))), [branches]);
+  const options = useMemo(
+    () =>
+      flatten(buildTree(branches.filter((b) => b.active !== false))).filter(
+        (b) => !allowedKey || allowedKey.split(",").includes(b.id),
+      ),
+    [branches, allowedKey],
+  );
 
   // Autoselecciona la sede principal si no hay una sucursal activa válida elegida.
   useEffect(() => {

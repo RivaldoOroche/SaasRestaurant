@@ -91,6 +91,7 @@ export function Mesas() {
                     key={tbl.id}
                     onClick={() => openTable(tbl)}
                     disabled={tbl.status === "reservada"}
+                    aria-label={`Mesa ${tbl.number} · ${tbl.seats} personas · ${t(STATUS_KEY[tbl.status])}`}
                     className={cn(
                       "rounded-lg border p-3 text-left transition-transform hover:-translate-y-0.5 disabled:hover:translate-y-0 disabled:cursor-not-allowed",
                       STATUS_CLASS[tbl.status],

@@ -391,7 +391,7 @@ export class MockRepo implements BackendRepo {
     this.pushLog("Dueño", `Agregó a ${input.name} (${input.role})`);
     this.persist();
   }
-  async updateStaff(id: string, patch: Partial<{ name: string; role: StaffRole; active: boolean }>) {
+  async updateStaff(id: string, patch: Partial<{ name: string; role: StaffRole; active: boolean; branchIds: string[] }>) {
     const s = this.state.staff.find((x) => x.id === id);
     if (!s) return;
     Object.assign(s, patch);
@@ -403,7 +403,14 @@ export class MockRepo implements BackendRepo {
     return Promise.all(
       this.state.staff
         .filter((s) => s.active)
-        .map(async (s) => ({ id: s.id, name: s.name, initials: s.initials, role: s.role, verifier: s.pin ? await pinVerifier(s.pin, s.id) : null })),
+        .map(async (s) => ({
+          id: s.id,
+          name: s.name,
+          initials: s.initials,
+          role: s.role,
+          verifier: s.pin ? await pinVerifier(s.pin, s.id) : null,
+          branchIds: s.branchIds ?? [],
+        })),
     );
   }
   async setStaffPin(id: string, pin: string) {

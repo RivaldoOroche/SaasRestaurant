@@ -72,6 +72,7 @@ export interface StaffPin {
   initials: string;
   role: StaffRole;
   verifier: string | null;
+  branchIds?: string[];
 }
 
 export interface StaffMember {
@@ -80,6 +81,8 @@ export interface StaffMember {
   initials: string;
   role: StaffRole;
   active: boolean;
+  /** Sucursales asignadas; vacío = todas. */
+  branchIds?: string[];
 }
 
 export interface RestaurantTable {

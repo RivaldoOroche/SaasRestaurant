@@ -5,6 +5,8 @@ export interface ActingStaff {
   name: string;
   initials: string;
   role: Role;
+  /** Sucursales en las que puede operar (vacío o ausente = todas). */
+  branchIds?: string[];
 }
 
 export interface Session {

@@ -161,17 +161,18 @@ export class SupabaseRepo implements BackendRepo {
 
   // ---- Personal ----
   async getStaff(): Promise<StaffMember[]> {
-    const { data, error } = await this.sb
+    const { data, error } = await this.db
       .from("staff_members")
-      .select("id, name, initials, role, active")
+      .select("id, name, initials, role, active, staff_branches(branch_id)")
       .order("name");
-    if (error) throw error;
-    return (data ?? []).map((s) => ({
+    if (error) fail(error);
+    return ((data ?? []) as StaffRow[]).map((s) => ({
       id: s.id,
       name: s.name,
       initials: s.initials,
       role: s.role as StaffRole,
       active: s.active,
+      branchIds: (s.staff_branches ?? []).map((b) => b.branch_id),
     }));
   }
   async addStaff(input: { name: string; role: StaffRole; pin: string }): Promise<void> {
@@ -187,23 +188,44 @@ export class SupabaseRepo implements BackendRepo {
     });
     if (error) throw error;
   }
-  async updateStaff(id: string, patch: Partial<{ name: string; role: StaffRole; active: boolean }>): Promise<void> {
-    const row: Database["public"]["Tables"]["staff_members"]["Update"] = { ...patch };
-    if (patch.name) row.initials = initialsOf(patch.name);
-    const { error } = await this.sb.from("staff_members").update(row).eq("id", id);
-    if (error) throw error;
+  async updateStaff(id: string, patch: Partial<{ name: string; role: StaffRole; active: boolean; branchIds: string[] }>): Promise<void> {
+    const { branchIds, ...rest } = patch;
+    if (Object.keys(rest).length) {
+      const row: Database["public"]["Tables"]["staff_members"]["Update"] = { ...rest };
+      if (rest.name) row.initials = initialsOf(rest.name);
+      const { error } = await this.sb.from("staff_members").update(row).eq("id", id);
+      if (error) fail(error);
+    }
+    if (branchIds) {
+      // Reemplaza la asignación (vacío = todas las sucursales).
+      const del = await this.db.from("staff_branches").delete().eq("staff_id", id);
+      if (del.error) fail(del.error);
+      if (branchIds.length) {
+        const ins = await this.db
+          .from("staff_branches")
+          .insert(branchIds.map((b) => ({ staff_id: id, branch_id: b, tenant_id: this.tenantId })));
+        if (ins.error) fail(ins.error);
+      }
+    }
   }
   async setStaffPin(id: string, pin: string): Promise<void> {
     const { error } = await this.sb.from("staff_members").update({ pin_verifier: await pinVerifier(pin, id) }).eq("id", id);
     if (error) throw error;
   }
   async getStaffPins(): Promise<StaffPin[]> {
-    const { data, error } = await this.sb
+    const { data, error } = await this.db
       .from("staff_members")
-      .select("id, name, initials, role, pin_verifier")
+      .select("id, name, initials, role, pin_verifier, staff_branches(branch_id)")
       .eq("active", true);
     if (error) fail(error);
-    return (data ?? []).map((s) => ({ id: s.id, name: s.name, initials: s.initials, role: s.role as StaffRole, verifier: s.pin_verifier }));
+    return ((data ?? []) as (StaffRow & { pin_verifier: string | null })[]).map((s) => ({
+      id: s.id,
+      name: s.name,
+      initials: s.initials,
+      role: s.role as StaffRole,
+      verifier: s.pin_verifier,
+      branchIds: (s.staff_branches ?? []).map((b) => b.branch_id),
+    }));
   }
 
   async addTable(input: { zone: string; number: number; seats: number; branchId: string | null; count?: number }): Promise<void> {
@@ -1062,6 +1084,8 @@ function mapItem(r: Row<"menu_items">): MenuItem {
     sort: r.sort,
   };
 }
+type StaffRow = { id: string; name: string; initials: string; role: string; active: boolean; staff_branches?: { branch_id: string }[] };
+
 function deviceLabel(): string {
   try {
     return localStorage.getItem("wayra-device-id") ?? "";
