@@ -60,8 +60,10 @@ export function CobroModal({
   const [cardErr, setCardErr] = useState<string | null>(null);
   const [cardBusy, setCardBusy] = useState(false);
 
-  const cardConfigured =
+  const cardGateway =
     method === "tarjeta" && !!settings?.cardProvider && settings.cardProvider !== "ninguno" && !!settings.cardPublicKey;
+  // Sin red no hay pasarela: se registra el cobro hecho en el POS físico (datáfono).
+  const cardConfigured = cardGateway && online;
 
   const customer = customers.find((c) => c.id === custId) ?? null;
   const preResult = useMemo(
@@ -293,8 +295,13 @@ export function CobroModal({
                 <div className="text-4xl mb-2">{method === "efectivo" ? "💵" : "💳"}</div>
                 <p className="font-semibold">{t("pedido.charge")} {formatMoney(result.due)}</p>
                 <p className="text-muted text-sm">{t("cobro.method")}: {methodName}</p>
-                {method === "tarjeta" && settings?.cardProvider && settings.cardProvider !== "ninguno" && (
-                  <p className="text-muted text-xs mt-1">Procesado con {settings.cardProvider}</p>
+                {cardGateway && online && (
+                  <p className="text-muted text-xs mt-1">Procesado con {settings!.cardProvider}</p>
+                )}
+                {cardGateway && !online && (
+                  <p className="text-warning text-xs mt-1">
+                    Sin conexión: cobra en el datáfono y confirma aquí. El cobro se sincronizará al volver internet.
+                  </p>
                 )}
                 {result.pointsEarned > 0 && (
                   <p className="text-muted text-xs mt-1">{t("cobro.willEarn")} {result.pointsEarned} pts</p>
@@ -405,12 +412,12 @@ export function CobroModal({
             {/* Representación impresa de la boleta/factura */}
             <ComprobanteDoc
               tipo={docTipo}
-              folio={emitted?.folio ?? `${docTipo === "Factura" ? "F001" : "B001"}-PENDIENTE`}
+              folio={emitted?.folio ?? "Por emitir"}
               emisor={{
-                razonSocial: "LA HIGUERA S.A.C.",
-                nombreComercial: "La Higuera",
-                ruc: "20512345678",
-                direccion: "Av. La Mar 1234, Miraflores, Lima",
+                razonSocial: settings?.razonSocial || settings?.name || "—",
+                nombreComercial: settings?.name ?? "",
+                ruc: settings?.ruc || "—",
+                direccion: settings?.direccionFiscal || "—",
               }}
               cliente={
                 docTipo === "Factura"

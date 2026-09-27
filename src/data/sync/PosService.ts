@@ -55,6 +55,10 @@ class PosService {
   private started: (() => void) | null = null;
   private subscribers = 0;
   private catalogReady: Promise<void>;
+  private syncedListeners = new Set<(reason: "view" | "synced") => void>();
+  private emitSynced() {
+    for (const l of this.syncedListeners) l("synced");
+  }
 
   constructor(
     private backend: BackendRepo,
@@ -66,6 +70,12 @@ class PosService {
       key: `pos:${o.tenantKey}`,
       isOnline: o.isOnline,
       catalog: () => ({ zones: this.zones, drivers: this.drivers }),
+      // Comprobantes emitidos sin conexión: ya en el servidor → enviarlos a SUNAT.
+      onAcked: (ops) => {
+        if (ops.some((op) => op.type === "cpe.emit") && o.isOnline()) {
+          void this.backend.syncSunat(true).then(() => this.emitSynced(), () => undefined);
+        }
+      },
     });
     this.catalogReady = this.loadCatalog();
   }
@@ -363,12 +373,9 @@ class PosService {
       if (s.lastSyncAt !== lastSync) {
         lastSync = s.lastSyncAt;
         cb("synced");
-        // Comprobantes emitidos sin conexión: enviarlos a SUNAT ya sincronizados.
-        if (this.o.isOnline() && this.engine.pendingOps().some((op) => op.type === "cpe.emit")) {
-          void this.backend.syncSunat(true).then((n) => n > 0 && cb("synced"));
-        }
       }
     });
+    this.syncedListeners.add(cb);
     let timer: ReturnType<typeof setTimeout> | null = null;
     const offRemote = this.backend.onRemoteChange(() => {
       // Ráfagas de eventos (p. ej. un cobro toca pedido, líneas y mesa) → una sola lectura.
@@ -386,6 +393,7 @@ class PosService {
     void this.engine.ready();
     return () => {
       offEngine();
+      this.syncedListeners.delete(cb);
       offRemote();
       offNet();
       if (timer) clearTimeout(timer);

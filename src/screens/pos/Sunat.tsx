@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useComprobantes, useSunatActions } from "@/data/hooks";
+import { useComprobanteDocs, useComprobantes, useSettings, useSunatActions } from "@/data/hooks";
 import { useConnection } from "@/store/connection";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { Card } from "@/components/ui/Card";
@@ -38,7 +38,10 @@ export function Sunat() {
   const { data: comprobantes = [] } = useComprobantes();
   const { sync, retry, notaCredito, resumen, baja } = useSunatActions();
   const online = useConnection((s) => s.online);
+  const { data: settings } = useSettings();
   const [ver, setVer] = useState<Comprobante | null>(null);
+  // XML y CDR se piden solo al abrir un comprobante (la lista no los trae).
+  const { data: docs } = useComprobanteDocs(ver?.status === "aceptada" ? ver.id : null);
   const [ncFor, setNcFor] = useState<Comprobante | null>(null);
   const [motivo, setMotivo] = useState(MOTIVOS[0]);
   const [resumenRes, setResumenRes] = useState<ResumenDiario | null>(null);
@@ -267,10 +270,10 @@ export function Sunat() {
               refFolio={ver.refFolio}
               motivo={ver.motivo}
               emisor={{
-                razonSocial: "LA HIGUERA S.A.C.",
-                nombreComercial: "La Higuera",
-                ruc: "20512345678",
-                direccion: "Av. La Mar 1234, Miraflores, Lima",
+                razonSocial: settings?.razonSocial || settings?.name || "—",
+                nombreComercial: settings?.name ?? "",
+                ruc: settings?.ruc || "—",
+                direccion: settings?.direccionFiscal || "—",
               }}
               cliente={
                 ver.buyerRuc
@@ -285,13 +288,13 @@ export function Sunat() {
               status={ver.status}
             />
             <div className="flex flex-wrap justify-end gap-2 mt-4 no-print">
-              {ver.signedXml && (
-                <Button variant="secondary" onClick={() => downloadText(`${ver.folio}.xml`, ver.signedXml!, "application/xml")}>
+              {docs?.signedXml && (
+                <Button variant="secondary" onClick={() => downloadText(`${ver.folio}.xml`, docs.signedXml!, "application/xml")}>
                   ⬇ XML firmado
                 </Button>
               )}
-              {ver.cdr && (
-                <Button variant="secondary" onClick={() => downloadBase64(`R-${ver.folio}.zip`, ver.cdr!, "application/zip")}>
+              {docs?.cdr && (
+                <Button variant="secondary" onClick={() => downloadBase64(`R-${ver.folio}.zip`, docs.cdr!, "application/zip")}>
                   ⬇ CDR
                 </Button>
               )}

@@ -9,13 +9,14 @@ import { usePlatformSubscription } from "@/data/platform/hooks";
 import { useConnection } from "@/store/connection";
 import { Tour } from "@/components/tour/Tour";
 import { PwaPrompts } from "@/components/pwa/PwaPrompts";
+import { SyncBanner, SyncPanel } from "./SyncStatus";
 
 export function AppShell() {
   const { session, exitTenant } = useAuth();
   useRepoSubscription();
   usePlatformSubscription();
 
-  // Auto-sync queued comprobantes to SUNAT when connectivity is restored.
+  // Al reconectar: envía a SUNAT lo que haya quedado en cola (también de sesiones anteriores).
   const online = useConnection((s) => s.online);
   const { sync } = useSunatActions();
   const wasOnline = useRef(online);
@@ -35,11 +36,7 @@ export function AppShell() {
       <Rail />
       <main id="contenido" className="flex-1 min-h-0 min-w-0 flex flex-col mob:order-1">
         {session && session.role !== "saas" && <BranchBar />}
-        {session && session.role !== "saas" && !online && (
-          <div className="bg-warning/15 text-warning px-4 py-1.5 text-sm text-center no-print">
-            📴 Sin conexión — ventas y comprobantes se registran localmente y se enviarán a SUNAT al reconectar.
-          </div>
-        )}
+        {session && session.role !== "saas" && <SyncBanner />}
         {session?.impersonating && (
           <div className="flex items-center justify-between gap-3 bg-accent/15 text-accent px-4 py-1.5 text-sm no-print">
             <span>
@@ -56,6 +53,7 @@ export function AppShell() {
         </div>
       </main>
       <MobileTabBar />
+      {session && session.role !== "saas" && <SyncPanel />}
       <Tour />
       <PwaPrompts />
     </div>

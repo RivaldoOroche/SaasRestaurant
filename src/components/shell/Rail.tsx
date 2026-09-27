@@ -8,7 +8,7 @@ import { useT } from "@/i18n";
 import { WayraMark } from "@/components/brand/Logo";
 import { Modal } from "@/components/ui/Modal";
 import { useTheme } from "@/store/theme";
-import { useConnection } from "@/store/connection";
+import { SyncButton } from "./SyncStatus";
 import { cn } from "@/lib/cn";
 
 /** Pestañas fijas en la barra móvil; el resto va al menú "Más". */
@@ -157,23 +157,13 @@ export function MobileTabBar() {
 /** Conexión (solo tenant) y tema. `light`: estilo para fondo claro (hoja "Más"). */
 function UtilityButtons({ isTenant, light }: { isTenant: boolean; light?: boolean }) {
   const { theme, toggle } = useTheme();
-  const { online, toggle: toggleNet } = useConnection();
   const cls = cn(
     "h-10 w-10 rounded-md grid place-items-center",
     light ? "border border-border bg-chip-bg" : "h-[38px] w-[38px] hover:bg-white/10",
   );
   return (
     <>
-      {isTenant && (
-        <button
-          onClick={toggleNet}
-          title={online ? "En línea (SUNAT)" : "Sin conexión"}
-          aria-label={online ? "Conexión: en línea. Cambiar a sin conexión" : "Conexión: sin conexión. Cambiar a en línea"}
-          className={cls}
-        >
-          <span aria-hidden="true">{online ? "📶" : "📴"}</span>
-        </button>
-      )}
+      {isTenant && <SyncButton className={cls} />}
       <button
         onClick={toggle}
         title="Cambiar tema"

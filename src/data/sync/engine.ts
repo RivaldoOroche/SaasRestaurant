@@ -58,6 +58,8 @@ export interface EngineOptions {
   catalog: () => { zones: DeliveryZone[]; drivers: DeliveryDriver[] };
   /** Espera máxima de la confirmación del servidor antes de seguir en modo optimista. */
   submitTimeoutMs?: number;
+  /** Operaciones que el servidor acaba de confirmar (tras un envío). */
+  onAcked?: (ops: PosOp[]) => void;
 }
 
 const OVERLAP_MS = 30_000; // solapamiento del delta: cubre transacciones que confirmaron tarde
@@ -249,6 +251,7 @@ export class SyncEngine {
       if (!this.pending.length || !this.o.isOnline()) return;
       this.setSyncing(true);
       let sentAny = false;
+      const ackedNow: PosOp[] = [];
       try {
         while (this.pending.length) {
           const batch = this.pending.slice(0, BATCH).map((op) => this.rewrite(op));
@@ -261,6 +264,7 @@ export class SyncEngine {
             this.results.set(op.id, r);
             if (r.status === "ok") {
               this.acked.push({ op, ackedAt: now });
+              ackedNow.push(op);
               const target = r.result?.order_id;
               if (op.type === "order.open" && typeof target === "string" && target !== op.order_id) {
                 this.aliases.set(op.order_id, target);
@@ -282,6 +286,7 @@ export class SyncEngine {
         this.setSyncing(false);
       }
       if (sentAny) await this.pullNow(false);
+      if (ackedNow.length) this.o.onAcked?.(ackedNow);
     });
   }
 

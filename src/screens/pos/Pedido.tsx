@@ -16,6 +16,9 @@ import { usePos } from "@/store/pos";
 import { formatMoney, round2 } from "@/lib/money";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
+import { useConnection } from "@/store/connection";
+import { printThermal } from "@/lib/printThermal";
 import { useT } from "@/i18n";
 import { cn } from "@/lib/cn";
 import type { MenuItem, DraftLine, Order } from "@/data/model";
@@ -129,6 +132,23 @@ function PedidoActive({
   const igv = round2(subtotal * taxRate);
   const total = round2(subtotal + igv);
   const canSend = lines.length > 0;
+  // Solo lo que aún no fue a cocina (la siguiente comanda lleva únicamente lo nuevo).
+  const pendingKitchen = lines.filter((l) => l.qty > (l.sentQty ?? 0));
+  const online = useConnection((s) => s.online);
+  const [comanda, setComanda] = useState<{ label: string; lines: { qty: number; name: string }[]; at: Date } | null>(null);
+
+  function sendKitchen() {
+    if (!order || pendingKitchen.length === 0) return;
+    const snapshot = {
+      label: `Mesa ${order.tableLabel}`,
+      lines: pendingKitchen.map((l) => ({ qty: l.qty - (l.sentQty ?? 0), name: l.modifiers ? `${l.name} · ${l.modifiers}` : l.name })),
+      at: new Date(),
+    };
+    actions.sendToKitchen.mutate(order.id, {
+      // Sin internet la pantalla de cocina no la recibe aún: se ofrece imprimirla.
+      onSuccess: () => !online && setComanda(snapshot),
+    });
+  }
   const itemCount = lines.reduce((s, l) => s + l.qty, 0);
 
   function toggleFilter(f: Filter) {
@@ -274,7 +294,14 @@ function PedidoActive({
                 <li key={l.id} className="rounded-md bg-surface-alt border border-border-soft p-2.5">
                   <div className="flex justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{l.name}</p>
+                      <p className="font-medium text-sm truncate">
+                        {l.name}
+                        {(l.sentQty ?? 0) > 0 && (
+                          <span className="ml-1.5 text-[10px] font-semibold text-success" title={`${l.sentQty} en cocina`}>
+                            🔥 {l.sentQty === l.qty ? "en cocina" : `${l.sentQty} en cocina`}
+                          </span>
+                        )}
+                      </p>
                       {l.modifiers && <p className="text-muted text-xs truncate">{l.modifiers}</p>}
                     </div>
                     <span className="font-mono text-sm">
@@ -309,10 +336,10 @@ function PedidoActive({
             <Button
               variant="secondary"
               className="flex-1"
-              disabled={!canSend}
-              onClick={() => order && actions.sendToKitchen.mutate(order.id)}
+              disabled={pendingKitchen.length === 0 || actions.sendToKitchen.isPending}
+              onClick={sendKitchen}
             >
-              {t("pedido.sendKitchen")}
+              {lines.length > 0 && pendingKitchen.length === 0 ? "✓ Todo en cocina" : t("pedido.sendKitchen")}
             </Button>
             <Button
               className="flex-1"
@@ -324,6 +351,36 @@ function PedidoActive({
           </div>
         </div>
       </aside>
+
+      {comanda && (
+        <Modal open onClose={() => setComanda(null)} labelledBy="comanda-title" className="max-w-sm">
+          <div className="p-5">
+            <h2 id="comanda-title" className="text-lg font-bold">
+              Comanda guardada sin conexión
+            </h2>
+            <p className="text-sm text-muted mt-1 no-print">
+              La pantalla de cocina la recibirá al volver internet. Si cocina la necesita ya, imprímela.
+            </p>
+            <div className="print-area mt-3 rounded-lg border border-border p-3 font-mono text-sm">
+              <p className="font-bold text-base">COMANDA · {comanda.label}</p>
+              <p className="text-xs">{comanda.at.toLocaleString("es-PE")}</p>
+              <ul className="mt-2 space-y-0.5">
+                {comanda.lines.map((l, i) => (
+                  <li key={i}>
+                    <strong>{l.qty} ×</strong> {l.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex justify-end gap-2 mt-4 no-print">
+              <Button variant="secondary" onClick={() => setComanda(null)}>
+                Cerrar
+              </Button>
+              <Button onClick={printThermal}>🧾 Imprimir comanda</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       <ModifierModal
         item={modItem}
