@@ -12,10 +12,13 @@ UIT = 5500         # 2026
 # EsSalud 9 % + ½ gratificación (+9 %) + ½ CTS + 15 días de vacaciones + vida ley.
 CARGA_LABORAL = 0.27
 
-PLANES = {  # precio con IGV, locales promedio por cliente, % de clientes
-    "Básico":     dict(precio=149, locales=1.3, mezcla=0.60),
-    "Pro":        dict(precio=349, locales=3.5, mezcla=0.30),
-    "Enterprise": dict(precio=899, locales=12,  mezcla=0.10),
+# Realidad peruana: la gran mayoría de restaurantes tiene un solo local y casi
+# ninguno pasa de 4. precio = con IGV e incluye `incluidos` locales; cada local
+# adicional suma `extra`. locales = promedio por cliente; mezcla = % de clientes.
+PLANES = {
+    "Básico":     dict(precio=159, incluidos=1, extra=0,   locales=1.0, mezcla=0.80),
+    "Pro":        dict(precio=299, incluidos=2, extra=119, locales=2.6, mezcla=0.17),
+    "Enterprise": dict(precio=899, incluidos=6, extra=99,  locales=8.0, mezcla=0.03),
 }
 
 COMPROBANTES_POR_LOCAL = 1800   # al mes (~60 al día)
@@ -52,6 +55,11 @@ ESCENARIOS = {
 }
 
 
+def precio_cliente(d):
+    """Mensualidad promedio de un cliente del plan: precio + locales adicionales."""
+    return d["precio"] + max(0.0, d["locales"] - d.get("incluidos", 1)) * d.get("extra", 0)
+
+
 def infra_usd(n):
     usd = 25 + (5 if n <= 100 else 50 if n <= 400 else 100)  # Supabase Pro + cómputo
     usd += 100 if n > 100 else 0                              # PITR 7 días
@@ -68,11 +76,11 @@ def run(n, esc, planes=PLANES, cpe=None):
     e = ESCENARIOS[esc]
     clientes = {p: n * d["mezcla"] for p, d in planes.items()}
     locales = sum(clientes[p] * d["locales"] for p, d in planes.items())
-    bruto = sum(clientes[p] * d["precio"] for p, d in planes.items())
+    bruto = sum(clientes[p] * precio_cliente(d) for p, d in planes.items())
     neto = bruto / (1 + IGV)
 
     # Variables
-    pasarela = sum(clientes[p] * PAGO_CON_TARJETA * (d["precio"] * 0.042 + 0.30 * TC) * (1 + IGV) for p, d in planes.items())
+    pasarela = sum(clientes[p] * PAGO_CON_TARJETA * (precio_cliente(d) * 0.042 + 0.30 * TC) * (1 + IGV) for p, d in planes.items())
     comprobantes = locales * COMPROBANTES_POR_LOCAL * cpe
     morosidad = neto * MOROSIDAD
     nuevos = n * CHURN_MENSUAL  # solo para reponer bajas; el crecimiento se paga con marketing
@@ -118,11 +126,17 @@ if __name__ == "__main__":
         print(f"  {nombre:24} S/ {s:>6,} → S/ {costo(s):>7,.0f}")
 
     print("\n══ Sensibilidad: clientes para cubrir costos según precios")
+    def variante(basico, pro, ent):
+        return {"Básico": {**PLANES["Básico"], "precio": basico},
+                "Pro": {**PLANES["Pro"], "precio": pro[0], "extra": pro[1]},
+                "Enterprise": {**PLANES["Enterprise"], "precio": ent[0], "extra": ent[1]}}
     alternativas = {
-        "Actual 149 / 349 / 899": PLANES,
-        "Básico 129 / 349 / 899": {**PLANES, "Básico": {**PLANES["Básico"], "precio": 129}},
-        "Básico 119 / 299 / 799": {"Básico": {**PLANES["Básico"], "precio": 119}, "Pro": {**PLANES["Pro"], "precio": 299}, "Enterprise": {**PLANES["Enterprise"], "precio": 799}},
-        "Básico 169 / 399 / 999": {"Básico": {**PLANES["Básico"], "precio": 169}, "Pro": {**PLANES["Pro"], "precio": 399}, "Enterprise": {**PLANES["Enterprise"], "precio": 999}},
+        "Anterior 149 (3 locales)": {"Básico": dict(precio=149, incluidos=3, extra=0, locales=1.0, mezcla=0.80),
+                                     "Pro": dict(precio=349, incluidos=11, extra=0, locales=2.6, mezcla=0.17),
+                                     "Enterprise": dict(precio=899, incluidos=25, extra=29, locales=8.0, mezcla=0.03)},
+        "Básico 149 · Pro 279+109": variante(149, (279, 109), (849, 99)),
+        "Básico 159 · Pro 299+119": PLANES,
+        "Básico 169 · Pro 319+129": variante(169, (319, 129), (949, 109)),
     }
     for nombre, pl in alternativas.items():
         print(f"  {nombre:24} arranque {equilibrio('Arranque', pl):>4} · equipo completo {equilibrio('Equipo completo', pl):>4}"
@@ -131,18 +145,19 @@ if __name__ == "__main__":
 
 
 def plan_por_etapas(nuevos_por_mes=10, meses=36):
-    """Contratar a medida que se crece: soporte desde el día 1, desarrollador desde 60
-    clientes, vendedor desde 90 y sueldo del fundador desde 150."""
+    """Contratar a medida que se crece: soporte desde el día 1, desarrollador desde 100
+    clientes, vendedor desde 130 y sueldo del fundador desde 180 (con 80 % de clientes
+    de un solo local, el ingreso por cliente es menor y conviene esperar más)."""
     n, caja, peor, mes_eq = 0, 0.0, 0.0, None
     filas = []
     for m in range(1, meses + 1):
         n = n * (1 - CHURN_MENSUAL) + nuevos_por_mes
-        ESCENARIOS["_etapa"] = dict(dev=n >= 60, vendedor=n >= 90, gerente=n >= 150,
-                                    marketing=1500 if n < 90 else 3000, oficina=0 if n < 150 else 600)
+        ESCENARIOS["_etapa"] = dict(dev=n >= 100, vendedor=n >= 130, gerente=n >= 180,
+                                    marketing=1500 if n < 130 else 3000, oficina=0 if n < 180 else 600)
         r = run(round(n), "_etapa")
         caja += r["utilidad"]
         peor = min(peor, caja)
-        if mes_eq is None and r["antes_ir"] > 0 and n >= 150:
+        if mes_eq is None and r["antes_ir"] > 0 and n >= 180:
             mes_eq = m
         if m in (6, 12, 18, 24, 36):
             filas.append((m, round(n), r["utilidad"], caja))

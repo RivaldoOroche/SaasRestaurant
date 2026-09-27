@@ -1,27 +1,36 @@
 import { describe, it, expect } from "vitest";
-import { PLANS, annualMonthly, branchLimitLabel, extraBranches, monthlyTotal, planInfo } from "./plans";
+import { PLANS, annualMonthly, branchLimitLabel, extraBranches, monthlyTotal, planInfo, quotaExceededMessage } from "./plans";
 
-describe("planes", () => {
+describe("planes (la mayoría de restaurantes tiene un local)", () => {
   it("precios vigentes (IGV incluido) y anual = 10 meses", () => {
     expect(PLANS.map((p) => [p.tier, p.price, p.annualPrice])).toEqual([
-      ["Básico", 149, 1490],
-      ["Pro", 349, 3490],
+      ["Básico", 159, 1590],
+      ["Pro", 299, 2990],
       ["Enterprise", 899, 8990],
     ]);
-    expect(annualMonthly(planInfo("Básico"))).toBe(124.17);
+    expect(annualMonthly(planInfo("Básico"))).toBe(132.5);
   });
 
-  it("Enterprise: 25 locales incluidos y S/ 29 por local adicional", () => {
+  it("Básico: un solo local", () => {
+    const b = planInfo("Básico");
+    expect(branchLimitLabel(b)).toBe("1 local");
+    expect(monthlyTotal(b, 0)).toBe(159);
+    expect(quotaExceededMessage("Básico", 0)).toMatch(/un solo local/);
+  });
+
+  it("Pro: 2 locales incluidos + S/ 119 por local adicional, hasta 5", () => {
+    const p = planInfo("Pro");
+    expect(branchLimitLabel(p)).toBe("2 locales incluidos + S/ 119 por local adicional (hasta 5)");
+    expect(monthlyTotal(p, 1)).toBe(299);
+    expect(monthlyTotal(p, 2)).toBe(418);
+    expect(monthlyTotal(p, 4)).toBe(656);
+    expect(quotaExceededMessage("Pro", 4)).toMatch(/hasta 5 locales/);
+  });
+
+  it("Enterprise: 6 locales incluidos + S/ 99 por local adicional, sin tope", () => {
     const e = planInfo("Enterprise");
-    expect(extraBranches(e, 24)).toBe(0);
-    expect(monthlyTotal(e, 24)).toBe(899);
-    expect(monthlyTotal(e, 26)).toBe(957);
-    expect(branchLimitLabel(e)).toBe("25 locales incluidos + S/ 29 por local adicional");
-  });
-
-  it("Básico y Pro no tienen adicionales", () => {
-    expect(monthlyTotal(planInfo("Básico"), 2)).toBe(149);
-    expect(branchLimitLabel(planInfo("Básico"))).toBe("principal + 2 sucursales");
-    expect(branchLimitLabel(null)).toBe("sucursales ilimitadas");
+    expect(extraBranches(e, 5)).toBe(0);
+    expect(monthlyTotal(e, 7)).toBe(1097);
+    expect(branchLimitLabel(e)).toBe("6 locales incluidos + S/ 99 por local adicional");
   });
 });

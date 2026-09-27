@@ -52,10 +52,10 @@ describe("árbol de sucursales", () => {
   });
 
   it("no permite ciclos, ni colgar la principal, ni padres de otro restaurante", async () => {
-    const root = await rootOf(FAROL);
+    const root = await rootOf(MUELLE);
     const { rows } = await db.query<{ id: string }>(
       `insert into branches (tenant_id, parent_id, name) values ($1, $2, 'Hija') returning id`,
-      [FAROL, root],
+      [MUELLE, root],
     );
     const child = rows[0].id;
     await expect(db.query(`update branches set parent_id = $1 where id = $2`, [child, root])).rejects.toThrow(
@@ -63,7 +63,7 @@ describe("árbol de sucursales", () => {
     );
     await expect(db.query(`update branches set parent_id = $1 where id = $1`, [child])).rejects.toThrow();
     await expect(
-      db.query(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'Intrusa')`, [FAROL, MIRAFLORES]),
+      db.query(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'Intrusa')`, [MUELLE, MIRAFLORES]),
     ).rejects.toThrow(/branches_parent_fk/);
     await db.query(`delete from branches where id = $1`, [child]);
   });
@@ -91,40 +91,48 @@ describe("árbol de sucursales", () => {
 });
 
 describe("cuota de sucursales por plan", () => {
-  it("Básico: principal + 2 sucursales; la tercera se rechaza con mensaje claro", async () => {
+  it("Básico es para un solo local: la primera sucursal se rechaza con mensaje claro", async () => {
     const root = await rootOf(FAROL);
-    await asUser(db, farolOwner, async (q) => {
-      await q(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'Surco'), ($1, $2, 'Barranco')`, [
-        FAROL,
-        root,
-      ]);
-    });
     await expect(
-      asUser(db, farolOwner, (q) =>
-        q(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'La Molina')`, [FAROL, root]),
-      ),
-    ).rejects.toThrow(/plan Básico permite la sede principal y hasta 2 sucursales/);
-
+      asUser(db, farolOwner, (q) => q(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'Surco')`, [FAROL, root])),
+    ).rejects.toThrow(/plan Básico es para un solo local. Pasa al plan Pro/);
     const quota = await asUser(db, farolOwner, (q) =>
       q<{ q: { used: number; max: number; remaining: number } }>(`select branch_quota($1) q`, [FAROL]),
     );
-    expect(quota.rows[0].q).toMatchObject({ plan: "Básico", used: 2, max: 2, remaining: 0 });
+    expect(quota.rows[0].q).toMatchObject({ plan: "Básico", used: 0, max: 0, remaining: 0 });
+  });
+
+  it("Pro: 2 locales incluidos, S/ 119 por local adicional y hasta 5 locales", async () => {
+    const root = await rootOf(FAROL);
+    await db.query(`update tenants set plan = 'Pro' where id = $1`, [FAROL]);
+    await asUser(db, farolOwner, (q) =>
+      q(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'Surco'), ($1, $2, 'Barranco')`, [FAROL, root]),
+    );
+    const t = await db.query<{ plan_total: string }>(`select plan_total from v_tenants where id = $1`, [FAROL]);
+    expect(Number(t.rows[0].plan_total)).toBe(299 + 119); // 3 locales
+    await db.query(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'La Molina'), ($1, $2, 'Chorrillos')`, [FAROL, root]);
+    await expect(
+      db.query(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'Lince')`, [FAROL, root]),
+    ).rejects.toThrow(/plan Pro permite hasta 5 locales/);
+    const q = await asUser(db, farolOwner, (qq) =>
+      qq<{ q: { included: number; extra: number; monthly_total: string } }>(`select branch_quota($1) q`, [FAROL]),
+    );
+    expect(q.rows[0].q).toMatchObject({ included: 1, extra: 3 });
+    expect(Number(q.rows[0].q.monthly_total)).toBe(299 + 3 * 119);
   });
 
   it("desactivar libera cupo; reactivar por encima del límite se rechaza", async () => {
     const root = await rootOf(FAROL);
     await db.query(`update branches set active = false where tenant_id = $1 and name = 'Surco'`, [FAROL]);
-    await db.query(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'La Molina')`, [FAROL, root]);
+    await db.query(`insert into branches (tenant_id, parent_id, name) values ($1, $2, 'Lince')`, [FAROL, root]);
     await expect(
       db.query(`update branches set active = true where tenant_id = $1 and name = 'Surco'`, [FAROL]),
-    ).rejects.toThrow(/plan_limit|hasta 2 sucursales/);
+    ).rejects.toThrow(/plan_limit|hasta 5 locales/);
   });
 
-  it("subir de plan amplía el límite; bajar con más sucursales activas se bloquea", async () => {
-    await db.query(`update tenants set plan = 'Pro' where id = $1`, [FAROL]);
-    await db.query(`update branches set active = true where tenant_id = $1 and name = 'Surco'`, [FAROL]);
+  it("bajar a Básico con sucursales activas se bloquea", async () => {
     await expect(db.query(`update tenants set plan = 'Básico' where id = $1`, [FAROL])).rejects.toThrow(
-      /tiene 3 activas. Desactiva 1/,
+      /permite un solo local y el restaurante tiene 4 sucursales activas. Desactiva 4/,
     );
   });
 
@@ -161,25 +169,24 @@ describe("carta por sucursal", () => {
 });
 
 describe("Enterprise: locales incluidos y adicionales", () => {
-  it("25 locales incluidos; cada sucursal activa adicional suma S/ 29 al MRR y a la cuota", async () => {
+  it("6 locales incluidos; cada sucursal activa adicional suma S/ 99 al MRR y a la cuota", async () => {
     const root = await rootOf(MUELLE);
     const existing = (await db.query<{ n: number }>(
       `select count(*)::int n from branches where tenant_id = $1 and parent_id is not null and active`, [MUELLE])).rows[0].n;
-    for (let i = existing; i < 26; i++) {
+    for (let i = existing; i < 7; i++) {
       await db.query(`insert into branches (tenant_id, parent_id, name) values ($1, $2, $3)`, [MUELLE, root, `Local ${i + 1}`]);
     }
-    const t = await db.query<{ plan_total: string; mrr: string }>(`select plan_total, mrr from v_tenants where id = $1`, [MUELLE]);
-    expect(Number(t.rows[0].plan_total)).toBe(899 + 2 * 29);
+    const t = await db.query<{ plan_total: string }>(`select plan_total from v_tenants where id = $1`, [MUELLE]);
+    expect(Number(t.rows[0].plan_total)).toBe(899 + 2 * 99); // 8 locales
     const owner = await makeUser(db, "andres@muelle.pe", MUELLE, "dueno");
-    const q = await asUser(db, owner, (qq) => qq<{ q: { included: number; extra: number; extra_price: string; monthly_total: string } }>(
+    const q = await asUser(db, owner, (qq) => qq<{ q: { included: number; extra: number; monthly_total: string } }>(
       `select branch_quota($1) q`, [MUELLE]));
-    expect(q.rows[0].q.included).toBe(24);
-    expect(q.rows[0].q.extra).toBe(2);
-    expect(Number(q.rows[0].q.monthly_total)).toBe(957);
+    expect(q.rows[0].q).toMatchObject({ included: 5, extra: 2 });
+    expect(Number(q.rows[0].q.monthly_total)).toBe(1097);
     // Desactivar una sucursal baja el cobro.
-    await db.query(`update branches set active = false where tenant_id = $1 and name = 'Local 26'`, [MUELLE]);
+    await db.query(`update branches set active = false where tenant_id = $1 and name = 'Local 7'`, [MUELLE]);
     const t2 = await db.query<{ plan_total: string }>(`select plan_total from v_tenants where id = $1`, [MUELLE]);
-    expect(Number(t2.rows[0].plan_total)).toBe(928);
+    expect(Number(t2.rows[0].plan_total)).toBe(998);
   });
 });
 
@@ -213,7 +220,7 @@ describe("integridad y normalización", () => {
     const { rows } = await asUser(db, higueraOwner, (q) =>
       q<{ mrr: string }>(`select mrr from v_tenants where id = $1`, [HIGUERA]),
     );
-    expect(Number(rows[0].mrr)).toBe(349);
+    expect(Number(rows[0].mrr)).toBe(299); // Pro con 2 locales (Miraflores + San Isidro), ambos incluidos
   });
 
   it("el inventario es por sucursal y el stock es la suma del kardex", async () => {

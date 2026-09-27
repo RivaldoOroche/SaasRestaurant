@@ -18,11 +18,15 @@ export function Suscripcion() {
   // Total real del mes: plan + sucursales adicionales (Enterprise).
   const price = quota?.monthlyTotal ?? basePrice;
   const usedBranches = quota?.used ?? 0;
+  const maxLocales = quota?.max == null ? null : quota.max + 1;
   const usage = [
     {
-      metric: quota?.included != null ? "Sucursales incluidas (además de la principal)" : "Sucursales (además de la principal)",
-      cur: quota?.included != null ? Math.min(usedBranches, quota.included) : usedBranches,
-      cap: quota?.included ?? quota?.max ?? null,
+      metric:
+        quota?.included != null
+          ? `Locales activos (${quota.included + 1} incluidos${quota.extraPrice != null ? `, luego ${formatMoney(quota.extraPrice)} c/u` : ""})`
+          : "Locales activos",
+      cur: usedBranches + 1,
+      cap: maxLocales,
     },
     { metric: "Personal activo", cur: staff.filter((m) => m.active).length, cap: null },
   ];
@@ -122,7 +126,8 @@ export function Suscripcion() {
                   <p className="text-accent text-xs mt-3">Tu plan actual</p>
                 ) : tooMany ? (
                   <p className="text-warning text-xs mt-3">
-                    Tienes {usedBranches} sucursales activas; desactiva {usedBranches - (t.maxBranches ?? 0)} para cambiar a este plan.
+                    Tienes {usedBranches} {usedBranches === 1 ? "sucursal activa" : "sucursales activas"}; desactiva{" "}
+                    {usedBranches - (t.maxBranches ?? 0)} para cambiar a este plan.
                   </p>
                 ) : (
                   <Button

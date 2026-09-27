@@ -1,4 +1,4 @@
-import { PLANS } from "@/lib/plans";
+import { PLANS, monthlyTotal, planInfo } from "@/lib/plans";
 import type { PlatformRepo } from "./PlatformRepo";
 import type {
   Tenant,
@@ -64,6 +64,12 @@ function seedTickets(): SupportTicket[] {
   ];
 }
 
+/** Mensualidad con locales adicionales (mismo cálculo que app.plan_monthly_total). */
+function planTotal(plan: PlanTier, branches: number, price?: number): number {
+  const info = planInfo(plan);
+  return monthlyTotal({ ...info, price: price ?? info.price }, Math.max(0, branches - 1));
+}
+
 const PLAN_PRICE = Object.fromEntries(PLANS.map((p) => [p.tier, p.price])) as Record<PlanTier, number>;
 const PLAN_FEATURES = Object.fromEntries(PLANS.map((p) => [p.tier, p.features])) as Record<PlanTier, string>;
 
@@ -111,7 +117,7 @@ const SEED_TENANTS: Tenant[] = [
 ];
 
 export class MockPlatformRepo implements PlatformRepo {
-  private tenants: Tenant[] = SEED_TENANTS.map((t) => ({ ...t }));
+  private tenants: Tenant[] = SEED_TENANTS.map((t) => ({ ...t, mrr: t.mrr > 0 ? planTotal(t.plan, t.branches) : 0 }));
   private plans: Record<PlanTier, { price: number; features: string }> = {
     Básico: { price: PLAN_PRICE.Básico, features: PLAN_FEATURES.Básico },
     Pro: { price: PLAN_PRICE.Pro, features: PLAN_FEATURES.Pro },
@@ -196,7 +202,7 @@ export class MockPlatformRepo implements PlatformRepo {
     if (patch.features !== undefined) this.plans[tier].features = patch.features;
     // Reactivar el MRR de los tenants activos de ese plan con el nuevo precio.
     for (const t of this.tenants) {
-      if (t.plan === tier && t.status === "Activo") t.mrr = this.plans[tier].price;
+      if (t.plan === tier && t.status === "Activo") t.mrr = planTotal(tier, t.branches, this.plans[tier].price);
     }
     this.log("Plataforma", "Plataforma", "plan", "info", `Plan ${tier} actualizado (precio S/ ${this.plans[tier].price})`);
     this.emit();
@@ -290,7 +296,7 @@ export class MockPlatformRepo implements PlatformRepo {
       .filter((t) => t.status === "Suspendido")
       .map((t) => ({
         tenant: t.name,
-        amount: this.plans[t.plan].price,
+        amount: planTotal(t.plan, t.branches, this.plans[t.plan].price),
         reason: "Cobro de suscripción fallido",
         tries: "3 intentos",
         status: "Suspendido",
@@ -412,7 +418,7 @@ export class MockPlatformRepo implements PlatformRepo {
     if (!t) return;
     const prev = t.plan;
     t.plan = plan;
-    if (t.status === "Activo") t.mrr = this.plans[plan].price;
+    if (t.status === "Activo") t.mrr = planTotal(plan, t.branches, this.plans[plan].price);
     this.log(t.name, "Plataforma", "plan", "info", `Cambió de plan ${prev} a ${plan}`);
     this.emit();
   }
@@ -422,7 +428,7 @@ export class MockPlatformRepo implements PlatformRepo {
     if (!t) return;
     if (t.status === "Suspendido") {
       t.status = "Activo";
-      t.mrr = this.plans[t.plan].price;
+      t.mrr = planTotal(t.plan, t.branches, this.plans[t.plan].price);
       this.log(t.name, "Plataforma", "plan", "info", "Suscripción reactivada");
     } else {
       t.status = "Suspendido";
@@ -435,12 +441,12 @@ export class MockPlatformRepo implements PlatformRepo {
   async chargeTenant(id: string, method: string, _token?: string): Promise<SaasCharge> {
     void _token; // demo: no hay pasarela real
     const t = this.tenants.find((x) => x.id === id);
-    const base = t ? Math.round((this.plans[t.plan].price / 1.18) * 100) / 100 : 0;
-    const total = t ? this.plans[t.plan].price : 0;
+    const total = t ? planTotal(t.plan, t.branches, this.plans[t.plan].price) : 0;
+    const base = Math.round((total / 1.18) * 100) / 100;
     // El pago activa la suscripción.
     if (t && total > 0) {
       t.status = "Activo";
-      t.mrr = this.plans[t.plan].price;
+      t.mrr = total;
       this.log(t.name, "Plataforma", "pago", "info", `Cobró suscripción · ${method} · S/ ${total.toFixed(2)}`);
       this.emit();
     }

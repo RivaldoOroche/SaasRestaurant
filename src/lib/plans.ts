@@ -20,41 +20,40 @@ export interface PlanInfo {
 }
 
 /**
- * Precios alineados al mercado peruano de POS para restaurantes (2026: la
- * mayoría entre S/ 99 y S/ 149 al mes por local con facturación SUNAT). Todas
- * las funciones están en todos los planes; cambian las sucursales y el soporte,
- * así el cliente no tiene que adivinar qué módulo le falta.
+ * Pensado para la realidad peruana: casi todos los restaurantes tienen un solo
+ * local y muy pocos pasan de 4 (ver PRECIOS.md). Todas las funciones en todos
+ * los planes; cambia cuántos locales incluye y el soporte. Precios con IGV.
  */
 export const PLANS: PlanInfo[] = [
   {
     tier: "Básico",
-    price: 149,
-    annualPrice: 1490,
-    maxBranches: 2,
+    price: 159,
+    annualPrice: 1590,
+    maxBranches: 0,
     includedBranches: null,
     extraBranchPrice: null,
-    support: "Soporte por WhatsApp y correo en horario comercial",
-    features: "Todas las funciones: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT",
+    support: "Soporte por WhatsApp los 7 días, en horario de restaurantes",
+    features: "Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT sin costo por comprobante",
   },
   {
     tier: "Pro",
-    price: 349,
-    annualPrice: 3490,
-    maxBranches: 10,
-    includedBranches: null,
-    extraBranchPrice: null,
-    support: "Soporte prioritario los 7 días",
-    features: "Todo lo del Básico + reportes consolidados de todas tus sucursales",
+    price: 299,
+    annualPrice: 2990,
+    maxBranches: 4,
+    includedBranches: 1,
+    extraBranchPrice: 119,
+    support: "Soporte prioritario los 7 días y puesta en marcha guiada",
+    features: "Todo lo del Básico para 2 locales (hasta 5): reportes consolidados, traslados de insumos y personal por local",
   },
   {
     tier: "Enterprise",
     price: 899,
     annualPrice: 8990,
     maxBranches: null,
-    includedBranches: 24,
-    extraBranchPrice: 29,
-    support: "Asesor dedicado y puesta en marcha asistida",
-    features: "Todo lo del Pro para cadenas: 25 locales incluidos y S/ 29 por local adicional",
+    includedBranches: 5,
+    extraBranchPrice: 99,
+    support: "Asesor dedicado y puesta en marcha asistida en cada local",
+    features: "Para cadenas: 6 locales incluidos, S/ 99 por local adicional y asesor dedicado",
   },
 ];
 
@@ -84,20 +83,23 @@ export function monthlyTotal(p: PlanInfo, activeChildBranches: number): number {
 }
 
 /**
- * Texto corto de los locales del plan: "principal + 2 sucursales",
- * "25 locales incluidos + S/ 29 por local adicional". Acepta el plan o solo
- * el tope (compatibilidad).
+ * Texto corto de los locales del plan: "1 local",
+ * "2 locales incluidos + S/ 119 por local adicional (hasta 5)". Acepta el plan
+ * o solo el tope (compatibilidad).
  */
 export function branchLimitLabel(plan: Pick<PlanInfo, "maxBranches" | "includedBranches" | "extraBranchPrice"> | number | null): string {
   const p = typeof plan === "object" && plan !== null ? plan : { maxBranches: plan, includedBranches: null, extraBranchPrice: null };
+  if (p.maxBranches === 0) return "1 local";
   if (p.includedBranches !== null && p.extraBranchPrice !== null) {
-    return `${p.includedBranches + 1} locales incluidos + S/ ${p.extraBranchPrice} por local adicional`;
+    const cap = p.maxBranches !== null ? ` (hasta ${p.maxBranches + 1})` : "";
+    return `${p.includedBranches + 1} locales incluidos + S/ ${p.extraBranchPrice} por local adicional${cap}`;
   }
-  if (p.maxBranches === null) return "sucursales ilimitadas";
-  return `principal + ${p.maxBranches} ${p.maxBranches === 1 ? "sucursal" : "sucursales"}`;
+  if (p.maxBranches === null) return "locales ilimitados";
+  return `hasta ${p.maxBranches + 1} locales`;
 }
 
 /** Mismo mensaje que el trigger branches_quota_guard. */
 export function quotaExceededMessage(tier: string, maxBranches: number): string {
-  return `Tu plan ${tier} permite la sede principal y hasta ${maxBranches} sucursales. Mejora tu plan para agregar más.`;
+  if (maxBranches === 0) return `Tu plan ${tier} es para un solo local. Pasa al plan Pro para agregar sucursales.`;
+  return `Tu plan ${tier} permite hasta ${maxBranches + 1} locales (la sede principal y ${maxBranches} sucursales). Mejora tu plan para agregar más.`;
 }

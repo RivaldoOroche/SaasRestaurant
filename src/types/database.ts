@@ -368,7 +368,7 @@ export type Database = {
         Relationships: [];
       };
       v_tenants: {
-        Row: Tables["tenants"]["Row"] & { mrr: number; branches_count: number };
+        Row: Tables["tenants"]["Row"] & { mrr: number; plan_total: number; branches_count: number };
         Relationships: [];
       };
     };

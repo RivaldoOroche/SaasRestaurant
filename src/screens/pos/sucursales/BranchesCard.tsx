@@ -99,6 +99,21 @@ export function BranchesCard() {
 
 function QuotaBar({ quota }: { quota: BranchQuota }) {
   const { used, max, plan, included, extraPrice, extra, monthlyTotal } = quota;
+  if (max === 0) {
+    return (
+      <div className="rounded-md bg-chip-bg p-3 text-sm">
+        Plan <strong>{plan}</strong> · 1 local.{" "}
+        {used > 0 ? (
+          <span className="text-muted">Tus {used} sucursales actuales se mantienen; para abrir más, cambia a Pro.</span>
+        ) : (
+          <span className="text-muted">¿Vas a abrir otro local?</span>
+        )}{" "}
+        <Link to="/pos/plan" className="text-accent font-semibold hover:underline">
+          Ver plan Pro (2 locales desde S/ 299) →
+        </Link>
+      </div>
+    );
+  }
   const cap = included ?? max;
   const pct = cap ? Math.min(100, (Math.min(used, cap) / Math.max(1, cap)) * 100) : 0;
   const full = max !== null && used >= max;

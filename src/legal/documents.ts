@@ -40,7 +40,7 @@ const UPDATED = "2026-09-28";
 const TERMINOS: LegalDoc = {
   id: "terminos",
   title: "Términos y Condiciones del Servicio",
-  // 2026-10: Enterprise con 25 locales incluidos y cobro por local adicional; SUNAT sin costo por comprobante.
+  // 2026-10: planes por local (Básico 1 local; Pro y Enterprise con locales incluidos y cobro por local adicional); SUNAT sin costo por comprobante.
   version: "2026-10",
   updated: UPDATED,
   acceptance: true,
@@ -60,13 +60,13 @@ const TERMINOS: LegalDoc = {
       p: [
         "Wayra POS es un sistema en la nube para restaurantes: toma de pedidos, mesas, cocina, caja, delivery, carta digital, inventario, recetas, reportes, programa de clientes y emisión de comprobantes electrónicos a través del proveedor de facturación que el Cliente elija.",
         "El servicio funciona desde el navegador en computadoras, tablets y celulares. Si se cae el internet, el sistema sigue registrando pedidos y cobros en el equipo y los sincroniza al volver la conexión; algunas funciones que dependen de terceros (cobro con tarjeta en línea, envío a SUNAT, pantalla de cocina en otro equipo) se completan al reconectar.",
-        "Todas las funciones están disponibles en todos los planes. Los planes se diferencian por la cantidad de sucursales permitidas y el nivel de soporte.",
+        "Todas las funciones están disponibles en todos los planes. Los planes se diferencian por la cantidad de locales incluidos y el nivel de soporte.",
       ],
     },
     {
       h: "3. Planes, precios y pago",
       p: [
-        "Los precios publicados son precios finales en soles e incluyen IGV. El plan Básico permite la sede principal y hasta 2 sucursales; el Pro, hasta 10 sucursales; el Enterprise incluye 25 locales (la sede principal y 24 sucursales) y cada sucursal activa adicional se cobra a S/ 29 al mes, IGV incluido. El sistema avisa ese costo antes de crear la sucursal, y desactivarla deja de cobrarla desde el siguiente periodo.",
+        "Los precios publicados son precios finales en soles e incluyen IGV. El plan Básico es para un local. El Pro incluye 2 locales (la sede principal y 1 sucursal) y permite hasta 5; cada local adicional se cobra a S/ 119 al mes. El Enterprise incluye 6 locales, sin tope, y cada local adicional se cobra a S/ 99 al mes. El sistema avisa ese costo antes de crear la sucursal, y desactivarla deja de cobrarla desde el siguiente periodo.",
         "El pago es mensual o anual, por adelantado. El pago anual equivale a 10 meses. Wayra emite el comprobante electrónico correspondiente por cada pago.",
         "La emisión de comprobantes directamente a SUNAT no tiene costo adicional por comprobante. Si el Cliente prefiere emitir mediante un OSE o PSE, lo contrata y paga directamente a ese proveedor.",
         "Wayra puede cambiar sus precios avisando al Cliente por correo con al menos 30 días calendario de anticipación. El nuevo precio se aplica desde el siguiente periodo; si el Cliente no está de acuerdo, puede cancelar antes sin penalidad. Los periodos ya pagados no cambian de precio.",

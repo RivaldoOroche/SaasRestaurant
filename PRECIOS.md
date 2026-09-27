@@ -8,7 +8,7 @@ inicio del archivo; cámbialos y vuelve a correrlo.
 | Supuesto | Valor | Fuente / criterio |
 | --- | --- | --- |
 | Tipo de cambio | S/ 3.44 por US$ | sept. 2026 |
-| Mezcla de clientes | 60 % Básico · 30 % Pro · 10 % Enterprise | locales promedio: 1.3 / 3.5 / 12 |
+| Mezcla de clientes | 80 % Básico · 17 % Pro · 3 % Enterprise | realidad peruana: casi todos tienen 1 local y muy pocos pasan de 4. Locales promedio: 1 / 2.6 / 8 |
 | Régimen de la empresa | REMYPE pequeña empresa + Régimen MYPE Tributario | IR: 10 % hasta 15 UIT (S/ 82 500) de utilidad anual y 29.5 % sobre el exceso |
 | Cargas laborales | +27 % sobre el sueldo | EsSalud 9 %, ½ gratificación, ½ CTS, 15 días de vacaciones, vida ley (en régimen general sería +45 %) |
 | Comprobantes SUNAT | S/ 0 | SUNAT directo (SEE del contribuyente, certificado digital tributario gratuito); el OSE, si se usa, lo paga el restaurante |
@@ -22,9 +22,9 @@ inicio del archivo; cámbialos y vuelve a correrlo.
 | --- | --- | --- | --- |
 | **Responsable de soporte y puesta en marcha** | S/ 2 500 | **S/ 3 175** + S/ 600 de bono por noches y fines de semana | desde el día 1 |
 | Asistente de soporte | S/ 1 800 | S/ 2 286 + bono | uno más cada ~250 locales |
-| Desarrollador semi senior | S/ 6 500 | S/ 8 255 | desde ~60 clientes (antes, los fundadores) |
-| Vendedor | S/ 1 500 + comisión (½ mes por cliente nuevo) | S/ 1 905 | desde ~90 clientes |
-| Gerente / fundador | S/ 4 000 | S/ 5 080 | desde ~150 clientes |
+| Desarrollador semi senior | S/ 6 500 | S/ 8 255 | desde ~100 clientes (antes, los fundadores) |
+| Vendedor | S/ 1 500 + comisión (½ mes por cliente nuevo) | S/ 1 905 | desde ~130 clientes |
+| Gerente / fundador | S/ 4 000 | S/ 5 080 | desde ~180 clientes |
 
 Referencias de mercado: analista de soporte S/ 1 550–1 820, ingeniero de soporte en Lima
 S/ 3 490, full stack semi senior S/ 6 500–8 500. Por encima del promedio de analista, porque
@@ -44,100 +44,109 @@ esta persona también capacita a los restaurantes y cubre horarios de servicio.
 | Oficina / coworking | S/ 0 remoto · S/ 600 con equipo completo |
 | Contingencia | +10 % sobre todos los gastos fijos |
 
-## 4. Resultados con los precios actuales (S/ 149 / 349 / 899)
+## 4. Estructura de planes (vigente)
+
+Premisa: en el Perú casi todos los restaurantes tienen **un solo local** y muy pocos pasan
+de 4. Por eso el precio se arma por local: el Básico cubre al restaurante típico y los
+demás planes crecen con cada local.
+
+| Plan | Precio con IGV | Locales | Local adicional | Pago anual (10 meses) |
+| --- | --- | --- | --- | --- |
+| **Básico** | **S/ 159** | 1 | — | S/ 1 590 (S/ 132.50/mes) |
+| **Pro** | **S/ 299** | 2 incluidos, hasta 5 | + S/ 119/mes | S/ 2 990 (S/ 249/mes) |
+| **Enterprise** | **S/ 899** | 6 incluidos, sin tope | + S/ 99/mes | S/ 8 990 (S/ 749/mes) |
+
+Cuánto paga un restaurante según sus locales:
+
+| Locales | Wayra | PANCA (Básico / Profesional, por local) | Fudo (por local) |
+| --- | --- | --- | --- |
+| 1 | **S/ 159** (Básico) | S/ 117 / 140 | S/ 134–272 |
+| 2 | **S/ 299** (Pro) | S/ 234 / 281 | S/ 268–544 |
+| 3 | **S/ 418** (Pro) | S/ 351 / 421 | S/ 402–816 |
+| 4 | **S/ 537** (Pro) | S/ 468 / 562 | S/ 536–1 088 |
+| 5 | **S/ 656** (Pro) | S/ 585 / 702 | S/ 670–1 360 |
+| 8 | **S/ 1 097** (Enterprise) | S/ 936 / 1 123 | S/ 1 072–2 176 |
+
+- Con 1 local somos S/ 19 más que PANCA Profesional; pagando anual (S/ 132.50), S/ 8 menos.
+- Desde 2 locales quedamos entre el Básico y el Profesional de PANCA, pero con todo incluido
+  (cocina, delivery, inventario con recetas, reportes consolidados, sin internet, SUNAT sin
+  costo por comprobante).
+- Cada local nuevo cuesta menos que el anterior (S/ 159 → S/ 119 → S/ 99): premia crecer.
+
+## 5. Resultados con estos precios
 
 **A) Arranque:** solo el responsable de soporte en planilla; los fundadores programan y venden
 sin sueldo.
 
-| Clientes | Venta neta | Costos | Utilidad después de IR | Margen |
+| Clientes | Locales | Venta neta | Utilidad después de IR | Margen |
 | --- | --- | --- | --- | --- |
-| 25 | S/ 6 017 | S/ 8 139 | −S/ 2 122 | −35 % |
-| 50 | S/ 12 034 | S/ 8 668 | S/ 3 030 | 25 % |
-| 100 | S/ 24 068 | S/ 12 722 | S/ 9 340 | 39 % |
-| 300 | S/ 72 203 | S/ 23 235 | S/ 35 863 | 50 % |
+| 50 | 74 | S/ 9 452 | S/ 857 | 9 % |
+| 100 | 148 | S/ 18 905 | S/ 8 175 | 43 % |
+| 300 | 445 | S/ 56 715 | S/ 30 130 | 53 % |
 
-→ **Equilibrio: 35 clientes.**
+→ **Equilibrio: 45 clientes.**
 
 **B) Equipo completo desde el inicio:** soporte, desarrollador, vendedor y sueldo del fundador.
 
 | Clientes | Venta neta | Utilidad después de IR | Margen |
 | --- | --- | --- | --- |
-| 100 | S/ 24 068 | −S/ 8 089 | −34 % |
-| 150 | S/ 36 102 | S/ 2 014 | 6 % |
-| 200 | S/ 48 136 | S/ 8 417 | 17 % |
-| 300 | S/ 72 203 | S/ 21 652 | 30 % |
-| 500 | S/ 120 339 | S/ 45 727 | 38 % |
+| 150 | S/ 28 357 | −S/ 1 712 | −6 % |
+| 200 | S/ 37 810 | S/ 3 342 | 9 % |
+| 300 | S/ 56 715 | S/ 16 083 | 28 % |
+| 500 | S/ 94 525 | S/ 37 938 | 40 % |
 
-→ **Equilibrio: 140 clientes.**
+→ **Equilibrio: 160 clientes.**
 
-**C) Recomendado: contratar por etapas.** Soporte desde el día 1, desarrollador desde 60
-clientes, vendedor desde 90 y sueldo del fundador desde 150.
+**C) Recomendado: contratar por etapas.** Soporte desde el día 1, desarrollador desde 100
+clientes, vendedor desde 130 y sueldo del fundador desde 180.
 
 | Ritmo | Mes 12 | Mes 24 | Capital de trabajo necesario | Rentable con equipo completo |
 | --- | --- | --- | --- | --- |
-| 10 clientes nuevos al mes | 102 clientes | 173 clientes · +S/ 3 700/mes | ~S/ 11 000 | desde el mes 20 |
-| 15 clientes nuevos al mes | 153 clientes | 259 clientes · +S/ 15 300/mes | ~S/ 5 400 | desde el mes 12 |
+| 10 clientes nuevos al mes | 102 clientes | 173 clientes · +S/ 4 786/mes | ~S/ 14 000 | desde el mes 26 |
+| 15 clientes nuevos al mes | 153 clientes | 259 clientes · +S/ 11 112/mes | ~S/ 7 500 | desde el mes 15 |
 
-A eso se suma la inversión inicial (laptops, equipo de demo, marca, abogado y constitución),
-unos **S/ 15 000**, que en el modelo está repartida mes a mes.
+Más la inversión inicial de unos S/ 15 000 (laptops, equipo de demo, marca, abogado y
+constitución), que en el modelo está repartida mes a mes.
 
-## 5. ¿Y si cambiamos los precios?
+## 6. Comparación de estructuras (misma mezcla realista)
 
-Clientes necesarios para cubrir costos:
-
-| Precios (Básico / Pro / Enterprise) | Arranque | Equipo completo | Utilidad con 300 clientes (equipo) |
+| Estructura | Equilibrio: arranque | Equilibrio: equipo completo | Utilidad con 300 clientes |
 | --- | --- | --- | --- |
-| **Actual 149 / 349 / 899** | **35** | **140** | **S/ 21 652** |
-| 129 / 349 / 899 | 37 | 147 | S/ 19 674 |
-| 119 / 299 / 799 | 41 | 183 | S/ 14 562 |
-| 169 / 399 / 999 | 31 | 124 | S/ 27 753 |
+| Anterior: Básico S/ 149 con 3 locales | 48 | 194 | S/ 13 185 |
+| Básico 149 · Pro 279 + 109 | 48 | 191 | S/ 13 788 |
+| **Básico 159 · Pro 299 + 119 (vigente)** | **45** | **160** | **S/ 16 083** |
+| Básico 169 · Pro 319 + 129 | 42 | 151 | S/ 18 477 |
 
-- Bajar Básico a S/ 129 casi no cambia el equilibrio. Bajar todo (119/299/799) exige
-  **43 clientes más** para cubrir el equipo completo.
-- Subir a 169/399/999 mejora el margen, pero deja el Básico S/ 29–52 por encima de PANCA.
-- **Si nosotros pagáramos el OSE, el equilibrio con equipo completo saltaría a 365 clientes.**
-
-## 6. Competencia
-
-| Producto | Precio con IGV | Nota |
-| --- | --- | --- |
-| PANCA Básico / Profesional | S/ 116.8 / 140.4 | un local; no cobra por comprobante |
-| Fudo | ≈ S/ 134 / 272 / 447 | por **cada** local |
-| Restaurant.pe | S/ 350–450 | |
-| NIOPOS Lite | ≈ S/ 42 al mes (S/ 499 al año) | POS básico |
-| Toteat corporativo | S/ 400+ y 0.3 % de las ventas | cadenas |
-| **Wayra** | **S/ 149 / 349 / 899** | todo incluido; Básico con 3 locales; anual = 2 meses gratis |
+- Con la mezcla realista, la estructura anterior regalaba sucursales que casi nadie usa y
+  necesitaba 194 clientes. La nueva baja el equilibrio a 160.
+- S/ 169 mejoraría algo más el margen, pero dejaría el Básico S/ 29 por encima de PANCA
+  Profesional. S/ 159 es el punto de equilibrio entre margen y competitividad.
+- **Si nosotros pagáramos el OSE, el equilibrio con equipo completo subiría a 259 clientes**:
+  SUNAT directo sigue siendo clave.
 
 ## 7. Aplicado (28/09/2026)
 
-- Precios S/ 149 / 349 / 899 se mantienen.
-- **Enterprise:** 25 locales incluidos + S/ 29 al mes por cada sucursal activa adicional. Migración
-  `0044` (`included_branches`, `extra_branch_price`, `app.plan_monthly_total`); el MRR (`v_tenants`),
-  el cobro mensual automático (`cron-tareas`) y la cuota (`branch_quota`) ya incluyen los adicionales.
-  La app avisa «+ S/ 29 al mes» antes de crear la sucursal y muestra el desglose en Plan.
-- **Precio anual visible:** S/ 124 / 291 / 749 al mes pagando anual (landing y pantalla Plan).
-- **SUNAT directo recomendado:** primero en Ajustes con «sin costo por comprobante»; los OSE figuran
-  como contrato propio del restaurante. Landing y FAQ dicen «sin costo por comprobante».
-- **Términos y Condiciones versión 2026-10:** incluyen el cobro por local adicional y que el OSE lo
-  paga el restaurante. Al entrar, cada cliente vuelve a aceptarlos. Antes de cobrar adicionales a
-  clientes Enterprise existentes, hay que avisarles por correo con 30 días de anticipación, como
-  dicen los propios términos.
+- Planes en la base (migración `0045`), la app, la consola SaaS, la landing y los Términos
+  (versión 2026-10):
+  - Básico: 1 local. Al intentar abrir una sucursal: «Tu plan Básico es para un solo local.
+    Pasa al plan Pro».
+  - Pro y Enterprise: la app avisa «+ S/ 119» o «+ S/ 99 al mes» antes de crear un local
+    adicional, y la pantalla Plan muestra el desglose.
+  - El MRR, el cobro mensual automático y los cobros manuales de la consola SaaS suman los
+    locales adicionales.
+- Clientes que ya tenían sucursales en Básico: las conservan (no se desactiva nada), pero
+  para abrir más deben pasar a Pro.
+- **Antes de aplicar a clientes existentes:** avisarles por correo con 30 días de
+  anticipación (sube el Básico de S/ 149 a S/ 159 y cambian los locales incluidos), como
+  exigen los Términos y la norma de protección al consumidor.
 
-## 8. Veredicto
+## 8. Reglas para proteger el margen
 
-1. **Mantener S/ 149 / 349 / 899.** Con sueldos y cargas reales, son los precios que
-   permiten sostener un equipo con unos 140 clientes sin salir del rango del mercado.
-2. **Crecer por etapas.** El responsable de soporte desde el día 1; el desarrollador y el
-   vendedor recién desde 60 y 90 clientes. Así el capital de trabajo necesario es de
-   S/ 5 000–11 000.
-3. **Enterprise con tope:** S/ 899 hasta 25 locales + S/ 29 por local adicional. Una cadena
-   grande consume soporte y hoy deja S/ 25 por local.
-4. **Proteger el margen:**
-   - SUNAT directo por defecto; el OSE a cargo del restaurante.
-   - Empujar el pago anual o con Yape (se ahorra ~S/ 8.60 por cobro con tarjeta).
-   - Contratar un asistente de soporte cada ~250 locales.
-5. **Para competir con PANCA sin bajar precios:** destacar «todo incluido», «3 locales en
-   Básico», «funciona sin internet» y «S/ 124 al mes pagando anual».
+1. SUNAT directo por defecto; el OSE siempre a cargo del restaurante.
+2. Empujar el pago anual, Yape o transferencia (se ahorra ~S/ 9 por cobro con tarjeta).
+3. Contratar por etapas y sumar un asistente de soporte cada ~250 locales.
+4. Mensaje comercial: «todo incluido para tu local por S/ 159, S/ 132.50 pagando anual, sin
+   costo por comprobante y funciona sin internet».
 
 ## Fuentes
 

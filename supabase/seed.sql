@@ -18,11 +18,12 @@
 -- 1) Planes de suscripción
 -- ---------------------------------------------------------------------------
 -- max_branches = sucursales además de la sede principal (null = sin límite).
--- Enterprise: 25 locales incluidos (principal + 24) y S/ 29 por local adicional.
+-- Casi todos los restaurantes tienen un local: Básico = 1 local; Pro = 2 incluidos
+-- (+ S/ 119 c/u, hasta 5); Enterprise = 6 incluidos (+ S/ 99 c/u, sin tope).
 insert into subscription_plans (tier, price, features, max_branches, annual_price, included_branches, extra_branch_price) values
-  ('Básico', 149, 'Todas las funciones: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT', 2, 1490, null, null),
-  ('Pro', 349, 'Todo lo del Básico + reportes consolidados de todas tus sucursales', 10, 3490, null, null),
-  ('Enterprise', 899, 'Todo lo del Pro para cadenas: 25 locales incluidos y S/ 29 por local adicional', null, 8990, 24, 29)
+  ('Básico', 159, 'Todo para un local: POS, cocina, caja, delivery, inventario, recetas, reportes y comprobantes SUNAT sin costo por comprobante', 0, 1590, null, null),
+  ('Pro', 299, 'Todo lo del Básico para 2 locales (hasta 5): reportes consolidados, traslados de insumos y personal por local', 4, 2990, 1, 119),
+  ('Enterprise', 899, 'Para cadenas: 6 locales incluidos, S/ 99 por local adicional y asesor dedicado', null, 8990, 5, 99)
 on conflict (tier) do update set
   price = excluded.price, features = excluded.features, max_branches = excluded.max_branches,
   annual_price = excluded.annual_price, included_branches = excluded.included_branches,

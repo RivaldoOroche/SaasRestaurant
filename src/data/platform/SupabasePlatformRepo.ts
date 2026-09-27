@@ -141,6 +141,13 @@ export class SupabasePlatformRepo implements PlatformRepo {
     });
   }
 
+  /** Mensualidad del tenant: precio del plan + locales adicionales (v_tenants.plan_total). */
+  private async totalOf(tenantId: string, tier: PlanTier): Promise<number> {
+    const { data } = await this.sb.from("v_tenants").select("plan_total").eq("id", tenantId).maybeSingle();
+    const total = (data as { plan_total?: number | string } | null)?.plan_total;
+    return total != null ? Number(total) : this.priceOf(tier);
+  }
+
   private async priceOf(tier: PlanTier): Promise<number> {
     const { data } = await this.sb.from("subscription_plans").select("price").eq("tier", tier).maybeSingle();
     return data ? Number(data.price) : PLAN_PRICE(tier);
@@ -400,7 +407,7 @@ export class SupabasePlatformRepo implements PlatformRepo {
   async chargeTenant(id: string, method: string, token?: string): Promise<SaasCharge> {
     const { data: t, error } = await this.sb.from("tenants").select("*").eq("id", id).single();
     if (error || !t) throw error ?? new Error("Tenant no encontrado");
-    const total = await this.priceOf(t.plan);
+    const total = await this.totalOf(id, t.plan);
     const base = Math.round((total / 1.18) * 100) / 100;
     const folio = `NP-F001-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -509,7 +516,7 @@ export class SupabasePlatformRepo implements PlatformRepo {
       .in("status", ["pendiente", "aprobada", "cobrada"])
       .maybeSingle();
     if (open) return null;
-    const total = await this.priceOf(t.plan);
+    const total = await this.totalOf(tenantId, t.plan);
     const base = Math.round((total / 1.18) * 100) / 100;
     const fiscal = await this.fiscalOf(tenantId);
     const { data, error } = await this.sb
