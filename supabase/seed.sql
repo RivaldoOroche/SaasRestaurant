@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Wayra POS — datos de prueba (seed) para un proyecto Supabase nuevo.
 -- Ejecuta este archivo UNA VEZ, después de aplicar todas las migraciones
--- (0001 … 0017). Es idempotente donde hay claves únicas; para volver a
+-- (supabase/migrations). Es idempotente donde hay claves únicas; para volver a
 -- sembrar desde cero, mejor recrea la base (o borra los datos del tenant demo).
 --
 -- Los usuarios de Auth NO se pueden crear por SQL: créalos en el dashboard
@@ -17,11 +17,13 @@
 -- ---------------------------------------------------------------------------
 -- 1) Planes de suscripción
 -- ---------------------------------------------------------------------------
-insert into subscription_plans (tier, price, features) values
-  ('Básico', 699,  'POS + 1 sucursal'),
-  ('Pro', 1499, 'POS + inventario + reportes + 3 sucursales'),
-  ('Enterprise', 4800, 'Todo + multi-sucursal + soporte prioritario')
-on conflict (tier) do update set price = excluded.price, features = excluded.features;
+-- max_branches = sucursales además de la sede principal (null = sin límite).
+insert into subscription_plans (tier, price, features, max_branches) values
+  ('Básico', 699,  'POS + sede principal + 2 sucursales', 2),
+  ('Pro', 1499, 'POS + inventario + reportes + hasta 10 sucursales', 10),
+  ('Enterprise', 4800, 'Todo + sucursales ilimitadas + soporte prioritario', null)
+on conflict (tier) do update set
+  price = excluded.price, features = excluded.features, max_branches = excluded.max_branches;
 
 -- ---------------------------------------------------------------------------
 -- 2) Datos del emisor del SaaS (tu empresa)
@@ -35,13 +37,15 @@ on conflict (id) do update set
 -- ---------------------------------------------------------------------------
 -- 3) Tenants (el demo + otros para poblar la consola SaaS)
 -- ---------------------------------------------------------------------------
-insert into tenants (id, name, slug, owner_name, plan, mrr, status, since) values
-  ('11111111-1111-1111-1111-111111111111', 'La Higuera', 'la-higuera', 'Mónica R.', 'Pro', 1499, 'Activo', '2025-03-01'),
-  ('a0000000-0000-0000-0000-000000000002', 'Cevichería El Muelle', 'cevicheria-el-muelle', 'Andrés Ríos', 'Enterprise', 4800, 'Activo', '2024-06-01'),
-  ('a0000000-0000-0000-0000-000000000003', 'Sushi Nami', 'sushi-nami', 'Keiko Tanaka', 'Pro', 1499, 'Activo', '2025-11-01'),
-  ('a0000000-0000-0000-0000-000000000004', 'Tacos El Farol', 'tacos-el-farol', 'Raúl Méndez', 'Básico', 699, 'Activo', '2025-01-01'),
-  ('a0000000-0000-0000-0000-000000000005', 'Café Aurora', 'cafe-aurora', 'Paula Vega', 'Pro', 0, 'Prueba', '2026-02-01'),
-  ('a0000000-0000-0000-0000-000000000006', 'Brasas del Sur', 'brasas-del-sur', 'Jorge Salas', 'Básico', 0, 'Suspendido', '2025-09-01')
+-- Cada alta crea sola su sede principal (trigger tenants_create_root). El MRR
+-- no se guarda: se deriva del plan en la vista v_tenants.
+insert into tenants (id, name, slug, owner_name, plan, status, since) values
+  ('11111111-1111-1111-1111-111111111111', 'La Higuera', 'la-higuera', 'Mónica R.', 'Pro', 'Activo', '2025-03-01'),
+  ('a0000000-0000-0000-0000-000000000002', 'Cevichería El Muelle', 'cevicheria-el-muelle', 'Andrés Ríos', 'Enterprise', 'Activo', '2024-06-01'),
+  ('a0000000-0000-0000-0000-000000000003', 'Sushi Nami', 'sushi-nami', 'Keiko Tanaka', 'Pro', 'Activo', '2025-11-01'),
+  ('a0000000-0000-0000-0000-000000000004', 'Tacos El Farol', 'tacos-el-farol', 'Raúl Méndez', 'Básico', 'Activo', '2025-01-01'),
+  ('a0000000-0000-0000-0000-000000000005', 'Café Aurora', 'cafe-aurora', 'Paula Vega', 'Pro', 'Prueba', '2026-02-01'),
+  ('a0000000-0000-0000-0000-000000000006', 'Brasas del Sur', 'brasas-del-sur', 'Jorge Salas', 'Básico', 'Suspendido', '2025-09-01')
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -57,11 +61,17 @@ values
 on conflict (tenant_id) do nothing;
 
 -- ---------------------------------------------------------------------------
--- 5) Sucursales del tenant demo (IDs fijos para asignar mesas)
+-- 5) Sucursales del tenant demo (árbol: Miraflores es la sede principal y
+--    San Isidro depende de ella). IDs fijos para asignar mesas.
 -- ---------------------------------------------------------------------------
-insert into branches (id, tenant_id, name, city) values
-  ('22222222-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Miraflores', 'Lima'),
-  ('22222222-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'San Isidro', 'Lima')
+update branches
+set id = '22222222-0000-0000-0000-000000000001', name = 'Miraflores', city = 'Lima',
+    address = 'Av. La Mar 1234, Miraflores'
+where tenant_id = '11111111-1111-1111-1111-111111111111' and parent_id is null
+  and id <> '22222222-0000-0000-0000-000000000001';
+insert into branches (id, tenant_id, parent_id, name, city, address) values
+  ('22222222-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
+   '22222222-0000-0000-0000-000000000001', 'San Isidro', 'Lima', 'Calle Las Begonias 450, San Isidro')
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -124,20 +134,35 @@ select
   z.zone, n, case when z.zone = 'Barra' then 2 else 4 end, 'libre'
 from (values ('Terraza', 1, 6), ('Salón principal', 7, 16), ('Barra', 17, 20)) as z(zone, lo, hi)
 cross join lateral generate_series(z.lo, z.hi) as n
-on conflict (tenant_id, number) do nothing;
+on conflict (branch_id, number) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 9) Inventario (con costo por unidad para food cost)
 -- ---------------------------------------------------------------------------
-insert into inventory_items (tenant_id, name, unit, stock, par, cost) values
-  ('11111111-1111-1111-1111-111111111111', 'Pescado fresco', 'kg', 18, 20, 28.00),
-  ('11111111-1111-1111-1111-111111111111', 'Lomo de res', 'kg', 15, 12, 32.00),
-  ('11111111-1111-1111-1111-111111111111', 'Papa amarilla', 'kg', 40, 25, 3.50),
-  ('11111111-1111-1111-1111-111111111111', 'Ají amarillo', 'kg', 6, 8, 9.00),
-  ('11111111-1111-1111-1111-111111111111', 'Culantro', 'atado', 8, 10, 1.50),
-  ('11111111-1111-1111-1111-111111111111', 'Pisco', 'bot', 12, 6, 45.00),
-  ('11111111-1111-1111-1111-111111111111', 'Limón', 'kg', 22, 15, 5.00)
+-- Catálogo de insumos (compartido por todas las sucursales) + stock inicial de
+-- cada sucursal como movimiento de kardex (el stock es la suma de movimientos).
+insert into inventory_items (tenant_id, name, unit, par, cost) values
+  ('11111111-1111-1111-1111-111111111111', 'Pescado fresco', 'kg', 20, 28.00),
+  ('11111111-1111-1111-1111-111111111111', 'Lomo de res', 'kg', 12, 32.00),
+  ('11111111-1111-1111-1111-111111111111', 'Papa amarilla', 'kg', 25, 3.50),
+  ('11111111-1111-1111-1111-111111111111', 'Ají amarillo', 'kg', 8, 9.00),
+  ('11111111-1111-1111-1111-111111111111', 'Culantro', 'atado', 10, 1.50),
+  ('11111111-1111-1111-1111-111111111111', 'Pisco', 'bot', 6, 45.00),
+  ('11111111-1111-1111-1111-111111111111', 'Limón', 'kg', 15, 5.00)
 on conflict do nothing;
+
+insert into inventory_movements (tenant_id, branch_id, item_id, delta, reason, actor)
+select '11111111-1111-1111-1111-111111111111', b.branch_id, inv.id, v.qty * b.factor, 'inicial', 'Seed'
+from (values
+  ('Pescado fresco', 18), ('Lomo de res', 15), ('Papa amarilla', 40), ('Ají amarillo', 6),
+  ('Culantro', 8), ('Pisco', 12), ('Limón', 22)
+) as v(insumo, qty)
+join inventory_items inv on inv.name = v.insumo and inv.tenant_id = '11111111-1111-1111-1111-111111111111'
+cross join (values
+  ('22222222-0000-0000-0000-000000000001'::uuid, 1.0),
+  ('22222222-0000-0000-0000-000000000002'::uuid, 0.5)
+) as b(branch_id, factor)
+where not exists (select 1 from inventory_movements m where m.item_id = inv.id);
 
 -- ---------------------------------------------------------------------------
 -- 10) Recetas (food cost) — enlaza plato ↔ insumo por nombre

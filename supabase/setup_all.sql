@@ -1580,13 +1580,1419 @@ $$;
 grant execute on function public.public_delivery_status(text) to anon, authenticated;
 
 -- ==================================================================
+-- Migracion 0030_enums_operacion.sql
+-- ==================================================================
+
+-- Valores de enum que usa la migración 0031. Van en un archivo aparte porque
+-- Postgres no permite usar un valor de enum en la misma transacción en que se
+-- agrega (cada migración corre en su propia transacción).
+
+-- Pedidos de delivery pagados en la app del agregador (Rappi, PedidosYa).
+alter type pay_method add value if not exists 'app';
+
+-- ==================================================================
+-- Migracion 0031_arquitectura.sql
+-- ==================================================================
+
+-- =============================================================================
+-- 0031 · Arquitectura multi-sucursal, normalización y rendimiento
+--
+--  1. Sucursales como árbol: cada restaurante (tenant) tiene UNA sede principal
+--     (raíz, parent_id null) y sucursales hijas. Se crea sola al dar de alta el
+--     tenant. Integridad: sin ciclos, raíz única, hijos del mismo tenant.
+--  2. Cuota por plan: subscription_plans.max_branches = sucursales además de la
+--     principal (Básico 2 · Pro 10 · Enterprise sin límite). Se valida al crear
+--     o reactivar sucursales y al bajar de plan.
+--  3. branch_id obligatorio en la operación (por defecto, la sede principal) y
+--     FK compuesta (tenant_id, branch_id): una fila nunca apunta a la sucursal
+--     de otro restaurante.
+--  4. Delivery unificado con pedidos: delivery_orders pasa a ser la extensión
+--     1:1 de orders (misma id). Sus platos viven en order_lines, así el delivery
+--     entra en reportes, caja, inventario y comprobantes como cualquier venta.
+--  5. Inventario por sucursal: catálogo (inventory_items) + stock por sucursal
+--     (inventory_stock) + kardex (inventory_movements). El stock es la suma
+--     de movimientos, mantenida por trigger.
+--  6. Limpieza: online_orders / sunat_credentials / payroll_entries (sin uso),
+--     tenants.mrr (derivado del plan: vista v_tenants).
+--  7. updated_at en tablas operativas (sincronización incremental offline).
+--  8. Índices para las consultas reales y RLS con InitPlan (los helpers se
+--     evalúan una vez por consulta, no una vez por fila).
+--  9. Publicación de Realtime con las tablas operativas.
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- Helpers genéricos
+-- ---------------------------------------------------------------------------
+create or replace function app.touch_updated_at() returns trigger
+language plpgsql as $$
+begin
+  new.updated_at := now();
+  return new;
+end $$;
+
+-- Tenants del usuario actual en un arreglo: permite escribir las políticas como
+-- `tenant_id = any((select app.my_tenant_ids()))`, que Postgres evalúa una sola
+-- vez por consulta (InitPlan) en lugar de llamar a una función por cada fila.
+create or replace function app.my_tenant_ids() returns uuid[]
+language sql stable security definer set search_path = public, app as $$
+  select coalesce(array_agg(m.tenant_id), '{}')
+  from memberships m
+  where m.user_id = auth.uid() and m.tenant_id is not null;
+$$;
+
+create or replace function app.my_managed_tenant_ids() returns uuid[]
+language sql stable security definer set search_path = public, app as $$
+  select coalesce(array_agg(m.tenant_id), '{}')
+  from memberships m
+  where m.user_id = auth.uid() and m.tenant_id is not null and m.role in ('admin', 'dueno');
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 1. Árbol de sucursales
+-- ---------------------------------------------------------------------------
+alter table branches
+  add column if not exists parent_id  uuid,
+  add column if not exists active     boolean not null default true,
+  add column if not exists address    text not null default '',
+  add column if not exists phone      text not null default '',
+  add column if not exists sort       int  not null default 0,
+  add column if not exists updated_at timestamptz not null default now();
+
+alter table branches add constraint branches_tenant_id_id_key unique (tenant_id, id);
+alter table branches add constraint branches_not_self check (parent_id is null or parent_id <> id);
+-- NO ACTION (no RESTRICT): al borrar un tenant, la cascada elimina todo el árbol
+-- en la misma sentencia y la FK se valida al final.
+alter table branches add constraint branches_parent_fk
+  foreign key (tenant_id, parent_id) references branches (tenant_id, id);
+
+-- Tenants sin sucursales: se les crea su sede principal.
+insert into branches (tenant_id, name, city)
+select t.id, t.name, ''
+from tenants t
+where not exists (select 1 from branches b where b.tenant_id = t.id);
+
+-- Tenants con sucursales: la más antigua es la principal; el resto, sus hijas.
+with roots as (
+  select distinct on (tenant_id) tenant_id, id
+  from branches
+  order by tenant_id, created_at, name
+)
+update branches b set parent_id = r.id
+from roots r
+where b.tenant_id = r.tenant_id and b.id <> r.id and b.parent_id is null;
+
+create unique index branches_one_root on branches (tenant_id) where parent_id is null;
+create index branches_parent_idx on branches (parent_id);
+
+create or replace function app.root_branch(tid uuid) returns uuid
+language sql stable security definer set search_path = public, app as $$
+  select id from branches where tenant_id = tid and parent_id is null;
+$$;
+
+-- Integridad del árbol: la principal no cuelga de nadie; sin ciclos; hasta 5 niveles.
+create or replace function app.branches_tree_guard() returns trigger
+language plpgsql as $$
+declare
+  cur   uuid := new.parent_id;
+  depth int  := 0;
+begin
+  if tg_op = 'UPDATE' and old.parent_id is null and new.parent_id is not null then
+    raise exception 'La sede principal no puede depender de otra sucursal.' using errcode = 'P0001';
+  end if;
+  if tg_op = 'UPDATE' and old.parent_id is not null and new.parent_id is null then
+    raise exception 'Ya existe una sede principal; una sucursal no puede convertirse en principal.' using errcode = 'P0001';
+  end if;
+  while cur is not null loop
+    if cur = new.id then
+      raise exception 'Una sucursal no puede depender de sí misma ni de sus propias sucursales.' using errcode = 'P0001';
+    end if;
+    depth := depth + 1;
+    if depth > 5 then
+      raise exception 'El árbol de sucursales admite hasta 5 niveles.' using errcode = 'P0001';
+    end if;
+    select parent_id into cur from branches where id = cur;
+  end loop;
+  return new;
+end $$;
+
+create trigger branches_tree_guard
+  before insert or update of parent_id on branches
+  for each row execute function app.branches_tree_guard();
+
+-- Borrado directo (no en cascada desde el tenant): nunca la principal, nunca
+-- una sucursal con hijas o con historial. Para dejar de usarla: desactivarla.
+create or replace function app.branches_delete_guard() returns trigger
+language plpgsql as $$
+begin
+  if pg_trigger_depth() > 1 then
+    return old; -- cascada al eliminar el tenant completo
+  end if;
+  if old.parent_id is null then
+    raise exception 'La sede principal no se puede eliminar.' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from branches where parent_id = old.id) then
+    raise exception 'La sucursal tiene sucursales dependientes; muévelas primero.' using errcode = 'P0001';
+  end if;
+  if exists (select 1 from orders where branch_id = old.id)
+     or exists (select 1 from restaurant_tables where branch_id = old.id) then
+    raise exception 'La sucursal tiene mesas o ventas registradas; desactívala en lugar de eliminarla.' using errcode = 'P0001';
+  end if;
+  return old;
+end $$;
+
+create trigger branches_delete_guard
+  before delete on branches
+  for each row execute function app.branches_delete_guard();
+
+create trigger branches_touch before update on branches
+  for each row execute function app.touch_updated_at();
+
+-- Alta de tenant → su sede principal (mismo nombre; se puede renombrar).
+create or replace function app.tenants_create_root() returns trigger
+language plpgsql security definer set search_path = public, app as $$
+begin
+  insert into branches (tenant_id, name, city) values (new.id, new.name, '');
+  return new;
+end $$;
+
+create trigger tenants_create_root
+  after insert on tenants
+  for each row execute function app.tenants_create_root();
+
+-- ---------------------------------------------------------------------------
+-- 2. Cuota de sucursales por plan
+-- ---------------------------------------------------------------------------
+alter table subscription_plans
+  add column if not exists max_branches int check (max_branches is null or max_branches >= 0);
+comment on column subscription_plans.max_branches is
+  'Sucursales permitidas además de la sede principal. NULL = sin límite.';
+
+update subscription_plans set max_branches = case tier
+  when 'Básico' then 2
+  when 'Pro' then 10
+  else null
+end;
+
+create or replace function app.plan_max_branches(p_plan plan_tier) returns int
+language sql stable security definer set search_path = public, app as $$
+  select max_branches from subscription_plans where tier = p_plan;
+$$;
+
+create or replace function app.active_child_branches(tid uuid, except_id uuid default null) returns int
+language sql stable security definer set search_path = public, app as $$
+  select count(*)::int from branches
+  where tenant_id = tid and parent_id is not null and active
+    and (except_id is null or id <> except_id);
+$$;
+
+create or replace function app.branches_quota_guard() returns trigger
+language plpgsql security definer set search_path = public, app as $$
+declare
+  v_plan plan_tier;
+  v_max  int;
+begin
+  -- Solo cuenta al sumar una sucursal activa (alta o reactivación).
+  if new.parent_id is null or not new.active then
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and old.active and old.parent_id is not null then
+    return new;
+  end if;
+  -- Serializa altas concurrentes del mismo tenant.
+  select plan into v_plan from tenants where id = new.tenant_id for update;
+  v_max := app.plan_max_branches(v_plan);
+  if v_max is not null and app.active_child_branches(new.tenant_id, new.id) >= v_max then
+    raise exception 'Tu plan % permite la sede principal y hasta % sucursales. Mejora tu plan para agregar más.', v_plan, v_max
+      using errcode = 'P0001', hint = 'plan_limit';
+  end if;
+  return new;
+end $$;
+
+create trigger branches_quota_guard
+  before insert or update of active, parent_id on branches
+  for each row execute function app.branches_quota_guard();
+
+-- Bajar de plan no puede dejar más sucursales activas que las permitidas.
+create or replace function app.tenants_plan_guard() returns trigger
+language plpgsql security definer set search_path = public, app as $$
+declare
+  v_max  int := app.plan_max_branches(new.plan);
+  v_used int;
+begin
+  if new.plan is distinct from old.plan and v_max is not null then
+    v_used := app.active_child_branches(new.id);
+    if v_used > v_max then
+      raise exception 'El plan % permite hasta % sucursales y el restaurante tiene % activas. Desactiva % antes de cambiar de plan.',
+        new.plan, v_max, v_used, v_used - v_max
+        using errcode = 'P0001', hint = 'plan_limit';
+    end if;
+  end if;
+  return new;
+end $$;
+
+create trigger tenants_plan_guard
+  before update of plan on tenants
+  for each row execute function app.tenants_plan_guard();
+
+-- Uso de la cuota para la UI (Sucursales / Suscripción).
+create or replace function public.branch_quota(p_tenant uuid) returns jsonb
+language plpgsql stable security definer set search_path = public, app as $$
+declare
+  v_plan plan_tier;
+  v_max  int;
+  v_used int;
+begin
+  if not ((select app.is_platform_admin()) or p_tenant = any (app.my_tenant_ids())) then
+    raise exception 'Sin acceso a este restaurante.' using errcode = '42501';
+  end if;
+  select plan into v_plan from tenants where id = p_tenant;
+  v_max := app.plan_max_branches(v_plan);
+  v_used := app.active_child_branches(p_tenant);
+  return jsonb_build_object(
+    'plan', v_plan,
+    'max', v_max,
+    'used', v_used,
+    'remaining', case when v_max is null then null else greatest(v_max - v_used, 0) end
+  );
+end $$;
+grant execute on function public.branch_quota(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 3. branch_id obligatorio + FK compuesta (tenant_id, branch_id)
+-- ---------------------------------------------------------------------------
+create or replace function app.fill_branch() returns trigger
+language plpgsql security definer set search_path = public, app as $$
+begin
+  if new.branch_id is null then
+    new.branch_id := app.root_branch(new.tenant_id);
+  end if;
+  return new;
+end $$;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['orders', 'restaurant_tables', 'kitchen_tickets', 'reservations',
+                           'waitlist', 'cash_register_closes']
+  loop
+    execute format(
+      'update %I x set branch_id = app.root_branch(x.tenant_id) where x.branch_id is null', t);
+    execute format('alter table %I drop constraint if exists %I', t, t || '_branch_id_fkey');
+    execute format('alter table %I alter column branch_id set not null', t);
+    execute format(
+      'alter table %I add constraint %I foreign key (tenant_id, branch_id) references branches (tenant_id, id)',
+      t, t || '_branch_fk');
+    execute format(
+      'create trigger %I before insert on %I for each row execute function app.fill_branch()',
+      t || '_fill_branch', t);
+  end loop;
+end $$;
+
+-- Números de mesa únicos por sucursal (dos locales pueden tener su "Mesa 1").
+alter table restaurant_tables drop constraint if exists restaurant_tables_tenant_id_number_key;
+alter table restaurant_tables add constraint restaurant_tables_branch_number_key unique (branch_id, number);
+
+-- ---------------------------------------------------------------------------
+-- 4. Delivery = pedido (orders) + datos de reparto (delivery_orders, 1:1)
+-- ---------------------------------------------------------------------------
+create type order_kind as enum ('mesa', 'llevar', 'delivery');
+
+alter table orders
+  add column if not exists kind       order_kind not null default 'mesa',
+  add column if not exists updated_at timestamptz not null default now();
+
+alter table order_lines
+  add column if not exists sent_qty int not null default 0 check (sent_qty >= 0);
+
+-- Pedidos de delivery ya existentes → pedido + líneas (misma id).
+insert into orders (id, tenant_id, branch_id, kind, status, opened_at, closed_at, paid_method, paid_total)
+select d.id, d.tenant_id, coalesce(d.branch_id, app.root_branch(d.tenant_id)), 'delivery',
+  case d.status
+    when 'entregado' then 'cobrada'::order_status
+    when 'cancelado' then 'anulada'::order_status
+    when 'recibido'  then 'abierta'::order_status
+    else 'en_cocina'::order_status
+  end,
+  d.created_at,
+  coalesce(d.delivered_at, d.cancelled_at),
+  case when d.status = 'entregado' then
+    (case d.pay_method when 'pagado_app' then 'app' else d.pay_method end)::pay_method
+  end,
+  case when d.status = 'entregado' then d.total end
+from delivery_orders d;
+
+insert into order_lines (tenant_id, order_id, name, qty, unit_price, sent_qty, created_at)
+select d.tenant_id, d.id, i ->> 'name', (i ->> 'qty')::int, (i ->> 'price')::numeric,
+  case when d.status = 'recibido' then 0 else (i ->> 'qty')::int end, d.created_at
+from delivery_orders d, jsonb_array_elements(d.items) i;
+
+alter table delivery_orders
+  add constraint delivery_orders_order_fk foreign key (id) references orders (id) on delete cascade,
+  alter column id drop default,
+  add column if not exists updated_at timestamptz not null default now();
+
+drop index if exists delivery_orders_tenant_idx;
+alter table delivery_orders
+  drop column if exists branch_id,
+  drop column if exists items,
+  drop column if exists subtotal,
+  drop column if exists total,
+  drop column if exists created_at;
+
+-- tenant_id se copia del pedido (redundancia controlada: RLS y filtro de Realtime).
+create or replace function app.delivery_fill_tenant() returns trigger
+language plpgsql security definer set search_path = public, app as $$
+begin
+  select tenant_id into new.tenant_id from orders where id = new.id;
+  if new.tenant_id is null then
+    raise exception 'El pedido % no existe.', new.id using errcode = '23503';
+  end if;
+  return new;
+end $$;
+
+create trigger delivery_orders_fill_tenant
+  before insert on delivery_orders
+  for each row execute function app.delivery_fill_tenant();
+
+-- Vista de lectura del tablero de delivery (respeta RLS del que consulta).
+create view v_delivery_orders with (security_invoker = true) as
+select
+  d.id, d.tenant_id, o.branch_id, d.code, d.tracking_token, d.channel,
+  d.customer_name, d.customer_phone, d.address, d.reference, d.zone_id, d.zone_name,
+  coalesce(l.items, '[]'::jsonb) as items,
+  coalesce(l.subtotal, 0)::numeric(12,2) as subtotal,
+  d.fee,
+  (coalesce(l.subtotal, 0) + d.fee)::numeric(12,2) as total,
+  d.pay_method, d.cash_for, d.status, d.driver_id, dr.name as driver_name,
+  d.notes, d.cancel_reason, d.eta_min,
+  o.opened_at as created_at, d.accepted_at, d.ready_at, d.dispatched_at, d.delivered_at, d.cancelled_at,
+  greatest(d.updated_at, o.updated_at) as updated_at
+from delivery_orders d
+join orders o on o.id = d.id
+left join delivery_drivers dr on dr.id = d.driver_id
+left join lateral (
+  select
+    jsonb_agg(jsonb_build_object('name', ol.name, 'qty', ol.qty, 'price', ol.unit_price + ol.extra_price)
+              order by ol.created_at) as items,
+    round(sum(ol.qty * (ol.unit_price + ol.extra_price)), 2) as subtotal
+  from order_lines ol
+  where ol.order_id = d.id
+) l on true;
+
+grant select on v_delivery_orders to authenticated;
+
+-- Seguimiento público: ahora la fecha de creación viene del pedido.
+create or replace function public.public_delivery_status(p_token text)
+returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'tenant_name',   t.name,
+    'code',          d.code,
+    'status',        d.status,
+    'eta_min',       d.eta_min,
+    'driver_name',   case when d.status in ('en_camino','entregado')
+                          then split_part(dr.name, ' ', 1) end,
+    'created_at',    o.opened_at,
+    'accepted_at',   d.accepted_at,
+    'ready_at',      d.ready_at,
+    'dispatched_at', d.dispatched_at,
+    'delivered_at',  d.delivered_at,
+    'cancelled_at',  d.cancelled_at
+  )
+  from delivery_orders d
+  join orders o on o.id = d.id
+  join tenants t on t.id = d.tenant_id
+  left join delivery_drivers dr on dr.id = d.driver_id
+  where length(p_token) >= 16 and d.tracking_token = p_token;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 5. Inventario por sucursal: catálogo + stock + kardex
+-- ---------------------------------------------------------------------------
+create table inventory_stock (
+  tenant_id  uuid not null references tenants (id) on delete cascade,
+  branch_id  uuid not null,
+  item_id    uuid not null references inventory_items (id) on delete cascade,
+  qty        numeric(12,3) not null default 0,
+  par        numeric(12,3), -- null = usa el par del catálogo
+  updated_at timestamptz not null default now(),
+  primary key (branch_id, item_id),
+  foreign key (tenant_id, branch_id) references branches (tenant_id, id) on delete cascade
+);
+create index inventory_stock_tenant_idx on inventory_stock (tenant_id);
+create index inventory_stock_item_idx on inventory_stock (item_id);
+
+create table inventory_movements (
+  id         uuid primary key default gen_random_uuid(),
+  tenant_id  uuid not null references tenants (id) on delete cascade,
+  branch_id  uuid not null,
+  item_id    uuid not null references inventory_items (id) on delete cascade,
+  delta      numeric(12,3) not null,
+  reason     text not null check (reason in ('inicial', 'venta', 'ajuste', 'merma', 'compra', 'traslado')),
+  order_id   uuid references orders (id) on delete set null,
+  actor      text not null default '',
+  created_at timestamptz not null default now(),
+  foreign key (tenant_id, branch_id) references branches (tenant_id, id) on delete cascade
+);
+create index inventory_movements_branch_idx on inventory_movements (tenant_id, branch_id, created_at desc);
+create index inventory_movements_item_idx on inventory_movements (item_id);
+create index inventory_movements_order_idx on inventory_movements (order_id) where order_id is not null;
+-- Una venta descuenta cada insumo una sola vez (reintentos idempotentes).
+create unique index inventory_movements_sale_once on inventory_movements (order_id, item_id) where reason = 'venta';
+
+-- El stock es la suma del kardex (puede quedar negativo: indica un conteo pendiente).
+create or replace function app.inventory_apply_movement() returns trigger
+language plpgsql security definer set search_path = public, app as $$
+begin
+  insert into inventory_stock (tenant_id, branch_id, item_id, qty)
+  values (new.tenant_id, new.branch_id, new.item_id, new.delta)
+  on conflict (branch_id, item_id)
+  do update set qty = inventory_stock.qty + excluded.qty, updated_at = now();
+  return new;
+end $$;
+
+create trigger inventory_movements_apply
+  after insert on inventory_movements
+  for each row execute function app.inventory_apply_movement();
+
+-- Stock actual → sede principal, registrado como movimiento inicial.
+insert into inventory_movements (tenant_id, branch_id, item_id, delta, reason, actor)
+select i.tenant_id, app.root_branch(i.tenant_id), i.item_id, i.stock, 'inicial', 'Migración'
+from (select id as item_id, tenant_id, stock from inventory_items) i
+where i.stock <> 0;
+
+alter table inventory_items drop column if exists stock;
+alter table inventory_items add column if not exists active boolean not null default true;
+
+alter table inventory_stock enable row level security;
+alter table inventory_movements enable row level security;
+create policy stock_read on inventory_stock for select using (app.has_tenant(tenant_id));
+create policy stock_par on inventory_stock for update using (app.can_manage(tenant_id)) with check (app.can_manage(tenant_id));
+create policy movements_read on inventory_movements for select using (app.has_tenant(tenant_id));
+create policy movements_ins on inventory_movements for insert with check (app.can_manage(tenant_id));
+
+-- ---------------------------------------------------------------------------
+-- 6. ticket_lines con tenant_id (RLS directa, sin subconsulta por fila)
+-- ---------------------------------------------------------------------------
+alter table ticket_lines add column if not exists tenant_id uuid references tenants (id) on delete cascade;
+update ticket_lines tl set tenant_id = k.tenant_id from kitchen_tickets k where k.id = tl.ticket_id;
+alter table ticket_lines alter column tenant_id set not null;
+
+create or replace function app.ticket_lines_fill_tenant() returns trigger
+language plpgsql security definer set search_path = public, app as $$
+begin
+  if new.tenant_id is null then
+    select tenant_id into new.tenant_id from kitchen_tickets where id = new.ticket_id;
+  end if;
+  return new;
+end $$;
+
+create trigger ticket_lines_fill_tenant
+  before insert on ticket_lines
+  for each row execute function app.ticket_lines_fill_tenant();
+
+drop policy if exists tenant_rw on ticket_lines;
+create policy tenant_rw on ticket_lines for all
+  using (app.has_tenant(tenant_id)) with check (app.has_tenant(tenant_id));
+
+-- ---------------------------------------------------------------------------
+-- 7. Limpieza de redundancias
+-- ---------------------------------------------------------------------------
+drop table if exists online_orders;
+drop table if exists sunat_credentials;
+drop table if exists payroll_entries;
+
+alter table tenants drop column if exists mrr;
+
+-- MRR derivado: precio del plan si el tenant está activo.
+create view v_tenants with (security_invoker = true) as
+select
+  t.*,
+  case when t.status = 'Activo' then coalesce(p.price, 0) else 0 end::numeric(10,2) as mrr,
+  (select count(*)::int from branches b where b.tenant_id = t.id and b.active) as branches_count
+from tenants t
+left join subscription_plans p on p.tier = t.plan;
+
+grant select on v_tenants to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- 8. updated_at (sincronización incremental) y "toque" del pedido
+-- ---------------------------------------------------------------------------
+alter table restaurant_tables add column if not exists updated_at timestamptz not null default now();
+alter table kitchen_tickets   add column if not exists updated_at timestamptz not null default now();
+alter table customers         add column if not exists updated_at timestamptz not null default now();
+alter table menu_items        add column if not exists updated_at timestamptz not null default now();
+alter table reservations      add column if not exists updated_at timestamptz not null default now();
+alter table waitlist          add column if not exists updated_at timestamptz not null default now();
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['orders', 'restaurant_tables', 'kitchen_tickets', 'delivery_orders', 'customers',
+                           'menu_items', 'reservations', 'waitlist', 'inventory_stock']
+  loop
+    execute format(
+      'create trigger %I before update on %I for each row execute function app.touch_updated_at()',
+      t || '_touch', t);
+  end loop;
+end $$;
+
+-- Un cambio en las líneas marca el pedido como modificado: la sincronización
+-- incremental trae el pedido completo (con sus líneas) y detecta borrados.
+create or replace function app.order_lines_touch_order() returns trigger
+language plpgsql security definer set search_path = public, app as $$
+begin
+  update orders set updated_at = now()
+  where id = case when tg_op = 'DELETE' then old.order_id else new.order_id end;
+  if tg_op = 'UPDATE' and new.order_id <> old.order_id then
+    update orders set updated_at = now() where id = old.order_id;
+  end if;
+  return null;
+end $$;
+
+create trigger order_lines_touch_order
+  after insert or update or delete on order_lines
+  for each row execute function app.order_lines_touch_order();
+
+-- ---------------------------------------------------------------------------
+-- 9. Índices según los accesos reales
+-- ---------------------------------------------------------------------------
+-- Pedidos abiertos por sucursal (mesas, cuentas, sincronización).
+create index orders_open_idx on orders (tenant_id, branch_id) where status not in ('cobrada', 'anulada');
+-- Historial de ventas (reportes, caja, comparativa de sucursales).
+create index orders_paid_idx on orders (tenant_id, closed_at desc) where status = 'cobrada';
+-- Delta de sincronización.
+create index orders_updated_idx on orders (tenant_id, updated_at);
+create index orders_customer_idx on orders (customer_id) where customer_id is not null;
+create index orders_waiter_idx on orders (waiter_id) where waiter_id is not null;
+drop index if exists orders_tenant_id_idx; -- cubierto por los índices anteriores
+
+create index order_lines_menu_item_idx on order_lines (menu_item_id) where menu_item_id is not null;
+
+drop index if exists kitchen_tickets_branch;
+create index kitchen_tickets_open_idx on kitchen_tickets (tenant_id, branch_id, entered_at) where col <> 'entregado';
+create index kitchen_tickets_updated_idx on kitchen_tickets (tenant_id, updated_at);
+create index kitchen_tickets_order_idx on kitchen_tickets (order_id) where order_id is not null;
+create index ticket_lines_ticket_idx on ticket_lines (ticket_id);
+
+create index delivery_orders_status_idx on delivery_orders (tenant_id, status);
+create index delivery_orders_updated_idx on delivery_orders (tenant_id, updated_at);
+create index delivery_orders_driver_idx on delivery_orders (driver_id) where driver_id is not null;
+
+create index restaurant_tables_branch_idx on restaurant_tables (tenant_id, branch_id);
+
+create index activity_log_tenant_created_idx on activity_log (tenant_id, created_at desc);
+create index comprobantes_issued_idx on comprobantes (tenant_id, issued_at desc);
+create index comprobantes_order_idx on comprobantes (order_id) where order_id is not null;
+create index comprobantes_queue_idx on comprobantes (tenant_id) where status = 'encola';
+create index sunat_outbox_cpe_idx on sunat_outbox (comprobante_id);
+create index loyalty_tx_customer_idx on loyalty_transactions (customer_id);
+create index loyalty_tx_order_idx on loyalty_transactions (order_id) where order_id is not null;
+create index void_events_order_idx on void_events (order_id) where order_id is not null;
+create index recipes_menu_item_idx on recipes (menu_item_id);
+create index recipes_inventory_idx on recipes (inventory_id);
+create index menu_items_category_idx on menu_items (category_id);
+create index reservations_date_idx on reservations (tenant_id, res_date);
+create index waitlist_created_idx on waitlist (tenant_id, created_at);
+create index cash_closes_idx on cash_register_closes (tenant_id, branch_id, closed_at desc);
+
+-- ---------------------------------------------------------------------------
+-- 10. RLS con InitPlan: reescribe todas las políticas existentes.
+--   app.has_tenant(x)       → ((select is_platform_admin()) or x = any((select my_tenant_ids())))
+--   app.can_manage(x)       → ((select is_platform_admin()) or x = any((select my_managed_tenant_ids())))
+--   app.is_platform_admin() → (select app.is_platform_admin())
+--   auth.uid()              → (select auth.uid())
+-- ---------------------------------------------------------------------------
+create or replace function app.initplan_expr(e text) returns text
+language plpgsql immutable as $$
+begin
+  if e is null then
+    return null;
+  end if;
+  e := replace(e, 'auth.uid()', '(select auth.uid())');
+  e := replace(e, 'app.is_platform_admin()', '(select app.is_platform_admin())');
+  e := regexp_replace(e, 'app\.has_tenant\(([^()]+)\)',
+    '((select app.is_platform_admin()) or \1 = any ((select app.my_tenant_ids())::uuid[]))', 'g');
+  e := regexp_replace(e, 'app\.can_manage\(([^()]+)\)',
+    '((select app.is_platform_admin()) or \1 = any ((select app.my_managed_tenant_ids())::uuid[]))', 'g');
+  return e;
+end $$;
+
+do $$
+declare
+  p record;
+  q text;
+  c text;
+begin
+  for p in
+    select tablename, policyname, qual, with_check
+    from pg_policies
+    where schemaname = 'public'
+  loop
+    q := app.initplan_expr(p.qual);
+    c := app.initplan_expr(p.with_check);
+    if q is not distinct from p.qual and c is not distinct from p.with_check then
+      continue;
+    end if;
+    execute format('alter policy %I on %I', p.policyname, p.tablename)
+      || case when q is not null then format(' using (%s)', q) else '' end
+      || case when c is not null then format(' with check (%s)', c) else '' end;
+  end loop;
+end $$;
+
+drop function app.initplan_expr(text);
+
+-- ---------------------------------------------------------------------------
+-- 11. Realtime: tablas operativas en la publicación (sin esto no llegan eventos)
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  t text;
+begin
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    return;
+  end if;
+  foreach t in array array['orders', 'kitchen_tickets', 'restaurant_tables', 'delivery_orders']
+  loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+
+-- ==================================================================
+-- Migracion 0032_pos_ops.sql
+-- ==================================================================
+
+-- =============================================================================
+-- 0032 · Operaciones del POS atómicas, idempotentes y aptas para offline
+--
+-- El dispositivo describe cada acción como una operación con id propio
+-- ({id, type, at, actor, ...}). Si hay internet se envía al momento; si no, se
+-- guarda en una cola local y se envía al volver la conexión. El servidor:
+--   · aplica cada operación en su propia subtransacción (todo o nada),
+--   · la registra en pos_ops: reenviarla nunca duplica una venta,
+--   · respeta la hora real en que ocurrió (`at`) para reportes y caja,
+--   · resuelve conflictos entre dispositivos (dos meseros abren la misma mesa
+--     sin conexión → los pedidos se unen; cobrar un pedido ya cobrado → error
+--     legible que el dispositivo muestra para revisión).
+--
+-- pos_snapshot entrega en UNA llamada el estado operativo (mesas, pedidos
+-- abiertos con líneas, comandas, delivery), completo o solo lo cambiado desde
+-- una marca de tiempo (sincronización incremental).
+--
+-- Terminales: cada caja que emite comprobantes tiene su propia serie SUNAT
+-- (B001/F001, B002/F002…). Así numera sin conexión sin chocar con otra caja.
+-- =============================================================================
+
+-- ---------------------------------------------------------------------------
+-- Tablas de soporte
+-- ---------------------------------------------------------------------------
+create table pos_ops (
+  id         uuid primary key,
+  tenant_id  uuid not null references tenants (id) on delete cascade,
+  device_id  text not null default '',
+  type       text not null,
+  status     text not null check (status in ('ok', 'error')),
+  result     jsonb,
+  error      text,
+  client_at  timestamptz,
+  applied_at timestamptz not null default now()
+);
+create index pos_ops_tenant_idx on pos_ops (tenant_id, applied_at desc);
+alter table pos_ops enable row level security;
+create policy pos_ops_read on pos_ops for select using (
+  (select app.is_platform_admin()) or tenant_id = any ((select app.my_tenant_ids())::uuid[]));
+
+-- Pedido abierto sin conexión en una mesa que otro dispositivo ya había abierto:
+-- sus operaciones se redirigen al pedido existente.
+create table order_redirects (
+  from_id    uuid primary key,
+  to_id      uuid not null references orders (id) on delete cascade,
+  tenant_id  uuid not null references tenants (id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create index order_redirects_to_idx on order_redirects (to_id);
+alter table order_redirects enable row level security;
+create policy order_redirects_read on order_redirects for select using (
+  (select app.is_platform_admin()) or tenant_id = any ((select app.my_tenant_ids())::uuid[]));
+
+create table pos_terminals (
+  id            uuid primary key default gen_random_uuid(),
+  tenant_id     uuid not null references tenants (id) on delete cascade,
+  branch_id     uuid not null,
+  device_id     text not null,
+  name          text not null default '',
+  serie_boleta  text not null check (serie_boleta ~ '^B[0-9A-Z]{3}$'),
+  serie_factura text not null check (serie_factura ~ '^F[0-9A-Z]{3}$'),
+  created_at    timestamptz not null default now(),
+  last_seen_at  timestamptz not null default now(),
+  unique (tenant_id, device_id),
+  unique (tenant_id, serie_boleta),
+  unique (tenant_id, serie_factura),
+  foreign key (tenant_id, branch_id) references branches (tenant_id, id)
+);
+alter table pos_terminals enable row level security;
+create policy pos_terminals_read on pos_terminals for select using (
+  (select app.is_platform_admin()) or tenant_id = any ((select app.my_tenant_ids())::uuid[]));
+create policy pos_terminals_mgr on pos_terminals for update using (
+  (select app.is_platform_admin()) or tenant_id = any ((select app.my_managed_tenant_ids())::uuid[]))
+  with check ((select app.is_platform_admin()) or tenant_id = any ((select app.my_managed_tenant_ids())::uuid[]));
+
+-- ---------------------------------------------------------------------------
+-- Folios: formato serie-correlativo sin truncar (lpad recortaba a 4 dígitos).
+-- ---------------------------------------------------------------------------
+create or replace function app.format_folio(p_serie text, n int) returns text
+language sql immutable as $$
+  select p_serie || '-' || lpad(n::text, greatest(4, length(n::text)), '0');
+$$;
+
+create or replace function public.next_folio(tid uuid, p_serie text) returns text
+language plpgsql security definer set search_path = public, app as $$
+declare
+  n integer;
+begin
+  if not app.has_tenant(tid) then
+    raise exception 'no autorizado';
+  end if;
+  insert into folio_counters (tenant_id, serie, last)
+  values (tid, p_serie, 1001)
+  on conflict (tenant_id, serie) do update set last = folio_counters.last + 1
+  returning last into n;
+  return app.format_folio(p_serie, n);
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- Helpers
+-- ---------------------------------------------------------------------------
+create or replace function app.pos_member(p_tenant uuid) returns boolean
+language sql stable security definer set search_path = public, app as $$
+  select app.is_platform_admin() or p_tenant = any (app.my_tenant_ids());
+$$;
+
+create or replace function app.pos_log(p_tenant uuid, p_actor text, p_message text) returns void
+language sql security definer set search_path = public, app as $$
+  insert into activity_log (tenant_id, actor, message) values (p_tenant, coalesce(nullif(p_actor, ''), 'POS'), p_message);
+$$;
+
+-- Pedido abierto (resolviendo redirecciones), bloqueado para la operación.
+create or replace function app.pos_open_order(p_tenant uuid, p_id uuid) returns orders
+language plpgsql security definer set search_path = public, app as $$
+declare
+  o orders;
+begin
+  select * into o from orders
+  where tenant_id = p_tenant
+    and id = coalesce((select to_id from order_redirects where from_id = p_id and tenant_id = p_tenant), p_id)
+  for update;
+  if not found then
+    raise exception 'El pedido ya no existe.' using errcode = 'P0001';
+  end if;
+  if o.status in ('cobrada', 'anulada') then
+    raise exception 'El pedido ya fue % en otro dispositivo.', case o.status when 'cobrada' then 'cobrado' else 'anulado' end
+      using errcode = 'P0001';
+  end if;
+  return o;
+end $$;
+
+-- Etiqueta visible de un pedido (mesa o código de delivery).
+create or replace function app.order_label(o orders) returns text
+language sql stable security definer set search_path = public, app as $$
+  select case
+    when o.kind = 'delivery' then '🛵 ' || coalesce((select code from delivery_orders where id = o.id), 'Delivery')
+    when o.table_id is not null then 'Mesa ' || coalesce((select number::text from restaurant_tables where id = o.table_id), '—')
+    else 'Para llevar'
+  end;
+$$;
+
+-- Envía a cocina SOLO lo que falta enviar (qty - sent_qty) en una comanda nueva.
+create or replace function app.pos_send_kitchen(o orders, p_ticket uuid, p_note text) returns int
+language plpgsql security definer set search_path = public, app as $$
+declare
+  v_ticket uuid := coalesce(p_ticket, gen_random_uuid());
+  n        int;
+begin
+  select count(*) into n from order_lines where order_id = o.id and qty > sent_qty;
+  if n = 0 then
+    return 0;
+  end if;
+  insert into kitchen_tickets (id, tenant_id, order_id, branch_id, table_label, col, note)
+  values (v_ticket, o.tenant_id, o.id, o.branch_id, app.order_label(o), 'nuevos', coalesce(p_note, ''))
+  on conflict (id) do nothing;
+  if not found then
+    return 0; -- reintento: la comanda ya existe
+  end if;
+  insert into ticket_lines (tenant_id, ticket_id, qty, name)
+  select o.tenant_id, v_ticket, qty - sent_qty,
+         name || case when modifiers <> '' then ' · ' || modifiers else '' end
+  from order_lines
+  where order_id = o.id and qty > sent_qty
+  order by created_at;
+  update order_lines set sent_qty = qty where order_id = o.id and qty > sent_qty;
+  update orders set status = 'en_cocina' where id = o.id and status = 'abierta';
+  return n;
+end $$;
+
+-- Descuenta insumos según receta en la sucursal del pedido (una sola vez por venta).
+create or replace function app.pos_deduct_inventory(o orders) returns void
+language sql security definer set search_path = public, app as $$
+  insert into inventory_movements (tenant_id, branch_id, item_id, delta, reason, order_id, actor)
+  select o.tenant_id, o.branch_id, r.inventory_id, -round(sum(r.qty_per_unit * ol.qty), 3), 'venta', o.id, 'Venta'
+  from order_lines ol
+  join recipes r on r.menu_item_id = ol.menu_item_id and r.tenant_id = o.tenant_id
+  where ol.order_id = o.id
+  group by r.inventory_id
+  on conflict (order_id, item_id) where reason = 'venta' do nothing;
+$$;
+
+-- Libera la mesa si ya no le queda ningún pedido abierto.
+create or replace function app.pos_free_table(p_table uuid) returns void
+language sql security definer set search_path = public, app as $$
+  update restaurant_tables t set status = 'libre'
+  where t.id = p_table
+    and not exists (select 1 from orders where table_id = p_table and status not in ('cobrada', 'anulada'));
+$$;
+
+-- ---------------------------------------------------------------------------
+-- Ejecución de UNA operación
+-- ---------------------------------------------------------------------------
+create or replace function app.pos_exec(p_tenant uuid, op jsonb) returns jsonb
+language plpgsql security definer set search_path = public, app as $$
+declare
+  v_type   text := op ->> 'type';
+  v_at     timestamptz := least(coalesce((op ->> 'at')::timestamptz, now()), now());
+  v_actor  text := coalesce(nullif(op ->> 'actor', ''), 'POS');
+  o        orders;
+  t        restaurant_tables;
+  d        delivery_orders;
+  k        kitchen_tickets;
+  v_id     uuid;
+  v_other  uuid;
+  v_n      int;
+  v_num    numeric;
+  v_text   text;
+  v_json   jsonb;
+begin
+  case v_type
+
+  -- ── Mesas y pedidos ────────────────────────────────────────────────────────
+  when 'order.open' then
+    v_id := (op ->> 'order_id')::uuid;
+    select * into t from restaurant_tables
+    where id = (op ->> 'table_id')::uuid and tenant_id = p_tenant for update;
+    if not found then
+      raise exception 'La mesa ya no existe.' using errcode = 'P0001';
+    end if;
+    if exists (select 1 from orders where id = v_id and tenant_id = p_tenant) then
+      return jsonb_build_object('order_id', v_id);
+    end if;
+    select id into v_other from orders
+    where table_id = t.id and status not in ('cobrada', 'anulada')
+    order by opened_at limit 1;
+    if v_other is not null then
+      insert into order_redirects (from_id, to_id, tenant_id) values (v_id, v_other, p_tenant)
+      on conflict (from_id) do nothing;
+      return jsonb_build_object('order_id', v_other, 'redirected', true);
+    end if;
+    insert into orders (id, tenant_id, branch_id, table_id, kind, status, opened_at)
+    values (v_id, p_tenant, t.branch_id, t.id, 'mesa', 'abierta', v_at);
+    update restaurant_tables set status = 'ocupada' where id = t.id;
+    return jsonb_build_object('order_id', v_id);
+
+  when 'line.add' then
+    o := app.pos_open_order(p_tenant, (op ->> 'order_id')::uuid);
+    insert into order_lines (id, tenant_id, order_id, menu_item_id, name, qty, unit_price, extra_price, modifiers, created_at)
+    values (
+      (op ->> 'line_id')::uuid, p_tenant, o.id, nullif(op ->> 'item_id', '')::uuid, op ->> 'name',
+      greatest(1, (op ->> 'qty')::int), (op ->> 'unit_price')::numeric,
+      coalesce((op ->> 'extra_price')::numeric, 0), coalesce(op ->> 'modifiers', ''), v_at)
+    on conflict (id) do nothing;
+    return jsonb_build_object('order_id', o.id);
+
+  when 'line.qty', 'line.remove', 'line.void' then
+    select ol.order_id, ol.name into v_id, v_text from order_lines ol
+    where ol.id = (op ->> 'line_id')::uuid and ol.tenant_id = p_tenant;
+    if v_id is null then
+      return jsonb_build_object('skipped', 'line_gone'); -- otro dispositivo ya la quitó
+    end if;
+    o := app.pos_open_order(p_tenant, v_id);
+    v_n := case when v_type = 'line.qty' then (op ->> 'qty')::int else 0 end;
+    if v_n > 0 then
+      update order_lines set qty = v_n, sent_qty = least(sent_qty, v_n) where id = (op ->> 'line_id')::uuid;
+    else
+      delete from order_lines where id = (op ->> 'line_id')::uuid;
+    end if;
+    if v_type = 'line.void' then
+      insert into void_events (tenant_id, order_id, line_name, reason)
+      values (p_tenant, o.id, v_text, coalesce(op ->> 'reason', ''));
+      perform app.pos_log(p_tenant, v_actor, format('Anuló %s · %s', v_text, coalesce(op ->> 'reason', '')));
+    end if;
+    return '{}'::jsonb;
+
+  when 'order.clear' then
+    o := app.pos_open_order(p_tenant, (op ->> 'order_id')::uuid);
+    delete from order_lines where order_id = o.id and sent_qty = 0;
+    return '{}'::jsonb;
+
+  when 'order.send' then
+    o := app.pos_open_order(p_tenant, (op ->> 'order_id')::uuid);
+    v_n := app.pos_send_kitchen(o, (op ->> 'ticket_id')::uuid, op ->> 'note');
+    if v_n > 0 then
+      perform app.pos_log(p_tenant, v_actor, format('Envió comanda de %s a cocina', app.order_label(o)));
+    end if;
+    return jsonb_build_object('lines', v_n);
+
+  when 'order.pay' then
+    o := app.pos_open_order(p_tenant, (op ->> 'order_id')::uuid);
+    v_num := greatest(0, (op ->> 'total')::numeric - coalesce((op ->> 'redeem')::int, 0));
+    update orders set
+      status = 'cobrada',
+      closed_at = v_at,
+      paid_method = (op ->> 'method')::pay_method,
+      paid_total = round(v_num, 2),
+      customer_id = coalesce(nullif(op ->> 'customer_id', '')::uuid, customer_id)
+    where id = o.id
+    returning * into o;
+    if o.table_id is not null then
+      perform app.pos_free_table(o.table_id);
+    end if;
+    perform app.pos_deduct_inventory(o);
+    if o.customer_id is not null then
+      v_n := floor(v_num / 10);
+      update customers set
+        points = greatest(0, points - coalesce((op ->> 'redeem')::int, 0) + v_n),
+        visits = visits + 1,
+        spent = spent + v_num
+      where id = o.customer_id and tenant_id = p_tenant;
+      insert into loyalty_transactions (tenant_id, customer_id, order_id, points_delta)
+      values (p_tenant, o.customer_id, o.id, v_n - coalesce((op ->> 'redeem')::int, 0));
+    end if;
+    perform app.pos_log(p_tenant, v_actor,
+      format('Cobró %s · %s · S/ %s', app.order_label(o), op ->> 'method', to_char(v_num, 'FM999999990.00')));
+    return jsonb_build_object('paid_total', o.paid_total);
+
+  when 'order.transfer' then
+    o := app.pos_open_order(p_tenant, (op ->> 'order_id')::uuid);
+    select * into t from restaurant_tables
+    where id = (op ->> 'to_table_id')::uuid and tenant_id = p_tenant for update;
+    if not found then
+      raise exception 'La mesa destino ya no existe.' using errcode = 'P0001';
+    end if;
+    if t.branch_id <> o.branch_id then
+      raise exception 'Solo se puede transferir a una mesa de la misma sucursal.' using errcode = 'P0001';
+    end if;
+    if exists (select 1 from orders where table_id = t.id and status not in ('cobrada', 'anulada') and id <> o.id) then
+      raise exception 'La Mesa % ya tiene un pedido; usa «Unir».', t.number using errcode = 'P0001';
+    end if;
+    v_other := o.table_id;
+    update orders set table_id = t.id where id = o.id;
+    update restaurant_tables set status = 'ocupada' where id = t.id;
+    if v_other is not null then
+      perform app.pos_free_table(v_other);
+    end if;
+    perform app.pos_log(p_tenant, v_actor, format('Transfirió pedido a Mesa %s', t.number));
+    return '{}'::jsonb;
+
+  when 'order.merge' then
+    o := app.pos_open_order(p_tenant, (op ->> 'order_id')::uuid);
+    select id into v_other from orders
+    where table_id = (op ->> 'into_table_id')::uuid and tenant_id = p_tenant
+      and status not in ('cobrada', 'anulada') and id <> o.id
+    order by opened_at limit 1
+    for update;
+    if v_other is null then
+      raise exception 'La mesa destino no tiene un pedido abierto.' using errcode = 'P0001';
+    end if;
+    update order_lines set order_id = v_other where order_id = o.id;
+    update kitchen_tickets set order_id = v_other where order_id = o.id;
+    update orders set status = 'anulada', closed_at = v_at where id = o.id;
+    insert into order_redirects (from_id, to_id, tenant_id) values (o.id, v_other, p_tenant)
+    on conflict (from_id) do update set to_id = excluded.to_id;
+    if o.table_id is not null then
+      perform app.pos_free_table(o.table_id);
+    end if;
+    perform app.pos_log(p_tenant, v_actor, format('Unió %s con otra mesa', app.order_label(o)));
+    return jsonb_build_object('order_id', v_other);
+
+  -- ── Cocina ─────────────────────────────────────────────────────────────────
+  when 'ticket.advance' then
+    select * into k from kitchen_tickets
+    where id = (op ->> 'ticket_id')::uuid and tenant_id = p_tenant for update;
+    if not found or k.col::text <> coalesce(op ->> 'from', k.col::text) then
+      return jsonb_build_object('skipped', 'already_moved'); -- otro dispositivo ya la movió
+    end if;
+    update kitchen_tickets set
+      col = case k.col when 'nuevos' then 'preparacion' when 'preparacion' then 'listos' else 'entregado' end::kds_column,
+      entered_at = now(),
+      done = k.col in ('preparacion', 'listos', 'entregado')
+    where id = k.id;
+    return '{}'::jsonb;
+
+  -- ── Delivery ───────────────────────────────────────────────────────────────
+  when 'delivery.create' then
+    v_id := (op ->> 'order_id')::uuid;
+    select * into d from delivery_orders where id = v_id and tenant_id = p_tenant;
+    if found then
+      return jsonb_build_object('code', d.code, 'tracking_token', d.tracking_token);
+    end if;
+    if coalesce(jsonb_array_length(op -> 'lines'), 0) = 0 then
+      raise exception 'Agrega al menos un plato.' using errcode = 'P0001';
+    end if;
+    if coalesce(trim(op ->> 'customer_name'), '') = '' then
+      raise exception 'Falta el nombre del cliente.' using errcode = 'P0001';
+    end if;
+    v_other := coalesce(
+      (select id from branches where id = nullif(op ->> 'branch_id', '')::uuid and tenant_id = p_tenant),
+      app.root_branch(p_tenant));
+    insert into orders (id, tenant_id, branch_id, kind, status, opened_at)
+    values (v_id, p_tenant, v_other, 'delivery', 'abierta', v_at);
+    insert into order_lines (id, tenant_id, order_id, menu_item_id, name, qty, unit_price, created_at)
+    select coalesce(nullif(l ->> 'line_id', '')::uuid, gen_random_uuid()), p_tenant, v_id,
+           nullif(l ->> 'item_id', '')::uuid, l ->> 'name', greatest(1, (l ->> 'qty')::int), (l ->> 'price')::numeric, v_at
+    from jsonb_array_elements(op -> 'lines') l;
+    v_text := op ->> 'channel';
+    if v_text in ('rappi', 'pedidosya') then
+      insert into delivery_orders (id, channel, customer_name, customer_phone, address, reference,
+                                   fee, pay_method, cash_for, notes, eta_min)
+      values (v_id, v_text, trim(op ->> 'customer_name'), coalesce(op ->> 'customer_phone', ''),
+              coalesce(op ->> 'address', ''), coalesce(op ->> 'reference', ''),
+              0, coalesce(op ->> 'pay_method', 'pagado_app'), null, coalesce(op ->> 'notes', ''), 30)
+      returning * into d;
+    else
+      if coalesce(trim(op ->> 'address'), '') = '' then
+        raise exception 'Falta la dirección de entrega.' using errcode = 'P0001';
+      end if;
+      insert into delivery_orders (id, channel, customer_name, customer_phone, address, reference,
+                                   zone_id, zone_name, fee, pay_method, cash_for, notes, eta_min)
+      select v_id, v_text, trim(op ->> 'customer_name'), coalesce(op ->> 'customer_phone', ''),
+             trim(op ->> 'address'), coalesce(op ->> 'reference', ''),
+             z.id, z.name, z.fee, op ->> 'pay_method',
+             case when op ->> 'pay_method' = 'efectivo' then nullif(op ->> 'cash_for', '')::numeric end,
+             coalesce(op ->> 'notes', ''), z.eta_min
+      from delivery_zones z
+      where z.id = nullif(op ->> 'zone_id', '')::uuid and z.tenant_id = p_tenant and z.active
+      returning * into d;
+      if d.id is null then
+        raise exception 'Elige una zona de reparto activa.' using errcode = 'P0001';
+      end if;
+    end if;
+    perform app.pos_log(p_tenant, v_actor, format('Nuevo delivery %s (%s)', d.code, d.channel));
+    return jsonb_build_object('code', d.code, 'tracking_token', d.tracking_token);
+
+  when 'delivery.status' then
+    select * into d from delivery_orders
+    where id = (op ->> 'order_id')::uuid and tenant_id = p_tenant for update;
+    if not found then
+      raise exception 'El pedido de delivery ya no existe.' using errcode = 'P0001';
+    end if;
+    v_text := op ->> 'to';
+    if d.status::text = v_text then
+      return jsonb_build_object('skipped', 'same_status');
+    end if;
+    if d.status::text <> coalesce(op ->> 'from', d.status::text) then
+      raise exception 'Otro usuario ya movió % a «%».', d.code, d.status using errcode = 'P0001';
+    end if;
+    if d.status in ('entregado', 'cancelado')
+       or (v_text <> 'cancelado' and v_text <> case d.status
+             when 'recibido' then 'preparando' when 'preparando' then 'listo'
+             when 'listo' then 'en_camino' when 'en_camino' then 'entregado' end) then
+      raise exception 'No se puede pasar de «%» a «%».', d.status, v_text using errcode = 'P0001';
+    end if;
+    select * into o from orders where id = d.id for update;
+    if v_text = 'preparando' then
+      d.accepted_at := v_at;
+      perform app.pos_send_kitchen(o, (op ->> 'ticket_id')::uuid, d.notes);
+    elsif v_text = 'listo' then
+      d.ready_at := v_at;
+    elsif v_text = 'en_camino' then
+      d.driver_id := coalesce(nullif(op ->> 'driver_id', '')::uuid, d.driver_id);
+      if d.channel not in ('rappi', 'pedidosya') then
+        if d.driver_id is null then
+          raise exception 'Asigna un repartidor para despachar.' using errcode = 'P0001';
+        end if;
+        if not exists (select 1 from delivery_drivers where id = d.driver_id and tenant_id = p_tenant and active) then
+          raise exception 'Ese repartidor no está disponible.' using errcode = 'P0001';
+        end if;
+      end if;
+      d.dispatched_at := v_at;
+    elsif v_text = 'entregado' then
+      d.delivered_at := v_at;
+      update orders set
+        status = 'cobrada',
+        closed_at = v_at,
+        paid_method = (case d.pay_method when 'pagado_app' then 'app' else d.pay_method end)::pay_method,
+        paid_total = round((select coalesce(sum(qty * (unit_price + extra_price)), 0) from order_lines where order_id = o.id) + d.fee, 2)
+      where id = o.id
+      returning * into o;
+      perform app.pos_deduct_inventory(o);
+    elsif v_text = 'cancelado' then
+      if coalesce(trim(op ->> 'cancel_reason'), '') = '' then
+        raise exception 'Indica el motivo de la cancelación.' using errcode = 'P0001';
+      end if;
+      d.cancel_reason := trim(op ->> 'cancel_reason');
+      d.cancelled_at := v_at;
+      update orders set status = 'anulada', closed_at = v_at where id = o.id;
+      update kitchen_tickets set col = 'entregado', done = true, note = 'CANCELADO · ' || d.cancel_reason
+      where order_id = o.id and col <> 'entregado';
+    end if;
+    update delivery_orders set
+      status = v_text::delivery_status,
+      driver_id = d.driver_id,
+      accepted_at = d.accepted_at, ready_at = d.ready_at, dispatched_at = d.dispatched_at,
+      delivered_at = d.delivered_at, cancelled_at = d.cancelled_at, cancel_reason = d.cancel_reason
+    where id = d.id;
+    perform app.pos_log(p_tenant, v_actor,
+      format('%s → %s%s', d.code, v_text, case when d.cancel_reason is not null then ' (' || d.cancel_reason || ')' else '' end));
+    return '{}'::jsonb;
+
+  -- ── Inventario ─────────────────────────────────────────────────────────────
+  when 'inventory.adjust' then
+    if not (app.is_platform_admin() or p_tenant = any (app.my_managed_tenant_ids())) then
+      raise exception 'Solo gerencia puede ajustar el inventario.' using errcode = 'P0001';
+    end if;
+    select name into v_text from inventory_items where id = (op ->> 'item_id')::uuid and tenant_id = p_tenant;
+    if v_text is null then
+      raise exception 'El insumo ya no existe.' using errcode = 'P0001';
+    end if;
+    v_other := coalesce(
+      (select id from branches where id = nullif(op ->> 'branch_id', '')::uuid and tenant_id = p_tenant),
+      app.root_branch(p_tenant));
+    v_num := (op ->> 'delta')::numeric;
+    insert into inventory_movements (tenant_id, branch_id, item_id, delta, reason, actor, created_at)
+    values (p_tenant, v_other, (op ->> 'item_id')::uuid, v_num,
+            coalesce(nullif(op ->> 'reason', ''), 'ajuste'), v_actor, v_at);
+    perform app.pos_log(p_tenant, v_actor,
+      format('Ajustó %s (%s%s)', v_text, case when v_num > 0 then '+' else '' end, v_num));
+    return '{}'::jsonb;
+
+  -- ── Comprobantes (numeración de la terminal, válida sin conexión) ─────────
+  when 'cpe.emit' then
+    v_id := (op ->> 'cpe_id')::uuid;
+    select jsonb_build_object('folio', folio, 'status', status) into v_json
+    from comprobantes where id = v_id and tenant_id = p_tenant;
+    if v_json is not null then
+      return v_json;
+    end if;
+    v_text := op ->> 'serie';
+    if v_text is null or v_text !~ '^[BF][0-9A-Z]{3}$' then
+      raise exception 'Serie de comprobante inválida.' using errcode = 'P0001';
+    end if;
+    v_n := nullif(op ->> 'number', '')::int;
+    -- Número propuesto por la terminal; si ya se usó, el servidor asigna el siguiente.
+    if v_n is null or exists (select 1 from comprobantes where tenant_id = p_tenant and folio = app.format_folio(v_text, v_n)) then
+      insert into folio_counters (tenant_id, serie, last) values (p_tenant, v_text, 1001)
+      on conflict (tenant_id, serie) do update set last = folio_counters.last + 1
+      returning last into v_n;
+    else
+      insert into folio_counters (tenant_id, serie, last) values (p_tenant, v_text, v_n)
+      on conflict (tenant_id, serie) do update set last = greatest(folio_counters.last, excluded.last);
+    end if;
+    insert into comprobantes (id, tenant_id, order_id, folio, tipo, buyer_ruc, buyer_name,
+                              subtotal, igv, total, reference, status, issued_at)
+    values (v_id, p_tenant,
+            (select id from orders where id = nullif(op ->> 'order_id', '')::uuid and tenant_id = p_tenant),
+            app.format_folio(v_text, v_n), (op ->> 'tipo')::comprobante_tipo,
+            nullif(op ->> 'buyer_ruc', ''), nullif(op ->> 'buyer_name', ''),
+            (op ->> 'subtotal')::numeric, (op ->> 'igv')::numeric, (op ->> 'total')::numeric,
+            coalesce(op ->> 'reference', ''), 'encola', v_at);
+    insert into sunat_outbox (tenant_id, comprobante_id) values (p_tenant, v_id);
+    perform app.pos_log(p_tenant, v_actor, format('Emitió %s %s · en cola', op ->> 'tipo', app.format_folio(v_text, v_n)));
+    return jsonb_build_object('folio', app.format_folio(v_text, v_n), 'status', 'encola');
+
+  else
+    raise exception 'Operación desconocida: %', v_type using errcode = 'P0001';
+  end case;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- API: aplicar un lote de operaciones (en orden, cada una atómica)
+-- ---------------------------------------------------------------------------
+create or replace function public.pos_apply(p_tenant uuid, p_device text, p_ops jsonb) returns jsonb
+language plpgsql security definer set search_path = public, app as $$
+declare
+  op      jsonb;
+  v_id    uuid;
+  v_res   jsonb;
+  v_prev  pos_ops;
+  results jsonb := '[]'::jsonb;
+begin
+  if not app.pos_member(p_tenant) then
+    raise exception 'Sin acceso a este restaurante.' using errcode = '42501';
+  end if;
+  if jsonb_typeof(p_ops) <> 'array' or jsonb_array_length(p_ops) > 200 then
+    raise exception 'Lote inválido (máximo 200 operaciones).' using errcode = '22023';
+  end if;
+
+  for op in select value from jsonb_array_elements(p_ops)
+  loop
+    v_id := (op ->> 'id')::uuid;
+    begin
+      -- Reserva el id: un reenvío (o el mismo lote en paralelo) no se aplica dos veces.
+      insert into pos_ops (id, tenant_id, device_id, type, status, client_at)
+      values (v_id, p_tenant, coalesce(p_device, ''), op ->> 'type', 'ok', (op ->> 'at')::timestamptz)
+      on conflict (id) do nothing;
+      if not found then
+        select * into v_prev from pos_ops where id = v_id and tenant_id = p_tenant;
+        results := results || jsonb_build_array(jsonb_build_object(
+          'id', v_id, 'status', coalesce(v_prev.status, 'error'), 'dup', true,
+          'result', v_prev.result, 'error', case when v_prev.id is null then 'Id de operación inválido.' else v_prev.error end));
+        continue;
+      end if;
+
+      v_res := app.pos_exec(p_tenant, op);
+      update pos_ops set result = v_res where id = v_id;
+      results := results || jsonb_build_array(jsonb_build_object('id', v_id, 'status', 'ok', 'result', v_res));
+    exception
+      -- Rechazos de negocio o de datos: definitivos. Se registran para que un
+      -- reenvío devuelva la misma respuesta. Otros errores (bloqueos, caídas)
+      -- abortan el lote y el dispositivo reintenta más tarde.
+      when sqlstate 'P0001' or sqlstate '22P02' or sqlstate '22003' or sqlstate '22007' or sqlstate '22008'
+        or sqlstate '23502' or sqlstate '23503' or sqlstate '23505' or sqlstate '23514' or sqlstate '42501' then
+        insert into pos_ops (id, tenant_id, device_id, type, status, error, client_at)
+        values (v_id, p_tenant, coalesce(p_device, ''), op ->> 'type', 'error', sqlerrm, (op ->> 'at')::timestamptz)
+        on conflict (id) do nothing;
+        results := results || jsonb_build_array(jsonb_build_object(
+          'id', v_id, 'status', 'error', 'error', sqlerrm, 'code', sqlstate));
+    end;
+  end loop;
+  return results;
+end $$;
+
+grant execute on function public.pos_apply(uuid, text, jsonb) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- API: estado operativo (completo o incremental) en una sola llamada
+-- ---------------------------------------------------------------------------
+create or replace function public.pos_snapshot(p_tenant uuid, p_branch uuid default null, p_since timestamptz default null)
+returns jsonb
+language plpgsql stable security definer set search_path = public, app as $$
+declare
+  v_today timestamptz := date_trunc('day', now() at time zone 'America/Lima') at time zone 'America/Lima';
+begin
+  if not app.pos_member(p_tenant) then
+    raise exception 'Sin acceso a este restaurante.' using errcode = '42501';
+  end if;
+
+  return jsonb_build_object(
+    'server_time', now(),
+    'full', p_since is null,
+
+    'tables', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'id', t.id, 'zone', t.zone, 'number', t.number, 'seats', t.seats, 'status', t.status,
+        'waiter_id', t.waiter_id, 'branch_id', t.branch_id) order by t.number), '[]'::jsonb)
+      from restaurant_tables t
+      where t.tenant_id = p_tenant
+        and (p_branch is null or t.branch_id = p_branch)
+        and (p_since is null or t.updated_at > p_since)),
+
+    -- En incremental, la lista de ids permite detectar mesas eliminadas.
+    'table_ids', case when p_since is null then null else (
+      select coalesce(jsonb_agg(t.id), '[]'::jsonb) from restaurant_tables t
+      where t.tenant_id = p_tenant and (p_branch is null or t.branch_id = p_branch)) end,
+
+    'orders', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'id', o.id, 'table_id', o.table_id, 'table_number', t.number, 'seats', t.seats, 'zone', t.zone,
+        'kind', o.kind, 'status', o.status, 'opened_at', o.opened_at, 'closed_at', o.closed_at,
+        'paid_method', o.paid_method, 'paid_total', o.paid_total, 'branch_id', o.branch_id,
+        'customer_id', o.customer_id,
+        'lines', (
+          select coalesce(jsonb_agg(jsonb_build_object(
+            'id', l.id, 'item_id', l.menu_item_id, 'name', l.name, 'qty', l.qty,
+            'unit_price', l.unit_price, 'extra_price', l.extra_price, 'modifiers', l.modifiers,
+            'split_payer', l.split_payer, 'sent_qty', l.sent_qty) order by l.created_at), '[]'::jsonb)
+          from order_lines l where l.order_id = o.id)
+      ) order by o.opened_at), '[]'::jsonb)
+      from orders o
+      left join restaurant_tables t on t.id = o.table_id
+      where o.tenant_id = p_tenant
+        and o.kind <> 'delivery'
+        and (p_branch is null or o.branch_id = p_branch)
+        and (case when p_since is null then o.status not in ('cobrada', 'anulada')
+                  else o.updated_at > p_since end)),
+
+    'tickets', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'id', k.id, 'order_id', k.order_id, 'table_label', k.table_label, 'col', k.col,
+        'entered_at', k.entered_at, 'note', k.note, 'done', k.done, 'branch_id', k.branch_id,
+        'lines', (
+          select coalesce(jsonb_agg(jsonb_build_object('qty', tl.qty, 'name', tl.name)), '[]'::jsonb)
+          from ticket_lines tl where tl.ticket_id = k.id)
+      ) order by k.entered_at), '[]'::jsonb)
+      from kitchen_tickets k
+      where k.tenant_id = p_tenant
+        and (p_branch is null or k.branch_id = p_branch)
+        and (case when p_since is null then k.col <> 'entregado' else k.updated_at > p_since end)),
+
+    'deliveries', (
+      select coalesce(jsonb_agg(to_jsonb(v) order by v.created_at desc), '[]'::jsonb)
+      from v_delivery_orders v
+      where v.tenant_id = p_tenant
+        and (p_branch is null or v.branch_id = p_branch)
+        and (case when p_since is null
+                  then v.status in ('recibido', 'preparando', 'listo', 'en_camino') or v.created_at >= v_today
+                  else v.updated_at > p_since end))
+  );
+end $$;
+
+grant execute on function public.pos_snapshot(uuid, uuid, timestamptz) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- API: registro de la terminal (caja) y su serie propia
+-- ---------------------------------------------------------------------------
+create or replace function public.pos_terminal(p_tenant uuid, p_device text, p_branch uuid default null, p_name text default '')
+returns jsonb
+language plpgsql security definer set search_path = public, app as $$
+declare
+  term pos_terminals;
+  n    int;
+begin
+  if not app.pos_member(p_tenant) then
+    raise exception 'Sin acceso a este restaurante.' using errcode = '42501';
+  end if;
+  if coalesce(length(p_device), 0) < 8 then
+    raise exception 'Identificador de dispositivo inválido.' using errcode = '22023';
+  end if;
+  select * into term from pos_terminals where tenant_id = p_tenant and device_id = p_device;
+  if not found then
+    perform 1 from tenants where id = p_tenant for update; -- serializa la asignación de series
+    select coalesce(max(substr(serie_boleta, 2)::int), 0) + 1 into n
+    from pos_terminals where tenant_id = p_tenant and serie_boleta ~ '^B[0-9]{3}$';
+    if n > 999 then
+      raise exception 'Se alcanzó el máximo de terminales.' using errcode = 'P0001';
+    end if;
+    insert into pos_terminals (tenant_id, branch_id, device_id, name, serie_boleta, serie_factura)
+    values (p_tenant,
+            coalesce((select id from branches where id = p_branch and tenant_id = p_tenant), app.root_branch(p_tenant)),
+            p_device, coalesce(nullif(p_name, ''), 'Caja ' || n),
+            'B' || lpad(n::text, 3, '0'), 'F' || lpad(n::text, 3, '0'))
+    returning * into term;
+  else
+    update pos_terminals set last_seen_at = now() where id = term.id;
+  end if;
+  return jsonb_build_object(
+    'id', term.id, 'name', term.name, 'branch_id', term.branch_id,
+    'serie_boleta', term.serie_boleta, 'serie_factura', term.serie_factura,
+    'last_boleta', coalesce((select last from folio_counters where tenant_id = p_tenant and serie = term.serie_boleta), 1000),
+    'last_factura', coalesce((select last from folio_counters where tenant_id = p_tenant and serie = term.serie_factura), 1000));
+end $$;
+
+grant execute on function public.pos_terminal(uuid, text, uuid, text) to authenticated;
+
+-- ==================================================================
 -- seed.sql
 -- ==================================================================
 
 -- ============================================================================
 -- Wayra POS — datos de prueba (seed) para un proyecto Supabase nuevo.
 -- Ejecuta este archivo UNA VEZ, después de aplicar todas las migraciones
--- (0001 … 0017). Es idempotente donde hay claves únicas; para volver a
+-- (supabase/migrations). Es idempotente donde hay claves únicas; para volver a
 -- sembrar desde cero, mejor recrea la base (o borra los datos del tenant demo).
 --
 -- Los usuarios de Auth NO se pueden crear por SQL: créalos en el dashboard
@@ -1602,11 +3008,13 @@ grant execute on function public.public_delivery_status(text) to anon, authentic
 -- ---------------------------------------------------------------------------
 -- 1) Planes de suscripción
 -- ---------------------------------------------------------------------------
-insert into subscription_plans (tier, price, features) values
-  ('Básico', 699,  'POS + 1 sucursal'),
-  ('Pro', 1499, 'POS + inventario + reportes + 3 sucursales'),
-  ('Enterprise', 4800, 'Todo + multi-sucursal + soporte prioritario')
-on conflict (tier) do update set price = excluded.price, features = excluded.features;
+-- max_branches = sucursales además de la sede principal (null = sin límite).
+insert into subscription_plans (tier, price, features, max_branches) values
+  ('Básico', 699,  'POS + sede principal + 2 sucursales', 2),
+  ('Pro', 1499, 'POS + inventario + reportes + hasta 10 sucursales', 10),
+  ('Enterprise', 4800, 'Todo + sucursales ilimitadas + soporte prioritario', null)
+on conflict (tier) do update set
+  price = excluded.price, features = excluded.features, max_branches = excluded.max_branches;
 
 -- ---------------------------------------------------------------------------
 -- 2) Datos del emisor del SaaS (tu empresa)
@@ -1620,13 +3028,15 @@ on conflict (id) do update set
 -- ---------------------------------------------------------------------------
 -- 3) Tenants (el demo + otros para poblar la consola SaaS)
 -- ---------------------------------------------------------------------------
-insert into tenants (id, name, slug, owner_name, plan, mrr, status, since) values
-  ('11111111-1111-1111-1111-111111111111', 'La Higuera', 'la-higuera', 'Mónica R.', 'Pro', 1499, 'Activo', '2025-03-01'),
-  ('a0000000-0000-0000-0000-000000000002', 'Cevichería El Muelle', 'cevicheria-el-muelle', 'Andrés Ríos', 'Enterprise', 4800, 'Activo', '2024-06-01'),
-  ('a0000000-0000-0000-0000-000000000003', 'Sushi Nami', 'sushi-nami', 'Keiko Tanaka', 'Pro', 1499, 'Activo', '2025-11-01'),
-  ('a0000000-0000-0000-0000-000000000004', 'Tacos El Farol', 'tacos-el-farol', 'Raúl Méndez', 'Básico', 699, 'Activo', '2025-01-01'),
-  ('a0000000-0000-0000-0000-000000000005', 'Café Aurora', 'cafe-aurora', 'Paula Vega', 'Pro', 0, 'Prueba', '2026-02-01'),
-  ('a0000000-0000-0000-0000-000000000006', 'Brasas del Sur', 'brasas-del-sur', 'Jorge Salas', 'Básico', 0, 'Suspendido', '2025-09-01')
+-- Cada alta crea sola su sede principal (trigger tenants_create_root). El MRR
+-- no se guarda: se deriva del plan en la vista v_tenants.
+insert into tenants (id, name, slug, owner_name, plan, status, since) values
+  ('11111111-1111-1111-1111-111111111111', 'La Higuera', 'la-higuera', 'Mónica R.', 'Pro', 'Activo', '2025-03-01'),
+  ('a0000000-0000-0000-0000-000000000002', 'Cevichería El Muelle', 'cevicheria-el-muelle', 'Andrés Ríos', 'Enterprise', 'Activo', '2024-06-01'),
+  ('a0000000-0000-0000-0000-000000000003', 'Sushi Nami', 'sushi-nami', 'Keiko Tanaka', 'Pro', 'Activo', '2025-11-01'),
+  ('a0000000-0000-0000-0000-000000000004', 'Tacos El Farol', 'tacos-el-farol', 'Raúl Méndez', 'Básico', 'Activo', '2025-01-01'),
+  ('a0000000-0000-0000-0000-000000000005', 'Café Aurora', 'cafe-aurora', 'Paula Vega', 'Pro', 'Prueba', '2026-02-01'),
+  ('a0000000-0000-0000-0000-000000000006', 'Brasas del Sur', 'brasas-del-sur', 'Jorge Salas', 'Básico', 'Suspendido', '2025-09-01')
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -1642,11 +3052,17 @@ values
 on conflict (tenant_id) do nothing;
 
 -- ---------------------------------------------------------------------------
--- 5) Sucursales del tenant demo (IDs fijos para asignar mesas)
+-- 5) Sucursales del tenant demo (árbol: Miraflores es la sede principal y
+--    San Isidro depende de ella). IDs fijos para asignar mesas.
 -- ---------------------------------------------------------------------------
-insert into branches (id, tenant_id, name, city) values
-  ('22222222-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Miraflores', 'Lima'),
-  ('22222222-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'San Isidro', 'Lima')
+update branches
+set id = '22222222-0000-0000-0000-000000000001', name = 'Miraflores', city = 'Lima',
+    address = 'Av. La Mar 1234, Miraflores'
+where tenant_id = '11111111-1111-1111-1111-111111111111' and parent_id is null
+  and id <> '22222222-0000-0000-0000-000000000001';
+insert into branches (id, tenant_id, parent_id, name, city, address) values
+  ('22222222-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111',
+   '22222222-0000-0000-0000-000000000001', 'San Isidro', 'Lima', 'Calle Las Begonias 450, San Isidro')
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -1709,20 +3125,35 @@ select
   z.zone, n, case when z.zone = 'Barra' then 2 else 4 end, 'libre'
 from (values ('Terraza', 1, 6), ('Salón principal', 7, 16), ('Barra', 17, 20)) as z(zone, lo, hi)
 cross join lateral generate_series(z.lo, z.hi) as n
-on conflict (tenant_id, number) do nothing;
+on conflict (branch_id, number) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 9) Inventario (con costo por unidad para food cost)
 -- ---------------------------------------------------------------------------
-insert into inventory_items (tenant_id, name, unit, stock, par, cost) values
-  ('11111111-1111-1111-1111-111111111111', 'Pescado fresco', 'kg', 18, 20, 28.00),
-  ('11111111-1111-1111-1111-111111111111', 'Lomo de res', 'kg', 15, 12, 32.00),
-  ('11111111-1111-1111-1111-111111111111', 'Papa amarilla', 'kg', 40, 25, 3.50),
-  ('11111111-1111-1111-1111-111111111111', 'Ají amarillo', 'kg', 6, 8, 9.00),
-  ('11111111-1111-1111-1111-111111111111', 'Culantro', 'atado', 8, 10, 1.50),
-  ('11111111-1111-1111-1111-111111111111', 'Pisco', 'bot', 12, 6, 45.00),
-  ('11111111-1111-1111-1111-111111111111', 'Limón', 'kg', 22, 15, 5.00)
+-- Catálogo de insumos (compartido por todas las sucursales) + stock inicial de
+-- cada sucursal como movimiento de kardex (el stock es la suma de movimientos).
+insert into inventory_items (tenant_id, name, unit, par, cost) values
+  ('11111111-1111-1111-1111-111111111111', 'Pescado fresco', 'kg', 20, 28.00),
+  ('11111111-1111-1111-1111-111111111111', 'Lomo de res', 'kg', 12, 32.00),
+  ('11111111-1111-1111-1111-111111111111', 'Papa amarilla', 'kg', 25, 3.50),
+  ('11111111-1111-1111-1111-111111111111', 'Ají amarillo', 'kg', 8, 9.00),
+  ('11111111-1111-1111-1111-111111111111', 'Culantro', 'atado', 10, 1.50),
+  ('11111111-1111-1111-1111-111111111111', 'Pisco', 'bot', 6, 45.00),
+  ('11111111-1111-1111-1111-111111111111', 'Limón', 'kg', 15, 5.00)
 on conflict do nothing;
+
+insert into inventory_movements (tenant_id, branch_id, item_id, delta, reason, actor)
+select '11111111-1111-1111-1111-111111111111', b.branch_id, inv.id, v.qty * b.factor, 'inicial', 'Seed'
+from (values
+  ('Pescado fresco', 18), ('Lomo de res', 15), ('Papa amarilla', 40), ('Ají amarillo', 6),
+  ('Culantro', 8), ('Pisco', 12), ('Limón', 22)
+) as v(insumo, qty)
+join inventory_items inv on inv.name = v.insumo and inv.tenant_id = '11111111-1111-1111-1111-111111111111'
+cross join (values
+  ('22222222-0000-0000-0000-000000000001'::uuid, 1.0),
+  ('22222222-0000-0000-0000-000000000002'::uuid, 0.5)
+) as b(branch_id, factor)
+where not exists (select 1 from inventory_movements m where m.item_id = inv.id);
 
 -- ---------------------------------------------------------------------------
 -- 10) Recetas (food cost) — enlaza plato ↔ insumo por nombre
