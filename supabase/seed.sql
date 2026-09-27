@@ -119,8 +119,8 @@ on conflict do nothing;
 insert into restaurant_tables (tenant_id, branch_id, zone, number, seats, status)
 select
   '11111111-1111-1111-1111-111111111111',
-  case when n <= 12 then '22222222-0000-0000-0000-000000000001'
-       else '22222222-0000-0000-0000-000000000002' end,
+  case when n <= 12 then '22222222-0000-0000-0000-000000000001'::uuid
+       else '22222222-0000-0000-0000-000000000002'::uuid end,
   z.zone, n, case when z.zone = 'Barra' then 2 else 4 end, 'libre'
 from (values ('Terraza', 1, 6), ('Salón principal', 7, 16), ('Barra', 17, 20)) as z(zone, lo, hi)
 cross join lateral generate_series(z.lo, z.hi) as n
