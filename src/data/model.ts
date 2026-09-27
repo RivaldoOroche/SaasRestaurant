@@ -65,6 +65,15 @@ export interface BranchQuota {
 
 export type StaffRole = "dueno" | "admin" | "mesero";
 
+/** Datos mínimos para validar el PIN en el equipo (sin internet). */
+export interface StaffPin {
+  id: string;
+  name: string;
+  initials: string;
+  role: StaffRole;
+  verifier: string | null;
+}
+
 export interface StaffMember {
   id: string;
   name: string;

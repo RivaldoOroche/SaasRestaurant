@@ -1,19 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
-import { homePathForRole } from "@/lib/roles";
-import { MOCK_USERS } from "@/auth/session";
 import { isBackendConfigured } from "@/lib/supabase";
 import { WayraMark } from "@/components/brand/Logo";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 
 export function Login() {
-  const { loginWithPin, loginWithPassword, pendingMfa, completeMfa } = useAuth();
+  const { loginWithPin, loginWithPassword, pendingMfa, completeMfa, pairing, unpair } = useAuth();
   const navigate = useNavigate();
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"pin" | "password">("pin");
+  // Demo: PIN. Con Supabase: PIN solo si el equipo ya está vinculado; si no, correo.
+  const pinAvailable = !isBackendConfigured || !!pairing;
+  const [mode, setMode] = useState<"pin" | "password">(pinAvailable ? "pin" : "password");
+  const [checking, setChecking] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
@@ -32,18 +33,19 @@ export function Login() {
 
   async function submitPin(nextPin: string) {
     setError(null);
+    setChecking(true);
     const err = await loginWithPin(nextPin);
+    setChecking(false);
     if (err) {
       setError(err);
       setPin("");
       return;
     }
-    const user = MOCK_USERS.find((u) => u.pin === nextPin);
-    navigate(homePathForRole(user?.role ?? "mesero"));
+    navigate("/"); // HomeRedirect lleva a la pantalla de inicio del rol
   }
 
   function press(d: string) {
-    if (pin.length >= 4) return;
+    if (pin.length >= 4 || checking) return;
     const next = pin + d;
     setPin(next);
     if (next.length === 4) void submitPin(next);
@@ -68,7 +70,18 @@ export function Login() {
           <h1 className="text-2xl font-bold">
             Wayra <span className="text-accent">POS</span>
           </h1>
-          <p className="text-white/60 text-sm">Punto de venta · SaaS para restaurantes</p>
+          <p className="text-white/60 text-sm">
+            {pairing ? pairing.tenantName ?? "Tu restaurante" : "Punto de venta · SaaS para restaurantes"}
+          </p>
+          {mode === "pin" && !pendingMfa && (
+            <p className="text-white/80 text-sm mt-3">{checking ? "Verificando…" : "Ingresa tu PIN de 4 dígitos"}</p>
+          )}
+          {mode === "password" && !pinAvailable && !pendingMfa && (
+            <p className="text-white/60 text-xs mt-3">
+              Primera vez en este equipo: ingresa con el correo del dueño o gerente. Luego tu equipo podrá entrar con su
+              PIN, incluso sin internet.
+            </p>
+          )}
         </div>
 
         {pendingMfa ? (
@@ -109,9 +122,11 @@ export function Login() {
               <PinKey onClick={() => press("0")}>0</PinKey>
               <PinKey onClick={() => setPin(pin.slice(0, -1))}>⌫</PinKey>
             </div>
-            <p className="text-center text-white/40 text-xs mt-5">
-              Demo: 1111 Dueña · 2222 Gerente · 3333/4444 Mesero · 0000 SaaS
-            </p>
+            {!isBackendConfigured && (
+              <p className="text-center text-white/40 text-xs mt-5">
+                Demo: 1111 Dueña · 2222 Gerente · 3333/4444 Mesero · 0000 SaaS
+              </p>
+            )}
           </>
         ) : (
           <form onSubmit={submitPassword} className="space-y-3">
@@ -137,15 +152,27 @@ export function Login() {
 
         {error && <p className="text-center text-warning text-sm mt-4">{error}</p>}
 
-        <button
-          onClick={() => {
-            setMode(mode === "pin" ? "password" : "pin");
-            setError(null);
-          }}
-          className="block mx-auto mt-6 text-white/50 text-xs underline underline-offset-2"
-        >
-          {mode === "pin" ? "Ingresar con correo y contraseña" : "Ingresar con PIN"}
-        </button>
+        {pinAvailable && (
+          <button
+            onClick={() => {
+              setMode(mode === "pin" ? "password" : "pin");
+              setError(null);
+            }}
+            className="block mx-auto mt-6 text-white/50 text-xs underline underline-offset-2"
+          >
+            {mode === "pin" ? "Ingresar con correo y contraseña" : "Ingresar con PIN"}
+          </button>
+        )}
+        {pairing && (
+          <button
+            onClick={() => {
+              if (window.confirm("¿Desvincular este equipo? Para volver a usarlo habrá que ingresar con el correo del dueño.")) unpair();
+            }}
+            className="block mx-auto mt-3 text-white/30 text-[11px] underline underline-offset-2"
+          >
+            Desvincular este equipo
+          </button>
+        )}
         {!isBackendConfigured && (
           <p className="text-center text-white/30 text-[11px] mt-3">
             Modo demo (sin backend). Configura .env para conectar Supabase.

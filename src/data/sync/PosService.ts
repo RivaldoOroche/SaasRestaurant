@@ -434,7 +434,7 @@ const OVERLAID = new Set(["getPaidOrders", "getInventory", "getComprobantes"]);
 /** Lecturas que conviene tener sin conexión (abrir la app y tomar pedidos). */
 const CACHED = new Set([
   "getCategories", "getMenuItems", "getExtras", "getPrefs", "getBranches", "getStaff", "getSettings",
-  "getCustomers", "getRecipes", "getDeliveryZones", "getDrivers", "getRolePermissions", "getSubscription",
+  "getCustomers", "getRecipes", "getStaffPins", "getDeliveryZones", "getDrivers", "getRolePermissions", "getSubscription",
   "getReservations", "getWaitlist", "getActivityLog", "getBranchSales", "getBranchQuota",
 ]);
 /** Escrituras administrativas tras las que hay que releer el estado operativo. */

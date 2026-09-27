@@ -10,6 +10,7 @@ import type {
   BranchSales,
   StaffMember,
   StaffRole,
+  StaffPin,
   Order,
   OrderLine,
   KitchenTicket,
@@ -43,6 +44,7 @@ import type { OpResult, PosOp, PosSnapshot } from "../pos/ops";
 import { stubSunatGateway, type SunatGateway, type SunatResult } from "../sunat/gateway";
 import { makeFunctionGateway } from "../sunat/functionGateway";
 import { decideEmission } from "../sunat/outbox";
+import { pinVerifier } from "@/lib/pin";
 
 /** Error legible a partir de un error de PostgREST (mensajes de los triggers en español). */
 function fail(error: { message?: string } | null): never {
@@ -172,13 +174,14 @@ export class SupabaseRepo implements BackendRepo {
     }));
   }
   async addStaff(input: { name: string; role: StaffRole; pin: string }): Promise<void> {
-    const pin_hash = await sha256Hex(input.pin);
+    const id = crypto.randomUUID();
     const { error } = await this.sb.from("staff_members").insert({
+      id,
       tenant_id: this.tenantId,
       name: input.name,
       initials: initialsOf(input.name),
       role: input.role,
-      pin_hash,
+      pin_verifier: await pinVerifier(input.pin, id),
       active: true,
     });
     if (error) throw error;
@@ -190,9 +193,16 @@ export class SupabaseRepo implements BackendRepo {
     if (error) throw error;
   }
   async setStaffPin(id: string, pin: string): Promise<void> {
-    const pin_hash = await sha256Hex(pin);
-    const { error } = await this.sb.from("staff_members").update({ pin_hash }).eq("id", id);
+    const { error } = await this.sb.from("staff_members").update({ pin_verifier: await pinVerifier(pin, id) }).eq("id", id);
     if (error) throw error;
+  }
+  async getStaffPins(): Promise<StaffPin[]> {
+    const { data, error } = await this.sb
+      .from("staff_members")
+      .select("id, name, initials, role, pin_verifier")
+      .eq("active", true);
+    if (error) fail(error);
+    return (data ?? []).map((s) => ({ id: s.id, name: s.name, initials: s.initials, role: s.role as StaffRole, verifier: s.pin_verifier }));
   }
 
   async addTable(input: { zone: string; number: number; seats: number; branchId: string | null; count?: number }): Promise<void> {
@@ -1010,10 +1020,6 @@ export class SupabaseRepo implements BackendRepo {
   }
 }
 
-async function sha256Hex(s: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
 function initialsOf(name: string): string {
   return name
     .split(/\s+/)

@@ -177,7 +177,7 @@ function StaffCard() {
           ))}
         </div>
         <p className="text-muted text-[11px]">
-          El PIN se guarda cifrado en el servidor. El ingreso por PIN se habilita en el dispositivo del local.
+          Cada persona entra con su PIN en los equipos del local (vinculados al ingresar una vez con tu correo), incluso sin internet. El PIN nunca se guarda: solo un verificador cifrado.
         </p>
       </CardBody>
     </Card>

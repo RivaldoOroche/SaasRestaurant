@@ -98,7 +98,7 @@ export interface Tables {
     } & Timestamps;
   };
   staff_members: {
-    Row: { id: string; tenant_id: string; name: string; initials: string; role: AppRole; pin_hash: string | null; active: boolean } & Timestamps;
+    Row: { id: string; tenant_id: string; name: string; initials: string; role: AppRole; pin_hash: string | null; pin_verifier: string | null; active: boolean; branch_ids?: string[] } & Timestamps;
   };
   business_settings: {
     Row: { tenant_id: string; name: string; currency: CurrencyCode; tax_rate: number; tax_regime: string; tip_presets: number[]; online_orders: boolean; auto_tip: boolean; ruc: string | null; address: string | null; yape_number: string | null; plin_number: string | null; card_provider: string; card_public_key: string | null; razon_social: string | null; ubigeo: string | null; billing_provider: string; sunat_mode: string; sol_user: string | null; billing_endpoint: string | null; updated_at: string };

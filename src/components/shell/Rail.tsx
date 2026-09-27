@@ -58,14 +58,14 @@ export function Rail() {
         <UtilityButtons isTenant={nav.isTenant} />
         <button
           onClick={lock}
-          title="Cerrar sesión"
-          aria-label="Cerrar sesión"
+          title="Cambiar de usuario (vuelve al teclado de PIN)"
+          aria-label="Cambiar de usuario"
           className="flex flex-col items-center justify-center rounded-md hover:bg-white/10 px-1 py-1"
         >
           <span className="h-9 w-9 rounded-md bg-accent grid place-items-center text-xs font-bold text-white" aria-hidden="true">
             {nav.initials}
           </span>
-          <span className="text-[10px] mt-0.5">salir</span>
+          <span className="text-[10px] mt-0.5">cambiar</span>
         </button>
       </div>
     </nav>

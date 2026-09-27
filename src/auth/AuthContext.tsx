@@ -13,8 +13,12 @@ export interface AuthValue {
   enterTenant: (tenantId: string, tenantName: string) => void;
   /** Return from impersonation to the platform console. */
   exitTenant: () => void;
-  /** Lock the session and return to the PIN screen. */
+  /** Bloquea: vuelve al teclado de PIN (el equipo sigue vinculado). */
   lock: () => void;
+  /** Cierra la sesión del equipo por completo (hay que volver a ingresar con correo). */
+  unpair: () => void;
+  /** Restaurante al que está vinculado este equipo (null si no lo está). */
+  pairing: import("./device").DevicePairing | null;
   /** true si el usuario entró con una contraseña temporal y debe cambiarla. */
   mustChangePassword: boolean;
   /** Cambia la contraseña y limpia la marca de cambio obligatorio. */

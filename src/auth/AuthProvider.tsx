@@ -10,6 +10,9 @@ import {
 import { supabase, USE_MOCK } from "@/lib/supabase";
 import { needsMfaChallenge, resolveMfaChallenge } from "@/lib/twofa";
 import type { AppRole } from "@/types/database";
+import { clearPairing, getPairing, setPairing, type DevicePairing } from "./device";
+import { matchPin, pinLockSeconds, registerPinFailure, resetPinFailures } from "@/lib/pin";
+import { getRepo } from "@/data";
 
 const mockMode = USE_MOCK || !supabase;
 
@@ -18,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   const [pendingMfa, setPendingMfa] = useState<{ userId: string; email: string; metaMustChange: boolean } | null>(null);
+  const [pairing, setPairingState] = useState<DevicePairing | null>(() => (mockMode ? null : getPairing()));
 
   useEffect(() => {
     setSession(loadSession());
@@ -31,17 +35,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginWithPin = useCallback<AuthValue["loginWithPin"]>(
     async (pin) => {
-      // The PIN keypad is a demo/offline affordance only. With a real backend,
-      // matching a hard-coded mock PIN would mint a fake privileged client
-      // session, so it's disabled — staff PIN auth on an already-authenticated
-      // tenant device (verified against staff_members.pin_hash server-side) is a
-      // backend task. Owners sign in with email + password.
-      if (!mockMode) {
-        return "Ingreso por PIN no disponible con backend real. Usa correo y contraseña.";
+      const wait = pinLockSeconds();
+      if (wait > 0) return `Demasiados intentos. Espera ${wait} s.`;
+      const fail = () => {
+        const secs = registerPinFailure();
+        return secs > 0 ? `PIN incorrecto. Teclado bloqueado ${secs} s.` : "PIN incorrecto";
+      };
+      if (mockMode) {
+        const user = MOCK_USERS.find((u) => u.pin === pin);
+        if (!user) return fail();
+        resetPinFailures();
+        update(sessionFromMockUser(user));
+        return null;
       }
-      const user = MOCK_USERS.find((u) => u.pin === pin);
-      if (!user) return "PIN incorrecto";
-      update(sessionFromMockUser(user));
+      // Equipo vinculado: el PIN se verifica en el propio equipo (funciona sin red).
+      const p = getPairing();
+      if (!p) return "Primero vincula este equipo: ingresa una vez con el correo del dueño.";
+      let staff;
+      try {
+        staff = await getRepo(p.tenantId).getStaffPins();
+      } catch {
+        return "No hay datos del personal en este equipo. Conéctate a internet una vez.";
+      }
+      if (!staff.some((s) => s.verifier)) {
+        return "Aún no hay PIN configurados. Ingresa con correo y define los PIN en Dueño → Personal.";
+      }
+      const who = await matchPin(pin, staff);
+      if (!who) return fail();
+      resetPinFailures();
+      update({
+        role: who.role,
+        tenantId: p.tenantId,
+        tenantName: p.tenantName,
+        staff: { id: who.id, name: who.name, initials: who.initials, role: who.role },
+        userEmail: p.email,
+        impersonating: false,
+      });
       return null;
     },
     [update],
@@ -68,6 +97,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenantName = t?.name ?? null;
       }
       update({ role, tenantId: membership.tenant_id, tenantName, staff: null, userEmail: email, impersonating: false });
+      // Dueño/gerente: el equipo queda vinculado al restaurante para ingresar con PIN.
+      if (membership.tenant_id && (role === "dueno" || role === "admin")) {
+        const pr = { tenantId: membership.tenant_id, tenantName, email };
+        setPairing(pr);
+        setPairingState(pr);
+        void getRepo(membership.tenant_id).getStaffPins().catch(() => undefined); // queda en caché para usar sin red
+      }
       try {
         await supabase.from("access_log").insert({
           user_id: userId,
@@ -151,7 +187,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const lock = useCallback<AuthValue["lock"]>(() => {
+    // Con equipo vinculado solo se bloquea (vuelve al PIN); si no, se cierra la sesión.
+    if (!mockMode && supabase && !getPairing()) void supabase.auth.signOut();
+    setMustChangePassword(false);
+    setPendingMfa(null);
+    update(null);
+  }, [update]);
+
+  const unpair = useCallback<AuthValue["unpair"]>(() => {
     if (!mockMode && supabase) void supabase.auth.signOut();
+    clearPairing();
+    setPairingState(null);
     setMustChangePassword(false);
     setPendingMfa(null);
     update(null);
@@ -181,12 +227,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       enterTenant,
       exitTenant,
       lock,
+      unpair,
+      pairing,
       mustChangePassword,
       changePassword,
       pendingMfa: pendingMfa !== null,
       completeMfa,
     }),
-    [session, ready, loginWithPin, loginWithPassword, enterTenant, exitTenant, lock, mustChangePassword, changePassword, pendingMfa, completeMfa],
+    [session, ready, loginWithPin, loginWithPassword, enterTenant, exitTenant, lock, unpair, pairing, mustChangePassword, changePassword, pendingMfa, completeMfa],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

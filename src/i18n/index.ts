@@ -40,7 +40,7 @@ const DICT: Record<string, Record<Lang, string>> = {
   // Comunes
   "common.language": { es: "Idioma", en: "Language" },
   "common.currency": { es: "Moneda", en: "Currency" },
-  "common.logout": { es: "Salir", en: "Log out" },
+  "common.logout": { es: "Cambiar de usuario", en: "Switch user" },
   "common.online": { es: "En línea", en: "Online" },
   "common.offline": { es: "Sin conexión", en: "Offline" },
   "common.cancel": { es: "Cancelar", en: "Cancel" },

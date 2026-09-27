@@ -33,7 +33,8 @@ import { applyOp, OpError, type ReduceCtx } from "../pos/reduce";
 import type { OpResult, PosOp, PosSnapshot } from "../pos/ops";
 import { planInfo, quotaExceededMessage } from "@/lib/plans";
 import { stubSunatGateway } from "../sunat/gateway";
-import type { Branch, BranchSales, StaffMember, StaffRole } from "../model";
+import type { Branch, BranchSales, StaffMember, StaffRole, StaffPin } from "../model";
+import { pinVerifier } from "@/lib/pin";
 import {
   CATEGORIES,
   MENU_ITEMS,
@@ -393,6 +394,13 @@ export class MockRepo implements BackendRepo {
     if (patch.name) s.initials = initialsOf(patch.name);
     this.pushLog("Dueño", `Actualizó a ${s.name}`);
     this.persist();
+  }
+  async getStaffPins(): Promise<StaffPin[]> {
+    return Promise.all(
+      this.state.staff
+        .filter((s) => s.active)
+        .map(async (s) => ({ id: s.id, name: s.name, initials: s.initials, role: s.role, verifier: s.pin ? await pinVerifier(s.pin, s.id) : null })),
+    );
   }
   async setStaffPin(id: string, pin: string) {
     const s = this.state.staff.find((x) => x.id === id);
