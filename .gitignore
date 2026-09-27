@@ -15,3 +15,4 @@ supabase/.temp
 # Playwright
 test-results/
 playwright-report/
+scripts/load/resultados-*.txt
