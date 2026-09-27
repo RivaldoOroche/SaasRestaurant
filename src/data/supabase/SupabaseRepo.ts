@@ -1,27 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Repo, PayInput } from "../Repo";
+import type { BackendRepo, BranchInput, TerminalInfo } from "../Repo";
 import type {
   Category,
   MenuItem,
   ModifierExtra,
   ModifierPref,
-  RestaurantTable,
   Branch,
+  BranchQuota,
   BranchSales,
   StaffMember,
   StaffRole,
   Order,
   OrderLine,
   KitchenTicket,
-  DraftLine,
   Customer,
   InventoryItem,
   LogEntry,
   BusinessSettings,
   MenuChange,
-  OnlineOrder,
   Comprobante,
-  EmitComprobanteInput,
   ResumenDiario,
   BajaResult,
   FiscalCredentialsInput,
@@ -36,23 +33,33 @@ import type {
   DeliveryZone,
   DeliveryDriver,
   DeliveryOrder,
-  DeliveryStatus,
   DeliveryChannel,
   DeliveryPay,
   DriverVehicle,
-  NewDeliveryInput,
+  RestaurantTable,
 } from "../model";
 import type { Database, Row, PlanTier } from "@/types/database";
-import { deliveryTotals, isAggregator, kitchenLabel, transitionPatch, validateNewDelivery } from "@/lib/delivery";
+import type { OpResult, PosOp, PosSnapshot } from "../pos/ops";
 import { stubSunatGateway, type SunatGateway, type SunatResult } from "../sunat/gateway";
 import { makeFunctionGateway } from "../sunat/functionGateway";
 import { decideEmission } from "../sunat/outbox";
 
+/** Error legible a partir de un error de PostgREST (mensajes de los triggers en español). */
+function fail(error: { message?: string } | null): never {
+  throw new Error(error?.message ?? "Error de base de datos");
+}
+
+/** Columnas de la lista de comprobantes (sin XML/CDR, que pesan). */
+const CPE_COLS =
+  "id, folio, tipo, buyer_ruc, buyer_name, subtotal, igv, total, reference, status, error, issued_at, ref_folio, motivo, order_id";
+
 /**
- * Real backend repo. Tenant scoping is enforced by RLS; we still set tenant_id
- * on inserts so rows land in the right tenant. One instance per tenant.
+ * Backend Supabase. El aislamiento por tenant lo garantiza RLS; igual se envía
+ * tenant_id en los inserts. Las operaciones del salón van por RPC (pos_apply /
+ * pos_snapshot): una llamada por lote, atómica e idempotente.
  */
-export class SupabaseRepo implements Repo {
+export class SupabaseRepo implements BackendRepo {
+  readonly remote = true;
   private sunat: SunatGateway;
   private betaMode: boolean;
 
@@ -93,27 +100,60 @@ export class SupabaseRepo implements Repo {
   }
 
   async getBranches(): Promise<Branch[]> {
-    const { data, error } = await this.sb.from("branches").select("*").order("name");
-    if (error) throw error;
-    return (data ?? []).map((b) => ({ id: b.id, name: b.name, city: b.city }));
+    const { data, error } = await this.sb
+      .from("branches")
+      .select("id, name, city, parent_id, active, address, phone, sort")
+      .order("sort")
+      .order("name");
+    if (error) fail(error);
+    return (data ?? []).map((b) => ({
+      id: b.id,
+      name: b.name,
+      city: b.city,
+      parentId: b.parent_id,
+      active: b.active,
+      address: b.address,
+      phone: b.phone,
+    }));
   }
 
-  async addBranch(name: string, city: string): Promise<void> {
-    const { error } = await this.sb.from("branches").insert({ tenant_id: this.tenantId, name, city });
-    if (error) throw error;
+  async addBranch(input: BranchInput): Promise<void> {
+    let parentId = input.parentId ?? null;
+    if (!parentId) {
+      const { data } = await this.sb.from("branches").select("id").is("parent_id", null).maybeSingle();
+      parentId = data?.id ?? null;
+    }
+    const { error } = await this.sb.from("branches").insert({
+      tenant_id: this.tenantId,
+      parent_id: parentId,
+      name: input.name,
+      city: input.city,
+      address: input.address ?? "",
+      phone: input.phone ?? "",
+    });
+    if (error) fail(error);
   }
-  async updateBranch(id: string, patch: Partial<{ name: string; city: string }>): Promise<void> {
-    const { error } = await this.sb.from("branches").update(patch).eq("id", id);
-    if (error) throw error;
+  async updateBranch(id: string, patch: Partial<BranchInput & { active: boolean }>): Promise<void> {
+    const row: Database["public"]["Tables"]["branches"]["Update"] = {};
+    if (patch.name !== undefined) row.name = patch.name;
+    if (patch.city !== undefined) row.city = patch.city;
+    if (patch.address !== undefined) row.address = patch.address;
+    if (patch.phone !== undefined) row.phone = patch.phone;
+    if (patch.active !== undefined) row.active = patch.active;
+    if (patch.parentId !== undefined) row.parent_id = patch.parentId;
+    const { error } = await this.sb.from("branches").update(row).eq("id", id);
+    if (error) fail(error);
   }
+  /** Los triggers impiden borrar la principal, una con hijas o con historial. */
   async removeBranch(id: string): Promise<void> {
-    const { count } = await this.sb
-      .from("restaurant_tables")
-      .select("id", { count: "exact", head: true })
-      .eq("branch_id", id);
-    if (count && count > 0) throw new Error("La sucursal tiene mesas; elimínalas o muévelas primero");
     const { error } = await this.sb.from("branches").delete().eq("id", id);
-    if (error) throw error;
+    if (error) fail(error);
+  }
+  async getBranchQuota(): Promise<BranchQuota> {
+    const { data, error } = await this.sb.rpc("branch_quota", { p_tenant: this.tenantId });
+    if (error) fail(error);
+    const q = data as { plan: string; used: number; max: number | null; remaining: number | null };
+    return { plan: q.plan, used: q.used, max: q.max, remaining: q.remaining };
   }
 
   // ---- Personal ----
@@ -155,26 +195,18 @@ export class SupabaseRepo implements Repo {
     if (error) throw error;
   }
 
-  async getTables(branchId?: string | null): Promise<RestaurantTable[]> {
-    let q = this.sb.from("restaurant_tables").select("*").order("number");
-    if (branchId) q = q.eq("branch_id", branchId);
-    const { data, error } = await q;
-    if (error) throw error;
-    return (data ?? []).map(mapTable);
-  }
-
   async addTable(input: { zone: string; number: number; seats: number; branchId: string | null; count?: number }): Promise<void> {
     const count = Math.max(1, input.count ?? 1);
     const rows = Array.from({ length: count }, (_, i) => ({
       tenant_id: this.tenantId,
-      branch_id: input.branchId,
+      branch_id: input.branchId ?? undefined, // sin sucursal: la principal (trigger)
       zone: input.zone,
       number: input.number + i,
       seats: input.seats,
       status: "libre" as const,
     }));
     const { error } = await this.sb.from("restaurant_tables").insert(rows);
-    if (error) throw error;
+    if (error) fail(error.code === "23505" ? { message: "Ese número de mesa ya existe en la sucursal." } : error);
   }
 
   async updateTable(id: string, patch: Partial<{ zone: string; number: number; seats: number }>): Promise<void> {
@@ -189,239 +221,56 @@ export class SupabaseRepo implements Repo {
     if (error) throw error;
   }
 
-  async getOpenOrderForTable(tableId: string): Promise<Order | null> {
-    const { data, error } = await this.sb
-      .from("orders")
-      .select("*")
-      .eq("table_id", tableId)
-      .not("status", "in", "(cobrada,anulada)")
-      .order("opened_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) throw error;
-    if (!data) return null;
-    return this.hydrateOrder(data);
+  // ---- Operaciones del POS (una llamada por lote) ----
+  async snapshot(since: string | null): Promise<PosSnapshot> {
+    const { data, error } = await this.sb.rpc("pos_snapshot", { p_tenant: this.tenantId, p_since: since });
+    if (error) fail(error);
+    return mapSnapshot(data as SnapshotDto);
   }
 
-  private async hydrateOrder(o: Row<"orders">): Promise<Order> {
-    const [{ data: lines }, { data: table }] = await Promise.all([
-      this.sb.from("order_lines").select("*").eq("order_id", o.id).order("created_at"),
-      o.table_id
-        ? this.sb.from("restaurant_tables").select("*").eq("id", o.table_id).maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
-    return {
-      id: o.id,
-      tableId: o.table_id,
-      tableLabel: table ? String((table as Row<"restaurant_tables">).number) : "—",
-      seats: table ? (table as Row<"restaurant_tables">).seats : 2,
-      zone: table ? (table as Row<"restaurant_tables">).zone : "",
-      status: o.status,
-      openedAt: o.opened_at,
-      paidMethod: o.paid_method,
-      paidTotal: o.paid_total != null ? Number(o.paid_total) : null,
-      branchId: o.branch_id,
-      lines: (lines ?? []).map(mapLine),
-    };
-  }
-
-  async openOrder(tableId: string): Promise<Order> {
-    const existing = await this.getOpenOrderForTable(tableId);
-    if (existing) return existing;
-    const { data: tbl } = await this.sb.from("restaurant_tables").select("branch_id").eq("id", tableId).maybeSingle();
-    const { data, error } = await this.sb
-      .from("orders")
-      .insert({ tenant_id: this.tenantId, table_id: tableId, status: "abierta", branch_id: tbl?.branch_id ?? null })
-      .select("*")
-      .single();
-    if (error) throw error;
-    await this.sb.from("restaurant_tables").update({ status: "ocupada" }).eq("id", tableId);
-    return this.hydrateOrder(data);
-  }
-
-  async addLine(orderId: string, line: DraftLine): Promise<void> {
-    const { error } = await this.sb.from("order_lines").insert({
-      tenant_id: this.tenantId,
-      order_id: orderId,
-      menu_item_id: line.itemId,
-      name: line.name,
-      qty: line.qty,
-      unit_price: line.unitPrice,
-      extra_price: line.extraPrice,
-      modifiers: line.modifiers,
+  async apply(ops: PosOp[]): Promise<OpResult[]> {
+    const { data, error } = await this.sb.rpc("pos_apply", {
+      p_tenant: this.tenantId,
+      p_device: deviceLabel(),
+      p_ops: ops,
     });
-    if (error) throw error;
+    if (error) fail(error);
+    return data as OpResult[];
   }
 
-  async setLineQty(lineId: string, qty: number): Promise<void> {
-    if (qty <= 0) return this.removeLine(lineId);
-    const { error } = await this.sb.from("order_lines").update({ qty }).eq("id", lineId);
-    if (error) throw error;
+  async terminal(deviceId: string): Promise<TerminalInfo> {
+    const { data, error } = await this.sb.rpc("pos_terminal", { p_tenant: this.tenantId, p_device: deviceId });
+    if (error) fail(error);
+    const t = data as { serie_boleta: string; serie_factura: string; last_boleta: number; last_factura: number };
+    return { serieBoleta: t.serie_boleta, serieFactura: t.serie_factura, lastBoleta: t.last_boleta, lastFactura: t.last_factura };
   }
 
-  async removeLine(lineId: string): Promise<void> {
-    const { error } = await this.sb.from("order_lines").delete().eq("id", lineId);
-    if (error) throw error;
-  }
-
-  async clearOrder(orderId: string): Promise<void> {
-    const { error } = await this.sb.from("order_lines").delete().eq("order_id", orderId);
-    if (error) throw error;
-  }
-
-  async sendToKitchen(orderId: string): Promise<void> {
-    const order = await this.sb.from("orders").select("*").eq("id", orderId).single();
-    if (order.error) throw order.error;
-    const hydrated = await this.hydrateOrder(order.data);
-    if (hydrated.lines.length === 0) return;
-    const { data: ticket, error } = await this.sb
-      .from("kitchen_tickets")
-      .insert({
-        tenant_id: this.tenantId,
-        order_id: orderId,
-        table_label: `Mesa ${hydrated.tableLabel}`,
-        col: "nuevos",
-        branch_id: hydrated.branchId ?? null,
-      })
-      .select("id")
-      .single();
-    if (error) throw error;
-    await this.sb.from("ticket_lines").insert(
-      hydrated.lines.map((l) => ({ ticket_id: ticket.id, qty: l.qty, name: l.name })),
-    );
-    await this.sb.from("orders").update({ status: "en_cocina" }).eq("id", orderId);
-  }
-
-  async getKitchenTickets(branchId?: string | null): Promise<KitchenTicket[]> {
-    let q = this.sb.from("kitchen_tickets").select("*").neq("col", "entregado").order("entered_at");
+  /** Historial de ventas: pedidos + líneas + mesa en UNA consulta (antes, 2 por pedido). */
+  async getPaidOrders(branchId?: string | null): Promise<Order[]> {
+    let q = this.db
+      .from("orders")
+      .select("*, order_lines(*), restaurant_tables(number, seats, zone), delivery_orders(code)")
+      .eq("status", "cobrada")
+      .order("closed_at", { ascending: false })
+      .limit(500);
     if (branchId) q = q.eq("branch_id", branchId);
     const { data, error } = await q;
-    if (error) throw error;
-    const tickets = data ?? [];
-    const ids = tickets.map((t) => t.id);
-    const { data: lines } = ids.length
-      ? await this.sb.from("ticket_lines").select("*").in("ticket_id", ids)
-      : { data: [] as Row<"ticket_lines">[] };
-    return tickets.map((t) => ({
-      id: t.id,
-      orderId: t.order_id,
-      tableLabel: t.table_label,
-      col: t.col,
-      enteredAt: new Date(t.entered_at).getTime(),
-      note: t.note,
-      done: t.done,
-      branchId: t.branch_id,
-      lines: (lines ?? []).filter((l) => l.ticket_id === t.id).map((l) => ({ qty: l.qty, name: l.name })),
-    }));
+    if (error) fail(error);
+    return ((data ?? []) as PaidOrderRow[]).map(mapPaidOrder);
   }
 
   async getBranchSales(): Promise<BranchSales[]> {
-    const [{ data: branches }, { data: paid }] = await Promise.all([
-      this.sb.from("branches").select("*").order("name"),
-      this.sb.from("orders").select("branch_id, paid_total").eq("status", "cobrada").limit(2000),
+    const [{ data: branches, error }, { data: sales, error: sErr }] = await Promise.all([
+      this.sb.from("branches").select("id, name, city").order("name"),
+      this.sb.rpc("branch_sales", { p_tenant: this.tenantId }),
     ]);
-    const totals = new Map<string, { sales: number; orders: number }>();
-    for (const o of paid ?? []) {
-      if (!o.branch_id) continue;
-      const cur = totals.get(o.branch_id) ?? { sales: 0, orders: 0 };
-      cur.sales += Number(o.paid_total ?? 0);
-      cur.orders += 1;
-      totals.set(o.branch_id, cur);
-    }
+    if (error) fail(error);
+    if (sErr) fail(sErr);
+    const byBranch = new Map((sales ?? []).map((r) => [r.branch_id, r]));
     return (branches ?? []).map((b) => {
-      const t = totals.get(b.id) ?? { sales: 0, orders: 0 };
-      return { branchId: b.id, name: b.name, city: b.city, sales: Math.round(t.sales * 100) / 100, orders: t.orders };
+      const t = byBranch.get(b.id);
+      return { branchId: b.id, name: b.name, city: b.city, sales: Number(t?.sales ?? 0), orders: t?.orders ?? 0 };
     });
-  }
-
-  async advanceTicket(ticketId: string): Promise<void> {
-    const { data, error } = await this.sb
-      .from("kitchen_tickets")
-      .select("col")
-      .eq("id", ticketId)
-      .single();
-    if (error) throw error;
-    const order = ["nuevos", "preparacion", "listos", "entregado"] as const;
-    const idx = order.indexOf(data.col);
-    const next = order[Math.min(idx + 1, order.length - 1)];
-    const { error: uErr } = await this.sb
-      .from("kitchen_tickets")
-      .update({ col: next, entered_at: new Date().toISOString(), done: next === "listos" || next === "entregado" })
-      .eq("id", ticketId);
-    if (uErr) throw uErr;
-  }
-
-  async payOrder({ orderId, method, total, customerId, redeem = 0 }: PayInput): Promise<void> {
-    const { data: order } = await this.sb.from("orders").select("table_id").eq("id", orderId).single();
-    await this.deductInventory(orderId);
-
-    if (customerId) {
-      const { data: cust } = await this.sb
-        .from("customers")
-        .select("points, visits, spent")
-        .eq("id", customerId)
-        .maybeSingle();
-      if (cust) {
-        const due = Math.max(0, total - redeem);
-        const earned = Math.floor(due / 10);
-        await this.sb
-          .from("customers")
-          .update({
-            points: cust.points - redeem + earned,
-            visits: cust.visits + 1,
-            spent: Number(cust.spent) + due,
-          })
-          .eq("id", customerId);
-        await this.sb.from("loyalty_transactions").insert({
-          tenant_id: this.tenantId,
-          customer_id: customerId,
-          order_id: orderId,
-          points_delta: earned - redeem,
-        });
-      }
-    }
-
-    await this.sb
-      .from("orders")
-      .update({
-        status: "cobrada",
-        closed_at: new Date().toISOString(),
-        paid_method: method as "efectivo" | "tarjeta" | "transferencia",
-        paid_total: Math.max(0, total - redeem),
-      })
-      .eq("id", orderId);
-    if (order?.table_id) {
-      await this.sb.from("restaurant_tables").update({ status: "libre" }).eq("id", order.table_id);
-    }
-    await this.log(`Cobró pedido · ${method} · S/ ${total.toFixed(2)}`);
-  }
-
-  private async deductInventory(orderId: string): Promise<void> {
-    const { data: lines } = await this.sb
-      .from("order_lines")
-      .select("menu_item_id, qty")
-      .eq("order_id", orderId);
-    if (!lines || lines.length === 0) return;
-    const itemIds = [...new Set(lines.map((l) => l.menu_item_id).filter(Boolean))] as string[];
-    if (itemIds.length === 0) return;
-    const { data: recipes } = await this.sb
-      .from("recipes")
-      .select("menu_item_id, inventory_id, qty_per_unit")
-      .in("menu_item_id", itemIds);
-    if (!recipes || recipes.length === 0) return;
-
-    const need = new Map<string, number>();
-    for (const line of lines) {
-      for (const r of recipes.filter((x) => x.menu_item_id === line.menu_item_id)) {
-        need.set(r.inventory_id, (need.get(r.inventory_id) ?? 0) + Number(r.qty_per_unit) * line.qty);
-      }
-    }
-    for (const [invId, qty] of need) {
-      const { data: inv } = await this.sb.from("inventory_items").select("stock").eq("id", invId).maybeSingle();
-      if (inv) {
-        await this.sb.from("inventory_items").update({ stock: Math.max(0, Number(inv.stock) - qty) }).eq("id", invId);
-      }
-    }
   }
 
   async setMenuPrice(itemId: string, price: number): Promise<void> {
@@ -431,62 +280,6 @@ export class SupabaseRepo implements Repo {
   async setMenuAvailable(itemId: string, available: boolean): Promise<void> {
     const { error } = await this.sb.from("menu_items").update({ available }).eq("id", itemId);
     if (error) throw error;
-  }
-
-  async getOpenOrders(branchId?: string | null): Promise<Order[]> {
-    let q = this.sb.from("orders").select("*").not("status", "in", "(cobrada,anulada)").order("opened_at");
-    if (branchId) q = q.eq("branch_id", branchId);
-    const { data, error } = await q;
-    if (error) throw error;
-    return Promise.all((data ?? []).map((o) => this.hydrateOrder(o)));
-  }
-
-  async getPaidOrders(branchId?: string | null): Promise<Order[]> {
-    let q = this.sb.from("orders").select("*").eq("status", "cobrada").order("closed_at", { ascending: false }).limit(200);
-    if (branchId) q = q.eq("branch_id", branchId);
-    const { data, error } = await q;
-    if (error) throw error;
-    return Promise.all((data ?? []).map((o) => this.hydrateOrder(o)));
-  }
-
-  async voidLine(lineId: string, reason: string, actor: string): Promise<void> {
-    const { data: line } = await this.sb
-      .from("order_lines")
-      .select("name, order_id")
-      .eq("id", lineId)
-      .maybeSingle();
-    await this.sb.from("order_lines").delete().eq("id", lineId);
-    if (line) {
-      await this.sb.from("void_events").insert({
-        tenant_id: this.tenantId,
-        order_id: line.order_id,
-        line_name: line.name,
-        reason,
-      });
-      await this.log(`${actor} anuló ${line.name} · ${reason}`);
-    }
-  }
-
-  async transferOrder(orderId: string, toTableId: string): Promise<void> {
-    const { data: order } = await this.sb.from("orders").select("table_id").eq("id", orderId).single();
-    await this.sb.from("orders").update({ table_id: toTableId }).eq("id", orderId);
-    await this.sb.from("restaurant_tables").update({ status: "ocupada" }).eq("id", toTableId);
-    if (order?.table_id) {
-      await this.sb.from("restaurant_tables").update({ status: "libre" }).eq("id", order.table_id);
-    }
-    await this.log(`Transfirió pedido a otra mesa`);
-  }
-
-  async mergeOrder(orderId: string, intoTableId: string): Promise<void> {
-    const target = await this.getOpenOrderForTable(intoTableId);
-    const { data: order } = await this.sb.from("orders").select("table_id").eq("id", orderId).single();
-    if (!target) return;
-    await this.sb.from("order_lines").update({ order_id: target.id }).eq("order_id", orderId);
-    await this.sb.from("orders").update({ status: "anulada" }).eq("id", orderId);
-    if (order?.table_id) {
-      await this.sb.from("restaurant_tables").update({ status: "libre" }).eq("id", order.table_id);
-    }
-    await this.log(`Unió pedidos de mesa`);
   }
 
   async getCustomers(): Promise<Customer[]> {
@@ -503,14 +296,23 @@ export class SupabaseRepo implements Repo {
     }));
   }
 
-  async getInventory(): Promise<InventoryItem[]> {
-    const { data, error } = await this.sb.from("inventory_items").select("*").order("name");
-    if (error) throw error;
-    return (data ?? []).map((i) => ({
+  /** Catálogo + stock de la sucursal (o la suma de todas). */
+  async getInventory(branchId?: string | null): Promise<InventoryItem[]> {
+    let sq = this.sb.from("inventory_stock").select("item_id, qty");
+    if (branchId) sq = sq.eq("branch_id", branchId);
+    const [{ data: items, error }, { data: stock, error: sErr }] = await Promise.all([
+      this.sb.from("inventory_items").select("id, name, unit, par, cost").eq("active", true).order("name"),
+      sq,
+    ]);
+    if (error) fail(error);
+    if (sErr) fail(sErr);
+    const qty = new Map<string, number>();
+    for (const s of stock ?? []) qty.set(s.item_id, (qty.get(s.item_id) ?? 0) + Number(s.qty));
+    return (items ?? []).map((i) => ({
       id: i.id,
       name: i.name,
       unit: i.unit,
-      stock: Number(i.stock),
+      stock: Math.round((qty.get(i.id) ?? 0) * 1000) / 1000,
       par: Number(i.par),
       cost: i.cost != null ? Number(i.cost) : undefined,
     }));
@@ -541,13 +343,6 @@ export class SupabaseRepo implements Repo {
     }
   }
 
-  async adjustInventory(itemId: string, delta: number, actor: string): Promise<void> {
-    const { data: inv } = await this.sb.from("inventory_items").select("stock, name").eq("id", itemId).maybeSingle();
-    if (!inv) return;
-    await this.sb.from("inventory_items").update({ stock: Math.max(0, Number(inv.stock) + delta) }).eq("id", itemId);
-    await this.log(`${actor} ajustó ${inv.name} (${delta > 0 ? "+" : ""}${delta})`);
-  }
-
   async getMenuChanges(): Promise<MenuChange[]> {
     const { data, error } = await this.sb.from("menu_change_requests").select("*").order("created_at");
     if (error) throw error;
@@ -567,28 +362,20 @@ export class SupabaseRepo implements Repo {
     await this.log(`${actor} ${approve ? "aprobó" : "rechazó"} un cambio de carta`);
   }
 
-  async getOnlineOrders(): Promise<OnlineOrder[]> {
-    const { data, error } = await this.sb.from("online_orders").select("*").order("created_at");
-    if (error) throw error;
-    return (data ?? []).map((o) => ({
-      id: o.id,
-      channel: o.channel,
-      name: o.customer_name,
-      items: o.items,
-      total: Number(o.total),
-      eta: o.eta,
-      status: o.status,
-    }));
-  }
-
   async getComprobantes(): Promise<Comprobante[]> {
-    const { data, error } = await this.sb
+    const { data, error } = await this.db
       .from("comprobantes")
-      .select("*")
+      .select(CPE_COLS)
       .order("issued_at", { ascending: false })
       .limit(100);
-    if (error) throw error;
-    return (data ?? []).map(mapComprobante);
+    if (error) fail(error);
+    return ((data ?? []) as Row<"comprobantes">[]).map(mapComprobante);
+  }
+
+  async getComprobanteDocs(id: string): Promise<{ signedXml: string | null; cdr: string | null }> {
+    const { data, error } = await this.sb.from("comprobantes").select("signed_xml, cdr").eq("id", id).maybeSingle();
+    if (error) fail(error);
+    return { signedXml: data?.signed_xml ?? null, cdr: data?.cdr ?? null };
   }
 
   /**
@@ -655,54 +442,6 @@ export class SupabaseRepo implements Repo {
       new_cdr: null,
     });
     return { ...cpe, status: "encola", error: decision.error };
-  }
-
-  async emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante> {
-    // Idempotencia: si el mismo pedido ya tiene un comprobante de ese tipo no
-    // rechazado, no emitas otro (evita duplicados por doble clic / reintento).
-    if (input.orderId) {
-      const { data: existing } = await this.sb
-        .from("comprobantes")
-        .select("*")
-        .eq("order_id", input.orderId)
-        .eq("tipo", input.tipo)
-        .neq("status", "rechazada")
-        .order("issued_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (existing) return mapComprobante(existing);
-    }
-    const { data: folio, error: folioErr } = await this.sb.rpc("next_folio", {
-      tid: this.tenantId,
-      p_serie: input.tipo === "Factura" ? "F001" : "B001",
-    });
-    if (folioErr) throw folioErr;
-    const { data, error } = await this.sb
-      .from("comprobantes")
-      .insert({
-        tenant_id: this.tenantId,
-        order_id: input.orderId ?? null,
-        folio,
-        tipo: input.tipo,
-        buyer_ruc: input.buyerRuc ?? null,
-        buyer_name: input.buyerName ?? null,
-        subtotal: input.subtotal,
-        igv: input.igv,
-        total: input.total,
-        reference: input.reference,
-        status: online ? "enviando" : "encola",
-      })
-      .select("*")
-      .single();
-    if (error) throw error;
-    let cpe = mapComprobante(data);
-    if (online) {
-      cpe = await this.settleEmission(cpe, await this.sunat.submit(cpe));
-    } else {
-      await this.sb.from("sunat_outbox").insert({ tenant_id: this.tenantId, comprobante_id: cpe.id });
-    }
-    await this.log(`Emitió ${input.tipo} ${folio} · ${cpe.status}`);
-    return cpe;
   }
 
   async emitNotaCredito(originalId: string, motivo: string, online: boolean): Promise<Comprobante> {
@@ -838,8 +577,8 @@ export class SupabaseRepo implements Repo {
 
   async syncSunat(online: boolean): Promise<number> {
     if (!online) return 0;
-    const { data: queued } = await this.sb.from("comprobantes").select("*").eq("status", "encola");
-    const rows = queued ?? [];
+    const { data: queued } = await this.db.from("comprobantes").select(CPE_COLS).eq("status", "encola");
+    const rows = (queued ?? []) as Row<"comprobantes">[];
     if (!rows.length) return 0;
     // Respeta el backoff: no reenvíes los que aún no toca (next_attempt_at futuro).
     const now = new Date().toISOString();
@@ -862,9 +601,9 @@ export class SupabaseRepo implements Repo {
 
   async retryComprobante(id: string, online: boolean): Promise<void> {
     if (!online) return;
-    const { data } = await this.sb.from("comprobantes").select("*").eq("id", id).maybeSingle();
+    const { data } = await this.db.from("comprobantes").select(CPE_COLS).eq("id", id).maybeSingle();
     if (!data) return;
-    const cpe = mapComprobante(data);
+    const cpe = mapComprobante(data as Row<"comprobantes">);
     if (cpe.status === "aceptada") return; // ya aceptado: idempotente, nada que reenviar
     await this.settleEmission(cpe, await this.sunat.submit(cpe));
   }
@@ -1090,12 +829,14 @@ export class SupabaseRepo implements Repo {
   }
 
   async getSubscription(): Promise<Subscription> {
-    const [{ data: t }, { data: plans }] = await Promise.all([
-      this.sb.from("tenants").select("plan, mrr, status").eq("id", this.tenantId).maybeSingle(),
-      this.sb.from("subscription_plans").select("tier, price"),
-    ]);
-    const price = (plans ?? []).find((p) => p.tier === t?.plan)?.price;
-    return { plan: t?.plan ?? "Pro", price: Number(price ?? t?.mrr ?? 0), status: t?.status ?? "Activo" };
+    const { data, error } = await this.sb
+      .from("v_tenants")
+      .select("plan, status")
+      .eq("id", this.tenantId)
+      .maybeSingle();
+    if (error) fail(error);
+    const { data: plan } = await this.sb.from("subscription_plans").select("price").eq("tier", data?.plan ?? "Pro").maybeSingle();
+    return { plan: data?.plan ?? "Pro", price: Number(plan?.price ?? 0), status: data?.status ?? "Activo" };
   }
   async getMyPlanRequest(): Promise<MyPlanRequest | null> {
     const { data } = await this.sb
@@ -1212,149 +953,30 @@ export class SupabaseRepo implements Repo {
     if (error) throw error;
   }
 
-  private mapDelivery(r: Row<"delivery_orders">, drivers: Map<string, string>): DeliveryOrder {
-    return {
-      id: r.id,
-      code: r.code,
-      trackingToken: r.tracking_token,
-      channel: r.channel as DeliveryChannel,
-      customerName: r.customer_name,
-      customerPhone: r.customer_phone,
-      address: r.address,
-      reference: r.reference,
-      zoneId: r.zone_id,
-      zoneName: r.zone_name,
-      items: (r.items ?? []).map((i) => ({ name: i.name, qty: Number(i.qty), price: Number(i.price) })),
-      subtotal: Number(r.subtotal),
-      fee: Number(r.fee),
-      total: Number(r.total),
-      payMethod: r.pay_method as DeliveryPay,
-      cashFor: r.cash_for == null ? null : Number(r.cash_for),
-      status: r.status,
-      driverId: r.driver_id,
-      driverName: r.driver_id ? drivers.get(r.driver_id) ?? null : null,
-      notes: r.notes,
-      cancelReason: r.cancel_reason,
-      etaMin: r.eta_min,
-      branchId: r.branch_id,
-      createdAt: r.created_at,
-      acceptedAt: r.accepted_at,
-      readyAt: r.ready_at,
-      dispatchedAt: r.dispatched_at,
-      deliveredAt: r.delivered_at,
-      cancelledAt: r.cancelled_at,
-    };
-  }
-
-  async getDeliveryOrders(): Promise<DeliveryOrder[]> {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const [{ data, error }, drivers] = await Promise.all([
-      this.sb
-        .from("delivery_orders")
-        .select("*")
-        // Activos (de cualquier día) + todo lo de hoy.
-        .or(`status.in.(recibido,preparando,listo,en_camino),created_at.gte."${startOfDay.toISOString()}"`)
-        .order("created_at", { ascending: false })
-        .limit(300),
-      this.getDrivers(),
-    ]);
-    if (error) throw error;
-    const names = new Map(drivers.map((d) => [d.id, d.name]));
-    return (data ?? []).map((r) => this.mapDelivery(r, names));
-  }
-
-  async createDeliveryOrder(input: NewDeliveryInput): Promise<DeliveryOrder> {
-    const zones = await this.getDeliveryZones();
-    const err = validateNewDelivery(input, zones);
-    if (err) throw new Error(err);
-    const zone = isAggregator(input.channel) ? undefined : zones.find((z) => z.id === input.zoneId);
-    const totals = deliveryTotals(input.items, zone?.fee ?? 0);
-    const { data, error } = await this.sb
-      .from("delivery_orders")
-      .insert({
-        tenant_id: this.tenantId,
-        branch_id: input.branchId ?? null,
-        channel: input.channel,
-        customer_name: input.customerName.trim(),
-        customer_phone: input.customerPhone.replace(/\D/g, "").slice(-9),
-        address: input.address.trim(),
-        reference: input.reference.trim(),
-        zone_id: zone?.id ?? null,
-        zone_name: zone?.name ?? "",
-        items: input.items,
-        subtotal: totals.subtotal,
-        fee: totals.fee,
-        total: totals.total,
-        pay_method: input.payMethod,
-        cash_for: input.payMethod === "efectivo" ? input.cashFor : null,
-        notes: input.notes.trim(),
-        eta_min: zone?.etaMin ?? 30,
-      })
-      .select("*")
-      .single();
-    if (error) throw error;
-    await this.log(`Nuevo delivery ${data.code} (${data.channel}) · S/ ${Number(data.total).toFixed(2)}`);
-    return this.mapDelivery(data, new Map());
-  }
-
-  async setDeliveryStatus(
-    id: string,
-    to: DeliveryStatus,
-    opts: { driverId?: string | null; cancelReason?: string } = {},
-  ): Promise<void> {
-    const { data: r, error } = await this.sb.from("delivery_orders").select("*").eq("id", id).single();
-    if (error) throw error;
-    const current = this.mapDelivery(r, new Map());
-    const patch = transitionPatch(current, to, opts, new Date().toISOString());
-    if (patch.driverId) {
-      const { data: drv } = await this.sb.from("delivery_drivers").select("active").eq("id", patch.driverId).maybeSingle();
-      if (!drv?.active) throw new Error("Ese repartidor no está disponible.");
-    }
-    const row: Database["public"]["Tables"]["delivery_orders"]["Update"] = { status: to };
-    if (patch.acceptedAt) row.accepted_at = patch.acceptedAt;
-    if (patch.readyAt) row.ready_at = patch.readyAt;
-    if (patch.dispatchedAt) row.dispatched_at = patch.dispatchedAt;
-    if (patch.deliveredAt) row.delivered_at = patch.deliveredAt;
-    if (patch.cancelledAt) row.cancelled_at = patch.cancelledAt;
-    if (patch.cancelReason) row.cancel_reason = patch.cancelReason;
-    if (patch.driverId !== undefined) row.driver_id = patch.driverId;
-    // Guarda contra carreras: solo actualiza si nadie lo movió mientras tanto.
-    const upd = await this.sb.from("delivery_orders").update(row).eq("id", id).eq("status", current.status).select("id");
-    if (upd.error) throw upd.error;
-    if (!upd.data?.length) throw new Error("Otro usuario ya actualizó este pedido. Refresca el tablero.");
-
-    const label = kitchenLabel(current.code);
-    if (to === "preparando") {
-      const { data: ticket, error: tErr } = await this.sb
-        .from("kitchen_tickets")
-        .insert({ tenant_id: this.tenantId, order_id: null, table_label: label, col: "nuevos", note: current.notes, branch_id: current.branchId })
-        .select("id")
-        .single();
-      if (tErr) throw tErr;
-      await this.sb.from("ticket_lines").insert(current.items.map((i) => ({ ticket_id: ticket.id, qty: i.qty, name: i.name })));
-    }
-    if (to === "cancelado") {
-      await this.sb.from("kitchen_tickets").delete().eq("table_label", label).neq("col", "entregado");
-    }
-    await this.log(`${current.code} → ${to}${patch.cancelReason ? ` (${patch.cancelReason})` : ""}`);
-  }
-
   private async log(message: string): Promise<void> {
     await this.sb.from("activity_log").insert({ tenant_id: this.tenantId, actor: "POS", message });
   }
 
-  subscribe(cb: () => void): () => void {
-    const channel = this.sb
-      .channel(`pos-${this.tenantId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "kitchen_tickets" }, cb)
-      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, cb)
-      .on("postgres_changes", { event: "*", schema: "public", table: "restaurant_tables" }, cb)
-      .on("postgres_changes", { event: "*", schema: "public", table: "delivery_orders" }, cb)
-      .subscribe();
+  /**
+   * Cambios de otros dispositivos. Filtrado por tenant: sin filtro, cada
+   * cliente recibiría (y el servidor autorizaría) eventos de TODOS los tenants.
+   * Las tablas están en la publicación supabase_realtime (0031).
+   */
+  onRemoteChange(cb: () => void): () => void {
+    const filter = `tenant_id=eq.${this.tenantId}`;
+    const channel = this.sb.channel(`pos-${this.tenantId}`);
+    for (const table of ["orders", "kitchen_tickets", "restaurant_tables", "delivery_orders"]) {
+      channel.on("postgres_changes", { event: "*", schema: "public", table, filter }, cb);
+    }
+    channel.subscribe();
     return () => {
       void this.sb.removeChannel(channel);
     };
+  }
+
+  /** Cliente sin tipos para consultas con recursos embebidos. */
+  private get db(): SupabaseClient {
+    return this.sb as unknown as SupabaseClient;
   }
 }
 
@@ -1391,8 +1013,181 @@ function mapItem(r: Row<"menu_items">): MenuItem {
     sort: r.sort,
   };
 }
-function mapTable(r: Row<"restaurant_tables">): RestaurantTable {
-  return { id: r.id, zone: r.zone, number: r.number, seats: r.seats, status: r.status, waiterId: r.waiter_id, branchId: r.branch_id };
+function deviceLabel(): string {
+  try {
+    return localStorage.getItem("wayra-device-id") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// ---- Estado operativo (pos_snapshot) → modelo de la app ----
+interface SnapshotDto {
+  server_time: string;
+  full: boolean;
+  table_ids: string[] | null;
+  tables: { id: string; zone: string; number: number; seats: number; status: RestaurantTable["status"]; waiter_id: string | null; branch_id: string }[];
+  orders: {
+    id: string;
+    table_id: string | null;
+    table_number: number | null;
+    seats: number | null;
+    zone: string | null;
+    kind: Order["kind"];
+    status: Order["status"];
+    opened_at: string;
+    closed_at: string | null;
+    paid_method: string | null;
+    paid_total: number | null;
+    branch_id: string;
+    customer_id: string | null;
+    lines: {
+      id: string;
+      item_id: string | null;
+      name: string;
+      qty: number;
+      unit_price: number;
+      extra_price: number;
+      modifiers: string;
+      split_payer: number | null;
+      sent_qty: number;
+    }[];
+  }[];
+  tickets: {
+    id: string;
+    order_id: string | null;
+    table_label: string;
+    col: KitchenTicket["col"];
+    entered_at: string;
+    note: string;
+    done: boolean;
+    branch_id: string;
+    lines: { qty: number; name: string }[];
+  }[];
+  deliveries: (Omit<Row<"delivery_orders">, "updated_at"> & {
+    branch_id: string;
+    items: { name: string; qty: number; price: number }[];
+    subtotal: number;
+    total: number;
+    driver_name: string | null;
+    created_at: string;
+  })[];
+}
+
+export function mapSnapshot(d: SnapshotDto): PosSnapshot {
+  return {
+    serverTime: d.server_time,
+    full: d.full,
+    tableIds: d.table_ids,
+    tables: d.tables.map((t) => ({
+      id: t.id,
+      zone: t.zone,
+      number: t.number,
+      seats: t.seats,
+      status: t.status,
+      waiterId: t.waiter_id,
+      branchId: t.branch_id,
+    })),
+    orders: d.orders.map((o) => ({
+      id: o.id,
+      tableId: o.table_id,
+      tableLabel: o.table_number != null ? String(o.table_number) : "—",
+      seats: o.seats ?? 2,
+      zone: o.zone ?? "",
+      kind: o.kind,
+      status: o.status,
+      openedAt: o.opened_at,
+      closedAt: o.closed_at,
+      paidMethod: o.paid_method,
+      paidTotal: o.paid_total != null ? Number(o.paid_total) : null,
+      branchId: o.branch_id,
+      customerId: o.customer_id,
+      lines: o.lines.map((l) => ({
+        id: l.id,
+        orderId: o.id,
+        itemId: l.item_id,
+        name: l.name,
+        qty: l.qty,
+        unitPrice: Number(l.unit_price),
+        extraPrice: Number(l.extra_price),
+        modifiers: l.modifiers,
+        splitPayer: l.split_payer,
+        sentQty: l.sent_qty,
+      })),
+    })),
+    tickets: d.tickets.map((k) => ({
+      id: k.id,
+      orderId: k.order_id,
+      tableLabel: k.table_label,
+      col: k.col,
+      enteredAt: new Date(k.entered_at).getTime(),
+      note: k.note,
+      done: k.done,
+      branchId: k.branch_id,
+      lines: k.lines,
+    })),
+    deliveries: d.deliveries.map(mapDelivery),
+  };
+}
+
+function mapDelivery(r: SnapshotDto["deliveries"][number]): DeliveryOrder {
+  return {
+    id: r.id,
+    code: r.code,
+    trackingToken: r.tracking_token,
+    channel: r.channel as DeliveryChannel,
+    customerName: r.customer_name,
+    customerPhone: r.customer_phone,
+    address: r.address,
+    reference: r.reference,
+    zoneId: r.zone_id,
+    zoneName: r.zone_name,
+    items: (r.items ?? []).map((i) => ({ name: i.name, qty: Number(i.qty), price: Number(i.price) })),
+    subtotal: Number(r.subtotal),
+    fee: Number(r.fee),
+    total: Number(r.total),
+    payMethod: r.pay_method as DeliveryPay,
+    cashFor: r.cash_for == null ? null : Number(r.cash_for),
+    status: r.status,
+    driverId: r.driver_id,
+    driverName: r.driver_name,
+    notes: r.notes,
+    cancelReason: r.cancel_reason,
+    etaMin: r.eta_min,
+    branchId: r.branch_id,
+    createdAt: r.created_at,
+    acceptedAt: r.accepted_at,
+    readyAt: r.ready_at,
+    dispatchedAt: r.dispatched_at,
+    deliveredAt: r.delivered_at,
+    cancelledAt: r.cancelled_at,
+  };
+}
+
+type PaidOrderRow = Row<"orders"> & {
+  order_lines: Row<"order_lines">[];
+  restaurant_tables: Pick<Row<"restaurant_tables">, "number" | "seats" | "zone"> | null;
+  delivery_orders: { code: string } | null;
+};
+
+function mapPaidOrder(o: PaidOrderRow): Order {
+  const t = o.restaurant_tables;
+  return {
+    id: o.id,
+    tableId: o.table_id,
+    tableLabel: t ? String(t.number) : o.delivery_orders?.code ?? "—",
+    seats: t?.seats ?? 0,
+    zone: t?.zone ?? (o.kind === "delivery" ? "Delivery" : ""),
+    kind: o.kind,
+    status: o.status,
+    openedAt: o.opened_at,
+    closedAt: o.closed_at,
+    paidMethod: o.paid_method,
+    paidTotal: o.paid_total != null ? Number(o.paid_total) : null,
+    branchId: o.branch_id,
+    customerId: o.customer_id,
+    lines: [...(o.order_lines ?? [])].sort((a, b) => (a.created_at < b.created_at ? -1 : 1)).map(mapLine),
+  };
 }
 function mapComprobante(r: Row<"comprobantes">): Comprobante {
   return {
@@ -1410,8 +1205,8 @@ function mapComprobante(r: Row<"comprobantes">): Comprobante {
     issuedAt: r.issued_at,
     refFolio: r.ref_folio,
     motivo: r.motivo,
-    signedXml: r.signed_xml,
-    cdr: r.cdr,
+    signedXml: r.signed_xml ?? null,
+    cdr: r.cdr ?? null,
   };
 }
 function mapLine(r: Row<"order_lines">): OrderLine {
@@ -1425,5 +1220,6 @@ function mapLine(r: Row<"order_lines">): OrderLine {
     extraPrice: Number(r.extra_price),
     modifiers: r.modifiers,
     splitPayer: r.split_payer,
+    sentQty: r.sent_qty,
   };
 }

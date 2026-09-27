@@ -40,10 +40,27 @@ export interface ModifierPref {
   name: string;
 }
 
+/**
+ * Sucursal. Forman un árbol: la sede principal (parentId null) es la raíz y
+ * las sucursales cuelgan de ella (o de otra sucursal, p. ej. por zona).
+ */
 export interface Branch {
   id: string;
   name: string;
   city: string;
+  parentId?: string | null;
+  active?: boolean;
+  address?: string;
+  phone?: string;
+}
+
+/** Uso de la cuota de sucursales del plan (sin contar la sede principal). */
+export interface BranchQuota {
+  plan: string;
+  used: number;
+  /** null = sin límite */
+  max: number | null;
+  remaining: number | null;
 }
 
 export type StaffRole = "dueno" | "admin" | "mesero";
@@ -76,6 +93,8 @@ export interface OrderLine {
   extraPrice: number;
   modifiers: string;
   splitPayer: number | null;
+  /** Unidades ya enviadas a cocina (la siguiente comanda solo lleva lo nuevo). */
+  sentQty?: number;
 }
 
 export interface Order {
@@ -90,6 +109,9 @@ export interface Order {
   paidMethod?: string | null;
   paidTotal?: number | null;
   branchId?: string | null;
+  kind?: "mesa" | "llevar" | "delivery";
+  closedAt?: string | null;
+  customerId?: string | null;
 }
 
 export interface TicketLine {
@@ -297,16 +319,6 @@ export interface MenuChange {
   itemName: string;
   detail: string;
   status: MenuChangeStatus;
-}
-
-export interface OnlineOrder {
-  id: string;
-  channel: string;
-  name: string;
-  items: string;
-  total: number;
-  eta: string;
-  status: string;
 }
 
 // ---- Delivery ----

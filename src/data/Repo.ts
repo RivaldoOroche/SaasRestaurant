@@ -5,6 +5,7 @@ import type {
   ModifierPref,
   RestaurantTable,
   Branch,
+  BranchQuota,
   BranchSales,
   StaffMember,
   StaffRole,
@@ -16,7 +17,6 @@ import type {
   LogEntry,
   BusinessSettings,
   MenuChange,
-  OnlineOrder,
   PayExtras,
   Comprobante,
   EmitComprobanteInput,
@@ -37,6 +37,25 @@ import type {
   DeliveryStatus,
   NewDeliveryInput,
 } from "./model";
+import type { PosBackend, SyncStatus } from "./sync/engine";
+
+/** Datos para crear/editar una sucursal (nodo del árbol). */
+export interface BranchInput {
+  name: string;
+  city: string;
+  /** Padre en el árbol; por defecto, la sede principal. */
+  parentId?: string | null;
+  address?: string;
+  phone?: string;
+}
+
+/** Caja/terminal del dispositivo: serie SUNAT propia para numerar sin conexión. */
+export interface TerminalInfo {
+  serieBoleta: string;
+  serieFactura: string;
+  lastBoleta: number;
+  lastFactura: number;
+}
 
 export interface PayInput extends PayExtras {
   orderId: string;
@@ -45,9 +64,9 @@ export interface PayInput extends PayExtras {
 }
 
 /**
- * Data access contract. Two implementations: MockRepo (in-browser, for demo /
- * offline UI work) and SupabaseRepo (real backend). The UI only ever talks to
- * this interface, so screens don't care which is active.
+ * Contrato de datos que usa la UI. Lo arma `createRepo` (sync/PosService):
+ * operaciones del salón offline-first sobre un backend (MockRepo en el modo
+ * demo, SupabaseRepo en producción). Las pantallas no saben cuál está activo.
  */
 export interface Repo {
   // Menu
@@ -59,10 +78,13 @@ export interface Repo {
   setMenuAvailable(itemId: string, available: boolean): Promise<void>;
 
   // Sucursales
+  /** Árbol completo: la sede principal (parentId null) y sus sucursales, activas o no. */
   getBranches(): Promise<Branch[]>;
-  addBranch(name: string, city: string): Promise<void>;
-  updateBranch(id: string, patch: Partial<{ name: string; city: string }>): Promise<void>;
+  addBranch(input: BranchInput): Promise<void>;
+  updateBranch(id: string, patch: Partial<BranchInput & { active: boolean }>): Promise<void>;
   removeBranch(id: string): Promise<void>;
+  /** Cuánto del límite de sucursales del plan está en uso. */
+  getBranchQuota(): Promise<BranchQuota>;
 
   // Personal (staff_members)
   getStaff(): Promise<StaffMember[]>;
@@ -103,8 +125,9 @@ export interface Repo {
   getCustomers(): Promise<Customer[]>;
 
   // Inventory
-  getInventory(): Promise<InventoryItem[]>;
-  adjustInventory(itemId: string, delta: number, actor: string): Promise<void>;
+  /** Stock de una sucursal (o la suma de todas con null). */
+  getInventory(branchId?: string | null): Promise<InventoryItem[]>;
+  adjustInventory(itemId: string, delta: number, actor: string, branchId?: string | null): Promise<void>;
   /** Recetas: menú item id -> insumos consumidos por unidad. */
   getRecipes(): Promise<Record<string, { inventoryId: string; qtyPerUnit: number }[]>>;
   /** Define/reemplaza la receta de un platillo. */
@@ -114,12 +137,13 @@ export interface Repo {
   getMenuChanges(): Promise<MenuChange[]>;
   reviewChange(id: string, approve: boolean, actor: string): Promise<void>;
 
-  // Online orders
-  getOnlineOrders(): Promise<OnlineOrder[]>;
-
   // Fiscal (SUNAT)
+  /** Lista liviana (sin XML ni CDR). */
   getComprobantes(): Promise<Comprobante[]>;
-  emitComprobante(input: EmitComprobanteInput, online: boolean): Promise<Comprobante>;
+  /** XML firmado y CDR de un comprobante (se piden al abrir el detalle). */
+  getComprobanteDocs(id: string): Promise<{ signedXml: string | null; cdr: string | null }>;
+  /** Con o sin conexión: numera con la serie de la caja y envía a SUNAT cuando hay red. */
+  emitComprobante(input: EmitComprobanteInput, online?: boolean): Promise<Comprobante>;
   /** Emite una nota de crédito que anula un comprobante ya emitido. */
   emitNotaCredito(originalId: string, motivo: string, online: boolean): Promise<Comprobante>;
   syncSunat(online: boolean): Promise<number>;
@@ -191,6 +215,58 @@ export interface Repo {
   /** Elimina una suscripción push por su endpoint. */
   removePushSubscription(endpoint: string): Promise<void>;
 
-  /** Subscribe to changes (kitchen + orders + tables). Returns an unsubscribe fn. */
-  subscribe(cb: () => void): () => void;
+  /**
+   * Avisa cambios: "view" = cambió el estado operativo local (mesas, pedidos,
+   * cocina, delivery); "synced" = el servidor confirmó cambios (refrescar
+   * reportes, caja, inventario, comprobantes). Devuelve la función para salir.
+   */
+  subscribe(cb: (reason: "view" | "synced") => void): () => void;
+
+  // Sincronización offline
+  syncStatus(): SyncStatus;
+  onSyncStatus(cb: () => void): () => void;
+  /** Descarta operaciones rechazadas por el servidor (ya revisadas). */
+  dismissRejected(opId?: string): void;
+  /** Fuerza el envío de la cola y una lectura del servidor. */
+  syncNow(): Promise<void>;
+}
+
+/**
+ * Métodos operativos: los implementa PosService sobre el motor de
+ * sincronización (funcionan sin conexión), no cada backend.
+ */
+export type PosMethod =
+  | "getTables"
+  | "getOpenOrders"
+  | "getOpenOrderForTable"
+  | "openOrder"
+  | "addLine"
+  | "setLineQty"
+  | "removeLine"
+  | "voidLine"
+  | "clearOrder"
+  | "transferOrder"
+  | "mergeOrder"
+  | "sendToKitchen"
+  | "payOrder"
+  | "getKitchenTickets"
+  | "advanceTicket"
+  | "getDeliveryOrders"
+  | "createDeliveryOrder"
+  | "setDeliveryStatus"
+  | "adjustInventory"
+  | "emitComprobante"
+  | "subscribe"
+  | "syncStatus"
+  | "onSyncStatus"
+  | "dismissRejected"
+  | "syncNow";
+
+/** Lo que aporta cada backend (demo o Supabase): datos administrativos + operaciones. */
+export interface BackendRepo extends Omit<Repo, PosMethod>, PosBackend {
+  terminal(deviceId: string): Promise<TerminalInfo>;
+  /** Cambios hechos por otros dispositivos (Realtime). */
+  onRemoteChange(cb: () => void): () => void;
+  /** true si las lecturas deben guardarse para abrir la app sin conexión. */
+  readonly remote: boolean;
 }

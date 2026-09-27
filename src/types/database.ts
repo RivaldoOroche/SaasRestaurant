@@ -12,19 +12,20 @@ export type KdsColumn = "nuevos" | "preparacion" | "listos" | "entregado";
 export type ComprobanteTipo = "Boleta" | "Factura" | "NotaCredito";
 export type SunatStatus = "encola" | "enviando" | "aceptada" | "rechazada";
 export type CurrencyCode = "PEN" | "USD" | "EUR";
-export type PayMethod = "efectivo" | "tarjeta" | "transferencia" | "yape" | "plin";
+export type PayMethod = "efectivo" | "tarjeta" | "transferencia" | "yape" | "plin" | "app";
+export type OrderKind = "mesa" | "llevar" | "delivery";
 
 type Timestamps = { created_at: string };
 
 export interface Tables {
   tenants: {
-    Row: { id: string; name: string; slug: string; owner_name: string; plan: PlanTier; mrr: number; status: TenantStatus; since: string } & Timestamps;
+    Row: { id: string; name: string; slug: string; owner_name: string; plan: PlanTier; status: TenantStatus; since: string } & Timestamps;
   };
   memberships: {
     Row: { id: string; user_id: string; tenant_id: string | null; role: AppRole } & Timestamps;
   };
   subscription_plans: {
-    Row: { id: string; tier: PlanTier; price: number; features: string } & Timestamps;
+    Row: { id: string; tier: PlanTier; price: number; features: string; max_branches: number | null } & Timestamps;
   };
   saas_invoices: {
     Row: { id: string; tenant_id: string; folio: string; amount: number; igv: number; method: PayMethod | null; paid: boolean; issued_at: string };
@@ -83,7 +84,18 @@ export interface Tables {
     Row: { id: string; tenant_id: string; token_hash: string; expires_at: string; used_at: string | null } & Timestamps;
   };
   branches: {
-    Row: { id: string; tenant_id: string; name: string; city: string } & Timestamps;
+    Row: {
+      id: string;
+      tenant_id: string;
+      parent_id: string | null;
+      name: string;
+      city: string;
+      address: string;
+      phone: string;
+      active: boolean;
+      sort: number;
+      updated_at: string;
+    } & Timestamps;
   };
   staff_members: {
     Row: { id: string; tenant_id: string; name: string; initials: string; role: AppRole; pin_hash: string | null; active: boolean } & Timestamps;
@@ -158,11 +170,11 @@ export interface Tables {
   delivery_drivers: {
     Row: { id: string; tenant_id: string; name: string; phone: string; vehicle: string; active: boolean; created_at: string };
   };
+  /** Extensión 1:1 de orders (misma id): datos de reparto. Líneas y totales en orders/order_lines. */
   delivery_orders: {
     Row: {
       id: string;
       tenant_id: string;
-      branch_id: string | null;
       code: string;
       tracking_token: string;
       channel: string;
@@ -172,10 +184,7 @@ export interface Tables {
       reference: string;
       zone_id: string | null;
       zone_name: string;
-      items: { name: string; qty: number; price: number }[];
-      subtotal: number;
       fee: number;
-      total: number;
       pay_method: string;
       cash_for: number | null;
       status: "recibido" | "preparando" | "listo" | "en_camino" | "entregado" | "cancelado";
@@ -183,12 +192,12 @@ export interface Tables {
       notes: string;
       cancel_reason: string | null;
       eta_min: number;
-      created_at: string;
       accepted_at: string | null;
       ready_at: string | null;
       dispatched_at: string | null;
       delivered_at: string | null;
       cancelled_at: string | null;
+      updated_at: string;
     };
   };
   push_subscriptions: {
@@ -269,25 +278,34 @@ export interface Tables {
     Row: { id: string; tenant_id: string; key: string; name: string };
   };
   restaurant_tables: {
-    Row: { id: string; tenant_id: string; branch_id: string | null; zone: string; number: number; seats: number; status: TableStatus; waiter_id: string | null };
+    Row: { id: string; tenant_id: string; branch_id: string; zone: string; number: number; seats: number; status: TableStatus; waiter_id: string | null; updated_at: string };
   };
   customers: {
     Row: { id: string; tenant_id: string; name: string; phone: string; visits: number; spent: number; points: number; tier: string } & Timestamps;
   };
   orders: {
-    Row: { id: string; tenant_id: string; branch_id: string | null; table_id: string | null; waiter_id: string | null; customer_id: string | null; status: OrderStatus; opened_at: string; closed_at: string | null; paid_method: PayMethod | null; paid_total: number | null };
+    Row: { id: string; tenant_id: string; branch_id: string; table_id: string | null; waiter_id: string | null; customer_id: string | null; kind: OrderKind; status: OrderStatus; opened_at: string; closed_at: string | null; paid_method: PayMethod | null; paid_total: number | null; updated_at: string };
   };
   order_lines: {
-    Row: { id: string; tenant_id: string; order_id: string; menu_item_id: string | null; name: string; qty: number; unit_price: number; extra_price: number; modifiers: string; split_payer: number | null } & Timestamps;
+    Row: { id: string; tenant_id: string; order_id: string; menu_item_id: string | null; name: string; qty: number; unit_price: number; extra_price: number; modifiers: string; split_payer: number | null; sent_qty: number } & Timestamps;
   };
   kitchen_tickets: {
-    Row: { id: string; tenant_id: string; order_id: string | null; table_label: string; col: KdsColumn; entered_at: string; note: string; done: boolean; branch_id: string | null };
+    Row: { id: string; tenant_id: string; order_id: string | null; table_label: string; col: KdsColumn; entered_at: string; note: string; done: boolean; branch_id: string; updated_at: string };
   };
   ticket_lines: {
-    Row: { id: string; ticket_id: string; qty: number; name: string };
+    Row: { id: string; tenant_id: string; ticket_id: string; qty: number; name: string };
   };
   inventory_items: {
-    Row: { id: string; tenant_id: string; name: string; unit: string; stock: number; par: number; cost: number | null };
+    Row: { id: string; tenant_id: string; name: string; unit: string; par: number; cost: number | null; active: boolean };
+  };
+  inventory_stock: {
+    Row: { tenant_id: string; branch_id: string; item_id: string; qty: number; par: number | null; updated_at: string };
+  };
+  inventory_movements: {
+    Row: { id: string; tenant_id: string; branch_id: string; item_id: string; delta: number; reason: string; order_id: string | null; actor: string; created_at: string };
+  };
+  pos_terminals: {
+    Row: { id: string; tenant_id: string; branch_id: string; device_id: string; name: string; serie_boleta: string; serie_factura: string; created_at: string; last_seen_at: string };
   };
   recipes: {
     Row: { id: string; tenant_id: string; menu_item_id: string; inventory_id: string; qty_per_unit: number };
@@ -300,9 +318,6 @@ export interface Tables {
   };
   void_events: {
     Row: { id: string; tenant_id: string; order_id: string | null; line_name: string; reason: string; actor_id: string | null } & Timestamps;
-  };
-  online_orders: {
-    Row: { id: string; tenant_id: string; channel: string; customer_name: string; items: string; total: number; eta: string; status: string } & Timestamps;
   };
   comprobantes: {
     Row: { id: string; tenant_id: string; order_id: string | null; folio: string; tipo: ComprobanteTipo; buyer_ruc: string | null; buyer_name: string | null; subtotal: number; igv: number; total: number; reference: string; status: SunatStatus; error: string | null; issued_at: string; ref_folio: string | null; motivo: string | null; signed_xml: string | null; cdr: string | null; sunat_ticket: string | null };
@@ -327,8 +342,21 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: {
+      v_tenants: {
+        Row: Tables["tenants"]["Row"] & { mrr: number; branches_count: number };
+        Relationships: [];
+      };
+    };
     Functions: {
+      pos_apply: { Args: { p_tenant: string; p_device: string; p_ops: unknown }; Returns: unknown };
+      pos_snapshot: { Args: { p_tenant: string; p_branch?: string | null; p_since?: string | null }; Returns: unknown };
+      pos_terminal: { Args: { p_tenant: string; p_device: string; p_branch?: string | null; p_name?: string }; Returns: unknown };
+      branch_quota: { Args: { p_tenant: string }; Returns: unknown };
+      branch_sales: {
+        Args: { p_tenant: string; p_from?: string | null };
+        Returns: { branch_id: string; sales: number; orders: number }[];
+      };
       next_folio: { Args: { tid: string; p_serie: string }; Returns: string };
       set_comprobante_status: {
         Args: { cid: string; new_status: SunatStatus; new_error: string | null };

@@ -130,7 +130,7 @@ export default async function handler(req: Request): Promise<Response> {
       method: "tarjeta",
       paid: true,
     });
-    await admin.from("tenants").update({ status: "Activo", mrr: total }).eq("id", tenantId);
+    await admin.from("tenants").update({ status: "Activo" }).eq("id", tenantId); // MRR: derivado del plan (v_tenants)
 
     // 3) Emitir la factura de suscripción a SUNAT con el emisor de la PLATAFORMA
     //    y el proveedor configurado (SUNAT directo u OSE). Best-effort: si falla

@@ -25,7 +25,8 @@ import { deriveRetentionMetrics, deriveCohorts } from "./retention";
 import type { Database, Row } from "@/types/database";
 import { MockPlatformRepo } from "./MockPlatformRepo";
 
-const PLAN_PRICE: Record<PlanTier, number> = { Básico: 699, Pro: 1499, Enterprise: 4800 };
+import { planInfo } from "@/lib/plans";
+const PLAN_PRICE = (tier: PlanTier) => planInfo(tier).price;
 
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
@@ -66,17 +67,19 @@ function mapActivity(id: string, tenant: string, actor: string, message: string,
   return { id, tenant, actor, category, level, message, at };
 }
 
-function mapTenant(r: Row<"tenants">): Tenant {
+type TenantRow = Row<"tenants"> & { mrr?: number; branches_count?: number };
+
+function mapTenant(r: TenantRow): Tenant {
   return {
     id: r.id,
     name: r.name,
     slug: r.slug,
     ownerName: r.owner_name,
     plan: r.plan,
-    mrr: Number(r.mrr),
+    mrr: Number(r.mrr ?? 0),
     status: r.status,
     since: new Date(r.since).toLocaleDateString("es-PE", { month: "short", year: "numeric" }),
-    branches: 1,
+    branches: r.branches_count ?? 1,
     users: 1,
     isYou: r.slug === "la-higuera",
     link: null,
@@ -94,7 +97,8 @@ export class SupabasePlatformRepo implements PlatformRepo {
   constructor(private sb: SupabaseClient<Database>) {}
 
   async getTenants(): Promise<Tenant[]> {
-    const { data, error } = await this.sb.from("tenants").select("*").order("name");
+    // v_tenants: MRR derivado del plan y número de sucursales activas.
+    const { data, error } = await this.sb.from("v_tenants").select("*").order("name");
     if (error) throw error;
     return (data ?? []).map(mapTenant);
   }
@@ -129,7 +133,7 @@ export class SupabasePlatformRepo implements PlatformRepo {
       const p = cfg.get(tier);
       return {
         tier,
-        price: p ? Number(p.price) : PLAN_PRICE[tier],
+        price: p ? Number(p.price) : PLAN_PRICE(tier),
         features: p?.features ?? "",
         subscribers: rows.length,
         mrr: rows.reduce((s, t) => s + t.mrr, 0),
@@ -139,7 +143,7 @@ export class SupabasePlatformRepo implements PlatformRepo {
 
   private async priceOf(tier: PlanTier): Promise<number> {
     const { data } = await this.sb.from("subscription_plans").select("price").eq("tier", tier).maybeSingle();
-    return data ? Number(data.price) : PLAN_PRICE[tier];
+    return data ? Number(data.price) : PLAN_PRICE(tier);
   }
 
   async updatePlan(tier: PlanTier, patch: { price?: number; features?: string }): Promise<void> {
@@ -147,10 +151,7 @@ export class SupabasePlatformRepo implements PlatformRepo {
       { tier, price: patch.price, features: patch.features },
       { onConflict: "tier" },
     );
-    // Actualiza el MRR de los tenants activos de ese plan si cambió el precio.
-    if (patch.price !== undefined) {
-      await this.sb.from("tenants").update({ mrr: patch.price }).eq("plan", tier).eq("status", "Activo");
-    }
+    // El MRR de cada tenant se deriva del precio del plan (v_tenants): nada más que actualizar.
   }
 
   private async tenantNames(): Promise<Map<string, string>> {
@@ -351,7 +352,7 @@ export class SupabasePlatformRepo implements PlatformRepo {
     const slug = slugify(input.name);
     const { data, error } = await this.sb
       .from("tenants")
-      .insert({ name: input.name, slug, owner_name: input.ownerName, plan: input.plan, mrr: 0, status: "Prueba" })
+      .insert({ name: input.name, slug, owner_name: input.ownerName, plan: input.plan, status: "Prueba" })
       .select("*")
       .single();
     if (error) throw error;
@@ -383,18 +384,17 @@ export class SupabasePlatformRepo implements PlatformRepo {
     return { link };
   }
 
+  /** Bajar de plan con más sucursales activas que las permitidas lo rechaza la BD. */
   async setTenantPlan(id: string, plan: PlanTier) {
-    const { data } = await this.sb.from("tenants").select("status").eq("id", id).maybeSingle();
-    const mrr = data?.status === "Activo" ? await this.priceOf(plan) : 0;
-    await this.sb.from("tenants").update({ plan, mrr }).eq("id", id);
+    const { error } = await this.sb.from("tenants").update({ plan }).eq("id", id);
+    if (error) throw new Error(error.message);
   }
 
   async toggleSuspend(id: string) {
     const { data } = await this.sb.from("tenants").select("status, plan").eq("id", id).maybeSingle();
     if (!data) return;
     const suspend = data.status !== "Suspendido";
-    const mrr = suspend ? 0 : await this.priceOf(data.plan);
-    await this.sb.from("tenants").update({ status: suspend ? "Suspendido" : "Activo", mrr }).eq("id", id);
+    await this.sb.from("tenants").update({ status: suspend ? "Suspendido" : "Activo" }).eq("id", id);
   }
 
   async chargeTenant(id: string, method: string, token?: string): Promise<SaasCharge> {
@@ -422,7 +422,7 @@ export class SupabasePlatformRepo implements PlatformRepo {
         method: method as "efectivo" | "tarjeta" | "transferencia",
         paid: true,
       });
-      await this.sb.from("tenants").update({ status: "Activo", mrr: total }).eq("id", id);
+      await this.sb.from("tenants").update({ status: "Activo" }).eq("id", id);
     }
 
     return {

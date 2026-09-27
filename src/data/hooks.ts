@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { getRepo } from "./index";
 import {
@@ -11,25 +11,47 @@ import {
 import { useAuth } from "@/auth/AuthContext";
 import { useBranchStore } from "@/store/branch";
 import type { DraftLine, NewDeliveryInput, DeliveryStatus, DeliveryZone, DeliveryDriver } from "./model";
-import type { PayInput } from "./Repo";
+import type { BranchInput, PayInput } from "./Repo";
 
 export function useRepo() {
   const { session } = useAuth();
   return useMemo(() => getRepo(session?.tenantId ?? null), [session?.tenantId]);
 }
 
-/** Re-fetch live queries whenever the repo signals a change (KDS realtime / mock events). */
+/** Consultas que se leen de la vista local (instantáneas, funcionan sin red). */
+const VIEW_KEYS = ["tables", "order", "openOrders", "kitchen", "delivery"];
+/** Consultas remotas que cambian cuando el servidor confirma operaciones. */
+const SYNCED_KEYS = ["paidOrders", "comprobantes", "inventory", "branchSales", "activityLog", "customers"];
+
+/**
+ * Mantiene las pantallas al día: la vista local cambia al instante con cada
+ * acción (propia, de Realtime o de la cola offline al sincronizar).
+ */
 export function useRepoSubscription() {
   const repo = useRepo();
   const qc = useQueryClient();
   useEffect(() => {
-    return repo.subscribe(() => {
-      qc.invalidateQueries({ queryKey: ["tables"] });
-      qc.invalidateQueries({ queryKey: ["order"] });
-      qc.invalidateQueries({ queryKey: ["kitchen"] });
-      qc.invalidateQueries({ queryKey: ["delivery"] });
+    let frame = 0;
+    return repo.subscribe((reason) => {
+      const keys = reason === "synced" ? SYNCED_KEYS : VIEW_KEYS;
+      if (reason === "view") {
+        // Varias notificaciones seguidas → una sola revalidación por cuadro.
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => keys.forEach((k) => qc.invalidateQueries({ queryKey: [k] })));
+      } else {
+        keys.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+      }
     });
   }, [repo, qc]);
+}
+
+/** Estado de la sincronización (cola pendiente, rechazos, conexión). */
+export function useSyncStatus() {
+  const repo = useRepo();
+  return useSyncExternalStore(
+    useCallback((cb) => repo.onSyncStatus(cb), [repo]),
+    () => repo.syncStatus(),
+  );
 }
 
 export function useCategories() {
@@ -68,7 +90,12 @@ export function useOpenOrder(tableId: string | null) {
 export function useKitchenTickets() {
   const repo = useRepo();
   const branchId = useBranchStore((s) => s.branchId);
-  return useQuery({ queryKey: ["kitchen", branchId], queryFn: () => repo.getKitchenTickets(branchId), refetchInterval: 5000 });
+  // Sin sondeo: la vista local se actualiza por Realtime (y sondeo de respaldo cada 60 s).
+  return useQuery({ queryKey: ["kitchen", branchId], queryFn: () => repo.getKitchenTickets(branchId) });
+}
+export function useBranchQuota() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["branchQuota"], queryFn: () => repo.getBranchQuota() });
 }
 export function useBranchSales() {
   const repo = useRepo();
@@ -86,9 +113,10 @@ export function useBranchActions() {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["branches"] });
     qc.invalidateQueries({ queryKey: ["branchSales"] });
+    qc.invalidateQueries({ queryKey: ["branchQuota"] });
   };
   const addBranch = useMutation({
-    mutationFn: ({ name, city }: { name: string; city: string }) => repo.addBranch(name, city),
+    mutationFn: (input: BranchInput) => repo.addBranch(input),
     onSuccess: invalidate,
   });
   const updateBranch = useMutation({
@@ -139,7 +167,8 @@ export function useCustomers() {
 }
 export function useInventory() {
   const repo = useRepo();
-  return useQuery({ queryKey: ["inventory"], queryFn: () => repo.getInventory() });
+  const branchId = useBranchStore((s) => s.branchId);
+  return useQuery({ queryKey: ["inventory", branchId], queryFn: () => repo.getInventory(branchId) });
 }
 export function useRecipes() {
   const repo = useRepo();
@@ -149,21 +178,26 @@ export function useMenuChanges() {
   const repo = useRepo();
   return useQuery({ queryKey: ["menuChanges"], queryFn: () => repo.getMenuChanges() });
 }
-export function useOnlineOrders() {
-  const repo = useRepo();
-  return useQuery({ queryKey: ["onlineOrders"], queryFn: () => repo.getOnlineOrders() });
-}
 export function useSettings() {
   const repo = useRepo();
   return useQuery({ queryKey: ["settings"], queryFn: () => repo.getSettings() });
 }
 export function useActivityLog() {
   const repo = useRepo();
-  return useQuery({ queryKey: ["activityLog"], queryFn: () => repo.getActivityLog(), refetchInterval: 4000 });
+  return useQuery({ queryKey: ["activityLog"], queryFn: () => repo.getActivityLog(), refetchInterval: 30_000 });
 }
 export function useComprobantes() {
   const repo = useRepo();
   return useQuery({ queryKey: ["comprobantes"], queryFn: () => repo.getComprobantes() });
+}
+export function useComprobanteDocs(id: string | null) {
+  const repo = useRepo();
+  return useQuery({
+    queryKey: ["comprobanteDocs", id],
+    queryFn: () => repo.getComprobanteDocs(id!),
+    enabled: id != null,
+    staleTime: Infinity,
+  });
 }
 export function useComplaints() {
   const repo = useRepo();
@@ -380,9 +414,10 @@ export function useSunatActions() {
 export function useTenantActions() {
   const repo = useRepo();
   const qc = useQueryClient();
+  const branchId = useBranchStore((s) => s.branchId);
   const adjustInventory = useMutation({
     mutationFn: ({ itemId, delta, actor }: { itemId: string; delta: number; actor: string }) =>
-      repo.adjustInventory(itemId, delta, actor),
+      repo.adjustInventory(itemId, delta, actor, branchId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["inventory"] });
       qc.invalidateQueries({ queryKey: ["activityLog"] });
@@ -483,13 +518,11 @@ export function usePushNotifications() {
 // --- Delivery ---
 export function useDeliveryOrders() {
   const repo = useRepo();
-  // Realtime invalida al instante con Supabase; el sondeo cubre el modo demo
-  // (otras pestañas) y reconexiones.
+  // Lectura local: Realtime (u otras pestañas en la demo) la actualiza al instante.
   const branchId = useBranchStore((s) => s.branchId);
   return useQuery({
     queryKey: ["delivery", "orders"],
     queryFn: () => repo.getDeliveryOrders(),
-    refetchInterval: 15_000,
     // Cada sucursal ve y despacha sus propios pedidos (los sin sucursal, en todas).
     select: (list) => list.filter((o) => !branchId || !o.branchId || o.branchId === branchId),
   });

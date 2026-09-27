@@ -1,12 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { MockRepo } from "./MockRepo";
+import { composeRepo } from "../index";
+import { MemoryKV } from "../sync/kv";
+import type { Repo } from "../Repo";
 import type { NewDeliveryInput } from "../model";
 
 // Flujo completo de delivery sobre el repo en memoria: crear → aceptar (comanda
 // en cocina) → listo → despachar (exige repartidor) → entregado; y cancelación.
 
 describe("MockRepo — delivery punta a punta", () => {
-  let repo: MockRepo;
+  let repo: Repo;
+  let backend: MockRepo;
   const input: NewDeliveryInput = {
     channel: "whatsapp",
     customerName: "Carla Mendoza",
@@ -29,7 +33,9 @@ describe("MockRepo — delivery punta a punta", () => {
     } catch {
       /* node: sin localStorage */
     }
-    repo = new MockRepo();
+    // Repo completo de la app (cola offline + reglas compartidas) sobre el backend demo.
+    backend = new MockRepo();
+    repo = composeRepo(backend, `test-${Math.random()}`, new MemoryKV());
   });
 
   it("crea el pedido con envío de la zona, código y token no adivinable", async () => {
@@ -95,7 +101,7 @@ describe("MockRepo — delivery punta a punta", () => {
     await repo.setDeliveryStatus(o.id, "preparando");
     await repo.setDeliveryStatus(o.id, "listo");
     await repo.setDeliveryStatus(o.id, "en_camino", { driverId: "dr-jose" });
-    const trk = repo.getDeliveryTracking(o.trackingToken)!;
+    const trk = backend.getDeliveryTracking(o.trackingToken)!;
     expect(trk).toMatchObject({ code: o.code, status: "en_camino", driverName: "José" }); // solo el primer nombre
     // Lista blanca exacta: cualquier campo nuevo en la vista pública debe revisarse a propósito.
     expect(Object.keys(trk).sort()).toEqual(
@@ -104,6 +110,6 @@ describe("MockRepo — delivery punta a punta", () => {
     const json = JSON.stringify(trk);
     for (const secret of ["Arequipa", "999888777", "Carla", "Edificio"]) expect(json).not.toContain(secret);
     expect(Object.values(trk)).not.toContain(o.total);
-    expect(repo.getDeliveryTracking("nope")).toBeNull();
+    expect(backend.getDeliveryTracking("nope")).toBeNull();
   });
 });

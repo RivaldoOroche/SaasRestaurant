@@ -8,8 +8,8 @@ import type {
   InventoryItem,
   RecipeLine,
   MenuChange,
-  OnlineOrder,
   BusinessSettings,
+  Branch,
 } from "../model";
 
 export const CATEGORIES: Category[] = [
@@ -68,9 +68,12 @@ export const PREFS: ModifierPref[] = [
 
 export const TERMS = ["Rojo", "Medio", "Tres cuartos", "Bien cocido"];
 
-export const BRANCHES = [
-  { id: "br-1", name: "Miraflores", city: "Lima" },
-  { id: "br-2", name: "San Isidro", city: "Lima" },
+
+
+/** Árbol de sucursales de la demo: Miraflores es la sede principal. */
+export const BRANCHES: Branch[] = [
+  { id: "br-1", name: "Miraflores", city: "Lima", parentId: null, active: true, address: "Av. La Mar 1234, Miraflores", phone: "" },
+  { id: "br-2", name: "San Isidro", city: "Lima", parentId: "br-1", active: true, address: "Calle Las Begonias 450, San Isidro", phone: "" },
 ];
 
 export function seedTables(): RestaurantTable[] {
@@ -101,16 +104,27 @@ export const CUSTOMERS: Customer[] = [
   { id: "cu-4", name: "Martín Palomino", phone: "981 220 145", visits: 28, spent: 4200, points: 420, tier: "Platino" },
 ];
 
+const STOCK_MIRAFLORES: Record<string, number> = {
+  "inv-pesc": 18, "inv-papa": 40, "inv-aji": 6, "inv-cul": 0, "inv-pisco": 12, "inv-limon": 22, "inv-res": 14,
+};
+
+/** Catálogo de insumos (compartido); el stock de cada sucursal va en seedStock. */
 export function seedInventory(): InventoryItem[] {
   return [
-    { id: "inv-pesc", name: "Pescado fresco", unit: "kg", stock: 18, par: 20, cost: 28 },
-    { id: "inv-papa", name: "Papa amarilla", unit: "kg", stock: 40, par: 25, cost: 4.5 },
-    { id: "inv-aji", name: "Ají amarillo", unit: "kg", stock: 6, par: 8, cost: 12 },
+    { id: "inv-pesc", name: "Pescado fresco", unit: "kg", stock: 0, par: 20, cost: 28 },
+    { id: "inv-papa", name: "Papa amarilla", unit: "kg", stock: 0, par: 25, cost: 4.5 },
+    { id: "inv-aji", name: "Ají amarillo", unit: "kg", stock: 0, par: 8, cost: 12 },
     { id: "inv-cul", name: "Culantro", unit: "atado", stock: 0, par: 10, cost: 2 },
-    { id: "inv-pisco", name: "Pisco", unit: "bot", stock: 12, par: 6, cost: 45 },
-    { id: "inv-limon", name: "Limón", unit: "kg", stock: 22, par: 15, cost: 6 },
-    { id: "inv-res", name: "Lomo de res", unit: "kg", stock: 14, par: 12, cost: 38 },
+    { id: "inv-pisco", name: "Pisco", unit: "bot", stock: 0, par: 6, cost: 45 },
+    { id: "inv-limon", name: "Limón", unit: "kg", stock: 0, par: 15, cost: 6 },
+    { id: "inv-res", name: "Lomo de res", unit: "kg", stock: 0, par: 12, cost: 38 },
   ];
+}
+
+/** stock[sucursal][insumo]: San Isidro arranca con la mitad que Miraflores. */
+export function seedStock(): Record<string, Record<string, number>> {
+  const half = Object.fromEntries(Object.entries(STOCK_MIRAFLORES).map(([k, v]) => [k, v / 2]));
+  return { "br-1": { ...STOCK_MIRAFLORES }, "br-2": half };
 }
 
 /** Recipe map: menu item id -> ingredient consumption per unit sold. */
@@ -131,14 +145,6 @@ export function seedMenuChanges(): MenuChange[] {
     { id: "mc-1", kind: "precio", itemName: "Ceviche mixto", detail: "S/ 52 → S/ 55", status: "pendiente" },
     { id: "mc-2", kind: "nuevo", itemName: "Chicharrón de pota", detail: "Nuevo · S/ 36", status: "pendiente" },
     { id: "mc-3", kind: "86", itemName: "Seco de res", detail: "Marcar agotado (sin culantro)", status: "pendiente" },
-  ];
-}
-
-export function seedOnlineOrders(): OnlineOrder[] {
-  return [
-    { id: "on-1", channel: "Rappi", name: "Pedido #4821", items: "2× Lomo saltado, 1× Chicha", total: 110, eta: "25 min", status: "nuevo" },
-    { id: "on-2", channel: "PedidosYa", name: "Pedido #7734", items: "1× Ceviche mixto", total: 52, eta: "18 min", status: "prep" },
-    { id: "on-3", channel: "WhatsApp", name: "Familia Torres", items: "3× Ají de gallina", total: 114, eta: "35 min", status: "nuevo" },
   ];
 }
 

@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { MockRepo } from "./MockRepo";
+import { composeRepo } from "../index";
+import { MemoryKV } from "../sync/kv";
+import type { Repo } from "../Repo";
 import type { DraftLine } from "../model";
 
 // Prueba de integración del flujo central del POS sobre el repo en memoria:
@@ -7,14 +10,15 @@ import type { DraftLine } from "../model";
 // invariantes que la UI da por sentados (mesa liberada, comanda retirada, etc.).
 
 describe("MockRepo — ciclo de vida del pedido", () => {
-  let repo: MockRepo;
+  let repo: Repo;
   beforeEach(() => {
     try {
       localStorage?.clear();
     } catch {
       /* sin localStorage en node: MockRepo usa el estado por defecto */
     }
-    repo = new MockRepo();
+    // Repo completo de la app (cola offline + reglas compartidas) sobre el backend demo.
+    repo = composeRepo(new MockRepo(), `test-${Math.random()}`, new MemoryKV());
   });
 
   it("abre un pedido en una mesa libre", async () => {
@@ -51,7 +55,7 @@ describe("MockRepo — ciclo de vida del pedido", () => {
     expect(after.some((t) => t.orderId === order.id)).toBe(true);
   });
 
-  it("cobra el pedido: libera la mesa y retira la comanda", async () => {
+  it("cobra el pedido: libera la mesa; la comanda sigue en cocina hasta entregarse", async () => {
     const tables = await repo.getTables();
     const free = tables.find((t) => t.status === "libre")!;
     const order = await repo.openOrder(free.id);
@@ -64,6 +68,6 @@ describe("MockRepo — ciclo de vida del pedido", () => {
     const tablesAfter = await repo.getTables();
     expect(tablesAfter.find((t) => t.id === free.id)?.status).toBe("libre");
     const tickets = await repo.getKitchenTickets();
-    expect(tickets.some((t) => t.orderId === order.id)).toBe(false);
+    expect(tickets.some((t) => t.orderId === order.id)).toBe(true);
   });
 });
