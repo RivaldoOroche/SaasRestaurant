@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Wayra POS — Requisitos de facturación electrónica y pagos</title>
+<link rel="stylesheet" href="marca.css">
+</head>
+<body class="doc">
+
+<div class="cover">
+  <img class="logo" src="../../public/brand/wayra-logo-ondark.svg" alt="Wayra POS">
+  <div class="kicker">Documento de requisitos</div>
+  <h1>Facturación electrónica SUNAT y pasarelas de pago</h1>
+  <p class="lead">Qué necesita reunir el restaurante para emitir boletas y facturas y cobrar con Yape, Plin y tarjeta en Wayra POS, y cómo se prueba antes de salir a producción.</p>
+  <div class="meta">
+    <div><b>Para</b>dueño del restaurante y su contador</div>
+    <div><b>Tiempo de configuración</b>una visita, con todo listo</div>
+    <div><b>Vigente a</b>octubre de 2026</div>
+  </div>
+</div>
+
+<main>
+<section>
+  <h2><span class="n">01</span>Qué debe elegir el restaurante</h2>
+  <p class="lede">Antes de configurar, el restaurante toma dos decisiones: cómo emite sus comprobantes (directo a SUNAT o con un OSE) y con qué medios cobra. Wayra no cobra por comprobante en ninguna de las opciones; lo único que cambia es lo que el restaurante paga a terceros.</p>
+  <table>
+    <thead><tr><th style="width:34%">Situación del restaurante</th><th>Emisión recomendada</th><th>Costo por comprobante</th><th>Quién paga</th></tr></thead>
+    <tbody>
+      <tr class="hl"><td>Ventas anuales menores a 300 UIT y no es principal contribuyente</td><td><b>SUNAT directo</b> (SEE del contribuyente)</td><td>S/ 0</td><td>nadie</td></tr>
+      <tr><td>Ya tiene contrato con Nubefact, Efact o Bizlinks</td><td><b>OSE / PSE</b> que ya usa</td><td>Tarifa de su contrato</td><td>el restaurante, al OSE</td></tr>
+      <tr><td>Principal contribuyente con ingresos de 300 UIT o más</td><td><b>OSE obligatorio</b></td><td>Tarifa de su contrato</td><td>el restaurante, al OSE</td></tr>
+      <tr><td>Aún no tiene nada listo</td><td>Vender ya y emitir después: los comprobantes quedan en cola</td><td>—</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <table>
+    <thead><tr><th style="width:24%">Medio de cobro</th><th>Qué necesita</th><th>Comisión aproximada</th><th>Recomendado para</th></tr></thead>
+    <tbody>
+      <tr><td><b>Efectivo</b></td><td>Caja abierta con sencillo inicial</td><td>0 %</td><td>todos</td></tr>
+      <tr><td><b>Yape / Plin</b></td><td>Número y QR del negocio</td><td>0 % en cuenta personal; tarifa del banco en cuenta de negocio</td><td>todos</td></tr>
+      <tr><td><b>Tarjeta con POS físico</b></td><td>Contrato con Izipay, Niubiz o Culqi</td><td>~3.4 % a 4 % + IGV</td><td>locales con ticket alto</td></tr>
+      <tr><td><b>Tarjeta en línea</b> (delivery, pedidos web)</td><td>Cuenta en la pasarela + llaves</td><td>Culqi ~4.20 % + US$ 0.30 + IGV</td><td>delivery propio</td></tr>
+    </tbody>
+  </table>
+  <p class="foot-note">Las comisiones son referenciales y cambian por contrato y volumen; el restaurante las confirma con su proveedor.</p>
+</section>
+
+<section>
+  <h2><span class="n">02</span>Emitir directo a SUNAT (S/ 0 por comprobante)</h2>
+  <p>Wayra firma cada comprobante con el certificado del restaurante y lo envía a SUNAT con un usuario SOL secundario. El restaurante necesita estos datos y documentos:</p>
+  <table>
+    <thead><tr><th style="width:22%">Requisito</th><th>Detalle</th><th style="width:28%">Dónde se obtiene</th></tr></thead>
+    <tbody>
+      <tr><td><b>RUC activo y habido</b></td><td>11 dígitos, afecto a renta de tercera categoría</td><td>Ficha RUC en SUNAT</td></tr>
+      <tr><td><b>Razón social</b></td><td>Exactamente como figura en la ficha RUC</td><td>Ficha RUC</td></tr>
+      <tr><td><b>Dirección fiscal y ubigeo</b></td><td>Ubigeo INEI de 6 dígitos del distrito (ej. 150122 = Miraflores)</td><td>Ficha RUC</td></tr>
+      <tr><td><b>Usuario secundario SOL</b></td><td>Creado por el titular, solo con el perfil de emisión y envío de comprobantes electrónicos; no se usa la clave SOL principal</td><td>SUNAT Operaciones en Línea → Administración de usuarios secundarios</td></tr>
+      <tr><td><b>Clave del usuario secundario</b></td><td>Se ingresa una sola vez en Wayra</td><td>La define el titular</td></tr>
+      <tr><td><b>Certificado digital</b></td><td><b>Certificado Digital Tributario gratuito</b> si los ingresos netos anuales son de hasta 300 UIT (vigencia 3 años); si no, uno comercial de una entidad acreditada por INDECOPI</td><td>SOL → Comprobantes de pago → Certificado Digital Tributario</td></tr>
+      <tr><td><b>Alta como emisor electrónico</b></td><td>Afiliación al Sistema de Emisión Electrónica desde los sistemas del contribuyente y registro del certificado en SOL</td><td>SUNAT Operaciones en Línea</td></tr>
+    </tbody>
+  </table>
+  <h3>Formato del certificado</h3>
+  <p>SUNAT entrega el certificado como archivo .pfx con contraseña. Wayra pide el certificado y la llave privada en formato PEM. El equipo de soporte hace la conversión con el cliente presente, o el cliente la hace así:</p>
+  <pre>openssl pkcs12 -in certificado.pfx -clcerts -nokeys -out certificado.pem
+openssl pkcs12 -in certificado.pfx -nocerts -nodes | openssl pkcs8 -topk8 -nocrypt -out llave.pem</pre>
+  <div class="grid2">
+    <div class="card"><h4>Series por caja</h4><p>Cada caja tiene su propia serie de boleta y de factura (B001 y F001 en la caja 1, B002 y F002 en la caja 2). Así cada caja numera sin internet y los correlativos nunca chocan.</p></div>
+    <div class="card"><h4>Plazos que cuida el sistema</h4><p>Las facturas se envían el mismo día o hasta 3 días calendario después; pasado ese plazo dejan de valer como factura electrónica. Las boletas van en el resumen diario. Wayra muestra los pendientes para actuar a tiempo.</p></div>
+  </div>
+  <p style="margin-top:3mm"><b>Ambientes.</b> Primero se trabaja en Homologación (beta, con el usuario de prueba de SUNAT) y luego se pasa a Producción con los datos reales.</p>
+</section>
+
+<section>
+  <h2><span class="n">03</span>Emitir con un OSE o PSE (Nubefact, Efact, Bizlinks)</h2>
+  <p>Con un OSE, Wayra arma el comprobante y lo entrega al proveedor, que lo valida y lo informa a SUNAT. El proveedor cobra al restaurante su propia tarifa; Wayra no cobra nada encima.</p>
+  <table>
+    <thead><tr><th style="width:30%">Requisito</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td><b>Contrato vigente con el OSE o PSE</b></td><td>Lo firma el restaurante; incluye la tarifa por comprobante o el paquete mensual</td></tr>
+      <tr><td><b>RUC, razón social, dirección fiscal y ubigeo</b></td><td>Los mismos datos del emisor que en SUNAT directo</td></tr>
+      <tr><td><b>Endpoint (URL) de la API</b></td><td>Lo da el proveedor en su panel; uno para pruebas y otro para producción</td></tr>
+      <tr><td><b>Token o API key</b></td><td>Secreto; se ingresa una sola vez en Wayra</td></tr>
+      <tr><td><b>Series autorizadas</b></td><td>Las series que el proveedor tenga habilitadas para el RUC, una por caja</td></tr>
+      <tr><td><b>Alta del OSE en SUNAT</b></td><td>El restaurante designa al OSE en SOL; el proveedor guía ese paso</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><div class="t">Cuándo es obligatorio</div>Si SUNAT designó al restaurante principal contribuyente y sus ingresos anuales son de 300 UIT o más, debe emitir a través de un OSE. En ese caso no aplica SUNAT directo.</div>
+  <p><b>Si ya usa un OSE.</b> Se mantiene su contrato y su numeración. Antes de cambiar, se confirma el último correlativo emitido de cada serie para continuar sin saltos ni duplicados.</p>
+</section>
+
+<section>
+  <h2><span class="n">04</span>Pagos: Yape, Plin y tarjetas</h2>
+  <p>Yape y Plin funcionan con el número del negocio y no tienen comisión de Wayra; las tarjetas necesitan una cuenta con una pasarela y sus llaves.</p>
+  <h3>Yape y Plin</h3>
+  <p>Al cobrar, Wayra muestra el QR con el número configurado y el monto exacto. El cajero confirma el pago recibido en su celular antes de cerrar la cuenta.</p>
+  <table>
+    <thead><tr><th style="width:34%">Requisito</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td><b>Número Yape del negocio</b></td><td>Celular de 9 dígitos; de preferencia Yape para negocios</td></tr>
+      <tr><td><b>Número Plin</b></td><td>Celular afiliado a Plin en su banco (Interbank, BBVA, Scotiabank u otro)</td></tr>
+      <tr><td><b>Celular de confirmación en caja</b></td><td>Donde llegan las notificaciones de pago</td></tr>
+    </tbody>
+  </table>
+  <h3>Tarjetas con pasarela</h3>
+  <p>Wayra se conecta con Culqi, Izipay o Niubiz. El restaurante abre la cuenta a su nombre y el dinero llega directo a su banco.</p>
+  <table>
+    <thead><tr><th style="width:22%">Dato en Wayra</th><th>Culqi</th><th>Izipay</th><th>Niubiz</th></tr></thead>
+    <tbody>
+      <tr><td><b>Llave pública</b></td><td class="mono" style="font-size:8.4pt">pk_live_… (pk_test_… en pruebas)</td><td>Clave pública de la tienda</td><td>Clave pública</td></tr>
+      <tr><td><b>Secreto</b></td><td>Llave secreta <span class="mono" style="font-size:8.4pt">sk_live_…</span></td><td>Password de API</td><td>Token de acceso</td></tr>
+      <tr><td><b>Código de comercio</b></td><td>No aplica</td><td>Código de tienda (shopId)</td><td>Código de comercio (merchantId)</td></tr>
+      <tr><td><b>Secreto de webhook</b></td><td>Opcional, para verificar firmas</td><td>Opcional</td><td>Opcional</td></tr>
+      <tr><td><b>Documentos para abrir la cuenta</b></td><td>RUC, DNI del representante, cuenta bancaria del negocio</td><td>Igual</td><td>Igual</td></tr>
+    </tbody>
+  </table>
+  <p><b>Comisiones de referencia.</b> Culqi en línea cobra alrededor de 4.20 % + US$ 0.30 + IGV por operación y en POS físico alrededor de 3.44 % + IGV. Izipay y Niubiz cobran según contrato y volumen. Wayra no añade comisión.</p>
+</section>
+
+<section>
+  <h2><span class="n">05</span>Dónde se configura en Wayra</h2>
+  <p>Todo se configura en <b>Ajustes</b>, con la sesión del dueño, en tres tarjetas: Datos del emisor, Facturación electrónica y Pagos.</p>
+  <div class="figure">
+    <svg viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="13">
+      <defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9a9ab0"/></marker></defs>
+      <text x="24" y="30" font-size="15" font-weight="700" fill="#171a21">Las claves se guardan una vez y nunca vuelven a la pantalla</text>
+      <g fill="none" stroke="#9a9ab0" stroke-width="1.3">
+        <path d="M264 212H304" marker-end="url(#ar2)"/>
+        <path d="M496 212H516V132H536" marker-end="url(#ar2)"/><path d="M516 212V220H536" marker-end="url(#ar2)"/><path d="M516 212V308H536" marker-end="url(#ar2)"/>
+        <path d="M144 360V384" marker-end="url(#ar2)"/>
+      </g>
+      <rect x="24" y="56" width="240" height="304" rx="12" fill="#f5f4fb" stroke="#d9d6ee" stroke-width="1.3"/>
+      <text x="40" y="80" font-weight="700" fill="#171a21">Ajustes en Wayra (dueño)</text>
+      <g fill="#fff" stroke="#d9d6ee" stroke-width="1.3">
+        <rect x="40" y="96" width="208" height="72" rx="10"/><rect x="40" y="184" width="208" height="72" rx="10"/><rect x="40" y="272" width="208" height="72" rx="10"/>
+        <rect x="536" y="96" width="200" height="72" rx="10"/><rect x="536" y="184" width="200" height="72" rx="10"/><rect x="536" y="272" width="200" height="72" rx="10"/>
+        <rect x="40" y="384" width="208" height="56" rx="10"/>
+      </g>
+      <rect x="304" y="168" width="192" height="88" rx="10" fill="#efedfa" stroke="#7a6cd0" stroke-width="2"/>
+      <g font-weight="700" fill="#171a21">
+        <text x="52" y="120">Datos del emisor</text><text x="52" y="208">Facturación electrónica</text><text x="52" y="296">Pagos</text>
+        <text x="316" y="192">Servidor de Wayra</text>
+        <text x="548" y="120">SUNAT directo</text><text x="548" y="208">OSE o PSE</text><text x="548" y="296">Pasarela de tarjetas</text>
+        <text x="52" y="408">PDF de configuración</text>
+      </g>
+      <g font-size="11.5" fill="#5b6072">
+        <text x="52" y="138">RUC, razón social,</text><text x="52" y="154">dirección fiscal, ubigeo</text>
+        <text x="52" y="226">proveedor, ambiente,</text><text x="52" y="242">usuario SOL o endpoint</text>
+        <text x="52" y="314">Yape, Plin, pasarela</text><text x="52" y="330">y sus llaves</text>
+        <text x="316" y="210" fill="#171a21">credenciales cifradas,</text><text x="316" y="226" fill="#171a21">solo escritura: nunca</text><text x="316" y="242" fill="#171a21">vuelven al navegador</text>
+        <text x="548" y="138">boletas, facturas,</text><text x="548" y="154">resumen diario</text>
+        <text x="548" y="226">Nubefact, Efact,</text><text x="548" y="242">Bizlinks</text>
+        <text x="548" y="314">Culqi, Izipay, Niubiz</text>
+        <text x="52" y="426">constancia, sin secretos</text>
+        <text x="284" y="204" text-anchor="middle">guarda</text>
+      </g>
+    </svg>
+  </div>
+  <p>La clave SOL, el certificado, la llave privada, los tokens y las llaves secretas se guardan cifrados en el servidor y no se pueden volver a ver; para cambiarlos se cargan de nuevo. El botón <b>PDF de configuración</b> genera una constancia con los datos del emisor, el proveedor y el ambiente, sin ningún secreto. Mientras no haya proveedor elegido, el restaurante puede vender y los comprobantes esperan en cola.</p>
+</section>
+
+<section>
+  <h2><span class="n">06</span>Checklist para el cliente</h2>
+  <p>Con esta lista completa, la configuración toma una sola visita. Lo marcado como <span class="who-tag w">Wayra</span> lo hace el equipo de soporte con el cliente.</p>
+  <div class="grid2">
+    <div class="card">
+      <h4>Datos del negocio (todos)</h4>
+      <ul class="checklist" style="margin-top:2mm">
+        <li>Ficha RUC actualizada: RUC, razón social, dirección fiscal y ubigeo <span class="who-tag">cliente</span></li>
+        <li>Cantidad de cajas por local, para asignar las series <span class="who-tag">cliente</span></li>
+        <li>Ingresos anuales aproximados y si es principal contribuyente <span class="who-tag">cliente y contador</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Si emite directo a SUNAT</h4>
+      <ul class="checklist" style="margin-top:2mm">
+        <li>Usuario secundario SOL con perfil de emisión electrónica y su clave <span class="who-tag">cliente</span></li>
+        <li>Afiliación como emisor electrónico desde los sistemas del contribuyente <span class="who-tag">cliente y contador</span></li>
+        <li>Certificado digital (.pfx) y su contraseña <span class="who-tag">cliente</span></li>
+        <li>Certificado registrado en SOL <span class="who-tag">cliente</span></li>
+        <li>Conversión del certificado a PEM y carga en Wayra <span class="who-tag w">Wayra</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Si emite con OSE o PSE</h4>
+      <ul class="checklist" style="margin-top:2mm">
+        <li>Contrato vigente y OSE designado en SOL <span class="who-tag">cliente</span></li>
+        <li>Endpoint y token de pruebas y de producción <span class="who-tag">proveedor</span></li>
+        <li>Último correlativo emitido por serie, si ya facturaba <span class="who-tag">cliente</span></li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Pagos</h4>
+      <ul class="checklist" style="margin-top:2mm">
+        <li>Números Yape y Plin del negocio <span class="who-tag">cliente</span></li>
+        <li>Cuenta en Culqi, Izipay o Niubiz aprobada <span class="who-tag">cliente</span></li>
+        <li>Llave pública, secreto y código de comercio o tienda <span class="who-tag">cliente</span></li>
+        <li>Carga de llaves en Wayra y cobro de prueba <span class="who-tag w">Wayra</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">07</span>Pruebas y salida a producción</h2>
+  <p>No se pasa a Producción hasta que las pruebas en Homologación salgan aceptadas.</p>
+  <ol class="steps">
+    <li>En Homologación (beta): emitir una boleta, una factura a un RUC de prueba, una nota de crédito y una anulación.</li>
+    <li>Revisar que cada una vuelva como aceptada en el monitor SUNAT de Wayra.</li>
+    <li>Cobrar con Yape, con Plin y con tarjeta en modo prueba (<span class="mono" style="font-size:8.6pt">pk_test_…</span>); anular el cobro de prueba.</li>
+    <li>Cortar el internet, emitir dos boletas y reconectar: deben salir solas de la cola.</li>
+    <li>Cambiar a Producción, cargar las credenciales reales y emitir el primer comprobante real de bajo monto.</li>
+    <li>Descargar el PDF de configuración y guardarlo con el cliente como constancia.</li>
+  </ol>
+  <table>
+    <thead><tr><th style="width:28%">Problema frecuente</th><th style="width:34%">Causa probable</th><th>Solución</th></tr></thead>
+    <tbody>
+      <tr><td>Rechazo por usuario o clave</td><td>Usuario secundario sin perfil de emisión</td><td>Asignar el perfil en SOL y volver a ingresar la clave</td></tr>
+      <tr><td>Rechazo por firma</td><td>Certificado no registrado en SOL o vencido</td><td>Registrarlo o renovarlo y volver a cargar el PEM</td></tr>
+      <tr><td>Factura rechazada por RUC del cliente</td><td>RUC del comprador inválido o no habido</td><td>Emitir boleta o corregir el RUC</td></tr>
+      <tr><td>Comprobantes que no salen de la cola</td><td>Sin internet o token del OSE vencido</td><td>Revisar conexión y renovar el token</td></tr>
+      <tr><td>Correlativo duplicado</td><td>Misma serie en dos cajas</td><td>Asignar una serie distinta por caja</td></tr>
+      <tr><td>Cobro con tarjeta rechazado en producción</td><td>Llaves de prueba en producción</td><td>Cargar las llaves live</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="keep">
+  <h2><span class="n">08</span>Fuentes</h2>
+  <ul class="sources">
+    <li><a href="https://cpe.sunat.gob.pe/certificado-digital-tributario">SUNAT — Certificado Digital Tributario</a>: requisitos y autorización de entrega gratuita hasta el 31/12/2027</li>
+    <li><a href="https://www.sunat.gob.pe/salaprensa/2020/febrero/NotaPrensaN0132020.doc">SUNAT — Nota de prensa 013-2020</a>: certificado gratuito para ventas de hasta 300 UIT</li>
+    <li><a href="https://www.sunat.gob.pe/legislacion/superin/2023/000003-2023.pdf">SUNAT — R. S. 003-2023/SUNAT</a>: plazo de 3 días calendario para enviar facturas</li>
+    <li><a href="https://sovos.com/es/cambios-regulatorios/iva/peru-boleta-venta-electronica-rs-000048-2026-sunat/">Sovos — R. S. 000048-2026/SUNAT</a>: cambios recientes en boleta electrónica y resúmenes</li>
+    <li><a href="https://www.nubefact.com/precios">Nubefact — precios</a></li>
+    <li><a href="https://adratechsystems.com/recursos/izipay-vs-niubiz-vs-culqi-comparativa-peru">Comparativa Izipay, Niubiz y Culqi</a>: comisiones de referencia</li>
+  </ul>
+  <p class="foot-note">Plazos y tarifas cambian; antes de cada implementación se confirman con SUNAT, el contador del cliente y el proveedor.</p>
+</section>
+</main>
+</body>
+</html>
