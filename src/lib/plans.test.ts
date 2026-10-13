@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PLANS, annualMonthly, branchLimitLabel, extraBranches, monthlyTotal, planInfo, quotaExceededMessage } from "./plans";
+import { PLANS, annualMonthly, branchLimitLabel, comensalLimitLabel, extraBranches, extraComensalBlocks, monthlyTotal, planInfo, plansFor, quotaExceededMessage } from "./plans";
 
 describe("planes (la mayoría de restaurantes tiene un local)", () => {
   it("precios vigentes (IGV incluido) y anual = 10 meses", () => {
@@ -7,6 +7,9 @@ describe("planes (la mayoría de restaurantes tiene un local)", () => {
       ["Básico", 159, 1590],
       ["Pro", 299, 2990],
       ["Enterprise", 899, 8990],
+      ["Comedor", 249, 2490],
+      ["Comedor Pro", 449, 4490],
+      ["Comedor Institucional", 899, 8990],
     ]);
     expect(annualMonthly(planInfo("Básico"))).toBe(132.5);
   });
@@ -32,5 +35,23 @@ describe("planes (la mayoría de restaurantes tiene un local)", () => {
     expect(extraBranches(e, 5)).toBe(0);
     expect(monthlyTotal(e, 7)).toBe(1097);
     expect(branchLimitLabel(e)).toBe("6 locales incluidos + S/ 99 por local adicional");
+  });
+});
+
+describe("planes de comedor", () => {
+  it("cada tipo de negocio ve solo sus planes", () => {
+    expect(plansFor("comedor").map((p) => p.tier)).toEqual(["Comedor", "Comedor Pro", "Comedor Institucional"]);
+    expect(plansFor(undefined).map((p) => p.tier)).toEqual(["Básico", "Pro", "Enterprise"]);
+  });
+  it("el Institucional cobra por bloques de 100 comensales sobre 2 000 (igual que la base)", () => {
+    const inst = planInfo("Comedor Institucional");
+    expect(extraComensalBlocks(inst, 2000)).toBe(0);
+    expect(extraComensalBlocks(inst, 2001)).toBe(1);
+    expect(monthlyTotal(inst, 4, 2150)).toBe(969);
+    expect(monthlyTotal(planInfo("Comedor"), 0, 300)).toBe(249);
+  });
+  it("describe los comensales del plan", () => {
+    expect(comensalLimitLabel(planInfo("Comedor"))).toBe("hasta 300 comensales activos");
+    expect(comensalLimitLabel(planInfo("Comedor Institucional"))).toMatch(/2.000 comensales incluidos \+ S\/ 35 por cada 100/);
   });
 });

@@ -2,9 +2,12 @@
 // del seed). Con Supabase, precios y límites vienen de la BD y esto es solo el
 // valor por defecto; en el modo demo es la fuente de verdad.
 import type { PlanTier } from "@/types/database";
+import type { BusinessType } from "./comedor";
 
 export interface PlanInfo {
   tier: PlanTier;
+  /** Restaurante o comedor: cada negocio solo puede tomar planes de su tipo. */
+  businessType: BusinessType;
   /** Precio mensual final en soles, IGV incluido. */
   price: number;
   /** Precio anual (paga 10 meses, usa 12). */
@@ -17,6 +20,12 @@ export interface PlanInfo {
   /** Precio mensual por cada sucursal activa adicional (IGV incluido). */
   extraBranchPrice: number | null;
   features: string;
+  /** Comedor: tope de comensales activos (null = sin tope). */
+  maxComensales?: number | null;
+  /** Comedor: comensales incluidos en el precio (null = todos los permitidos). */
+  includedComensales?: number | null;
+  /** Comedor: precio mensual por cada 100 comensales activos adicionales. */
+  extraComensalesPrice?: number | null;
 }
 
 /**
@@ -27,6 +36,7 @@ export interface PlanInfo {
 export const PLANS: PlanInfo[] = [
   {
     tier: "Básico",
+    businessType: "restaurante",
     price: 159,
     annualPrice: 1590,
     maxBranches: 0,
@@ -37,6 +47,7 @@ export const PLANS: PlanInfo[] = [
   },
   {
     tier: "Pro",
+    businessType: "restaurante",
     price: 299,
     annualPrice: 2990,
     maxBranches: 4,
@@ -47,6 +58,7 @@ export const PLANS: PlanInfo[] = [
   },
   {
     tier: "Enterprise",
+    businessType: "restaurante",
     price: 899,
     annualPrice: 8990,
     maxBranches: null,
@@ -55,7 +67,71 @@ export const PLANS: PlanInfo[] = [
     support: "Asesor dedicado y puesta en marcha asistida en cada local",
     features: "Para cadenas: 6 locales incluidos, S/ 99 por local adicional y asesor dedicado",
   },
+  // Comedores de colegios y empresas: se cobra por comensales activos (ver
+  // PRECIOS.md). El pago anual de 10 meses calza con el año escolar.
+  {
+    tier: "Comedor",
+    businessType: "comedor",
+    price: 249,
+    annualPrice: 2490,
+    maxBranches: 0,
+    includedBranches: null,
+    extraBranchPrice: null,
+    maxComensales: 300,
+    includedComensales: null,
+    extraComensalesPrice: null,
+    support: "Carga del padrón incluida y soporte por WhatsApp en horario escolar",
+    features:
+      "Un comedor o cafetería con hasta 300 comensales activos: despacho, monedero prepago, abonos, menú del día con reservas, kiosko saludable, portal de familias y comprobantes SUNAT",
+  },
+  {
+    tier: "Comedor Pro",
+    businessType: "comedor",
+    price: 449,
+    annualPrice: 4490,
+    maxBranches: 2,
+    includedBranches: null,
+    extraBranchPrice: null,
+    maxComensales: 1000,
+    includedComensales: null,
+    extraComensalesPrice: null,
+    support: "Soporte prioritario y capacitación al personal de cada sede",
+    features: "Hasta 1 000 comensales activos y 3 sedes: todo lo del plan Comedor, convenios, reportes por sede y soporte prioritario",
+  },
+  {
+    tier: "Comedor Institucional",
+    businessType: "comedor",
+    price: 899,
+    annualPrice: 8990,
+    maxBranches: null,
+    includedBranches: null,
+    extraBranchPrice: null,
+    maxComensales: null,
+    includedComensales: 2000,
+    extraComensalesPrice: 35,
+    support: "Asesor dedicado y puesta en marcha asistida en cada sede",
+    features: "Para redes de colegios, universidades y empresas: 2 000 comensales incluidos, S/ 35 por cada 100 adicionales y sedes ilimitadas",
+  },
 ];
+
+/** Planes que puede tomar un tipo de negocio. */
+export function plansFor(type: BusinessType | undefined): PlanInfo[] {
+  return PLANS.filter((p) => p.businessType === (type ?? "restaurante"));
+}
+
+/** Bloques de 100 comensales que se cobran aparte (mismo cálculo que app.plan_extra_comensal_blocks). */
+export function extraComensalBlocks(p: Pick<PlanInfo, "includedComensales" | "extraComensalesPrice">, activeComensales: number): number {
+  if (p.includedComensales == null || p.extraComensalesPrice == null) return 0;
+  return Math.ceil(Math.max(0, activeComensales - p.includedComensales) / 100);
+}
+
+/** Texto corto de los comensales del plan. */
+export function comensalLimitLabel(p: Pick<PlanInfo, "maxComensales" | "includedComensales" | "extraComensalesPrice">): string {
+  if (p.includedComensales != null && p.extraComensalesPrice != null)
+    return `${p.includedComensales.toLocaleString("es-PE")} comensales incluidos + S/ ${p.extraComensalesPrice} por cada 100 adicionales`;
+  if (p.maxComensales == null) return "comensales ilimitados";
+  return `hasta ${p.maxComensales.toLocaleString("es-PE")} comensales activos`;
+}
 
 /** Ahorro del pago anual frente a 12 meses. */
 export function annualSavings(p: PlanInfo): number {
@@ -78,8 +154,10 @@ export function extraBranches(p: Pick<PlanInfo, "includedBranches" | "extraBranc
 }
 
 /** Total mensual con IGV: precio del plan + sucursales adicionales (mismo cálculo que app.plan_monthly_total). */
-export function monthlyTotal(p: PlanInfo, activeChildBranches: number): number {
-  return Math.round((p.price + extraBranches(p, activeChildBranches) * (p.extraBranchPrice ?? 0)) * 100) / 100;
+export function monthlyTotal(p: PlanInfo, activeChildBranches: number, activeComensales = 0): number {
+  const branches = extraBranches(p, activeChildBranches) * (p.extraBranchPrice ?? 0);
+  const comensales = extraComensalBlocks(p, activeComensales) * (p.extraComensalesPrice ?? 0);
+  return Math.round((p.price + branches + comensales) * 100) / 100;
 }
 
 /**

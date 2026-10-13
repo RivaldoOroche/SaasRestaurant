@@ -118,11 +118,9 @@ const SEED_TENANTS: Tenant[] = [
 
 export class MockPlatformRepo implements PlatformRepo {
   private tenants: Tenant[] = SEED_TENANTS.map((t) => ({ ...t, mrr: t.mrr > 0 ? planTotal(t.plan, t.branches) : 0 }));
-  private plans: Record<PlanTier, { price: number; features: string }> = {
-    Básico: { price: PLAN_PRICE.Básico, features: PLAN_FEATURES.Básico },
-    Pro: { price: PLAN_PRICE.Pro, features: PLAN_FEATURES.Pro },
-    Enterprise: { price: PLAN_PRICE.Enterprise, features: PLAN_FEATURES.Enterprise },
-  };
+  private plans = Object.fromEntries(
+    PLANS.map((p) => [p.tier, { price: PLAN_PRICE[p.tier], features: PLAN_FEATURES[p.tier] }]),
+  ) as Record<PlanTier, { price: number; features: string }>;
   private tickets: SupportTicket[] = seedTickets();
   private activity: PlatformActivity[] = seedActivity();
   private charges: ChargeProposal[] = [];

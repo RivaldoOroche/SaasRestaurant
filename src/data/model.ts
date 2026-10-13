@@ -1,4 +1,5 @@
 import type { TableStatus, OrderStatus, KdsColumn } from "@/types/database";
+import type { BusinessType, ComedorPago, ComedorPlan, ComensalTipo } from "@/lib/comedor";
 
 export type { TableStatus, OrderStatus, KdsColumn };
 
@@ -27,6 +28,8 @@ export interface MenuItem {
   sort: number;
   /** Archivado: ya no se vende ni aparece en la carta (se conserva por su historial). */
   archived?: boolean;
+  /** Octógonos de advertencia del empaque (0 a 4). En colegios no se venden. */
+  octogonos?: number;
 }
 
 /** Datos editables de un plato. */
@@ -333,6 +336,23 @@ export interface BusinessSettings {
   sunatMode?: SunatMode; // beta (homologación) o producción
   solUser?: string; // usuario SOL (SUNAT directo) — no secreto
   billingEndpoint?: string; // URL del OSE/PSE (no secreto)
+  // --- Tipo de negocio y comedor ---
+  /** Restaurante (por defecto) o comedor de colegio/empresa. Lo fija la plataforma. */
+  businessType?: BusinessType;
+  /** Colegio (ley de alimentación saludable) o empresa/institución. */
+  comedorMode?: "escolar" | "empresa";
+  /** No vender productos con octógonos (obligatorio en colegios). */
+  bloquearOctogonos?: boolean;
+  /** Entregar el menú sin reserva mientras queden raciones libres. */
+  permitirSinReserva?: boolean;
+  /** Hora límite (HH:MM) del mismo día para reservar o anular el menú. */
+  cierreReservas?: string;
+  /** Precio del menú del día por defecto (con IGV). */
+  menuPrice?: number;
+  /** Aviso a la familia cuando el saldo baja de este monto. */
+  saldoMinimo?: number;
+  /** Tope diario de kiosko para comensales nuevos (null = sin tope). */
+  defaultDailyLimit?: number | null;
 }
 
 /** Datos de una tarjeta para tokenizar (nunca se envían a nuestro backend). */
@@ -589,4 +609,149 @@ export interface EmitComprobanteInput {
   igv: number;
   total: number;
   reference: string;
+}
+
+// ---- Comedor (colegios y empresas) ----
+/** Alumno, docente o colaborador que come en el comedor. */
+export interface Comensal {
+  id: string;
+  /** Código del colegio/empresa o DNI. Único en el comedor. */
+  code: string;
+  name: string;
+  tipo: ComensalTipo;
+  /** Grado y sección (colegio) o área (empresa). */
+  grupo: string;
+  plan: ComedorPlan;
+  /** Último día cubierto por el abono (YYYY-MM-DD). */
+  abonoHasta: string | null;
+  balance: number;
+  /** Tope diario de kiosko (S/); null = sin tope. */
+  dailyLimit: number | null;
+  /** Categorías de la carta que la familia no permite (golosinas, bebidas…). */
+  blockedCategoryIds: string[];
+  /** Alergias o restricciones (texto que ve quien despacha). */
+  allergies: string;
+  responsableId: string | null;
+  active: boolean;
+  branchId?: string | null;
+}
+
+export type ComensalInput = Omit<Comensal, "id" | "balance"> & { id?: string };
+
+/** Padre, madre o apoderado (o el área que paga en una empresa). */
+export interface Responsable {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  /** Enlace privado del portal de familias. */
+  portalToken: string;
+}
+
+export type WalletKind = "recarga" | "consumo" | "ajuste" | "abono";
+/** Movimiento del monedero de un comensal (los más recientes primero). */
+export interface WalletMovement {
+  id: string;
+  comensalId: string;
+  comensalName: string;
+  kind: WalletKind;
+  /** + entra al saldo, − sale. El pago de un abono no cambia el saldo (0). */
+  amount: number;
+  method: string | null;
+  detail: string;
+  actor: string;
+  balanceAfter: number;
+  at: string;
+}
+
+/** Menú del día publicado. */
+export interface ComedorMenuDay {
+  date: string; // YYYY-MM-DD
+  entrada: string;
+  fondo: string;
+  postre: string;
+  bebida: string;
+  /** Precio con IGV para quien paga con saldo. */
+  price: number;
+  /** Raciones preparadas. */
+  raciones: number;
+  /** Alérgenos del menú (texto). */
+  allergens: string;
+}
+
+export interface ComedorReserva {
+  comensalId: string;
+  date: string;
+  by: "familia" | "comedor";
+}
+
+export interface ComedorItem {
+  menuItemId?: string | null;
+  name: string;
+  qty: number;
+  price: number;
+}
+
+/** Entrega del menú o venta de kiosko. */
+export interface ComedorConsumo {
+  id: string;
+  comensalId: string | null;
+  comensalName: string;
+  grupo: string;
+  kind: "menu" | "kiosko";
+  items: ComedorItem[];
+  total: number;
+  pago: ComedorPago;
+  actor: string;
+  branchId: string | null;
+  date: string; // YYYY-MM-DD (día de servicio)
+  at: string; // ISO
+}
+
+export interface DespacharInput {
+  /** null = venta al paso (sin comensal; paga en efectivo, Yape, Plin o tarjeta). */
+  comensalId: string | null;
+  kind: "menu" | "kiosko";
+  items: (ComedorItem & { categoryId?: string })[];
+  /** Medio de pago de la venta al paso. */
+  pago?: Extract<ComedorPago, "efectivo" | "yape" | "plin" | "tarjeta">;
+  actor: string;
+  branchId: string | null;
+}
+
+export interface RecargaInput {
+  comensalId: string;
+  amount: number;
+  method: "efectivo" | "yape" | "plin" | "transferencia" | "tarjeta";
+  note?: string;
+  actor: string;
+  branchId: string | null;
+  /** Abono: paga el mes y extiende la cobertura hasta esta fecha (no suma saldo). */
+  abonoHasta?: string | null;
+}
+
+/** Lo que ve la familia en su enlace privado. */
+export interface PortalFamilia {
+  tenantName: string;
+  responsable: string;
+  yapeNumber: string | null;
+  plinNumber: string | null;
+  cierreReservas: string;
+  saldoMinimo: number;
+  categories: { id: string; name: string }[];
+  menus: ComedorMenuDay[];
+  comensales: {
+    id: string;
+    name: string;
+    grupo: string;
+    plan: ComedorPlan;
+    abonoHasta: string | null;
+    balance: number;
+    dailyLimit: number | null;
+    blockedCategoryIds: string[];
+    allergies: string;
+    reservas: string[];
+    consumos: { date: string; at: string; detail: string; total: number; pago: string }[];
+    recargas: { at: string; amount: number; method: string | null; detail: string }[];
+  }[];
 }

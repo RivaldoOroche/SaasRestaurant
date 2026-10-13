@@ -4,7 +4,7 @@
  * `supabase gen types typescript` and replace this file.
  */
 export type AppRole = "saas" | "dueno" | "admin" | "mesero";
-export type PlanTier = "Básico" | "Pro" | "Enterprise";
+export type PlanTier = "Básico" | "Pro" | "Enterprise" | "Comedor" | "Comedor Pro" | "Comedor Institucional";
 export type TenantStatus = "Activo" | "Prueba" | "Suspendido";
 export type TableStatus = "libre" | "ocupada" | "cuenta" | "reservada";
 export type OrderStatus = "abierta" | "en_cocina" | "servida" | "cobrada" | "anulada";

@@ -38,8 +38,8 @@ describe("instalar.sql (script único para Supabase)", () => {
     await fresh.exec(installer); // segunda corrida: no falla ni repite nada
     const again = await fresh.query<{ n: number }>("select count(*)::int n from wayra_migraciones where estado = 'aplicada'");
     expect(again.rows[0].n).toBe(first.rows[0].n);
-    const plans = await fresh.query<{ tier: string; price: string }>("select tier, price from subscription_plans order by price");
-    expect(plans.rows.map((r) => [r.tier, Number(r.price)])).toEqual([["Básico", 159], ["Pro", 299], ["Enterprise", 899]]);
+    const plans = await fresh.query<{ tier: string; price: string }>("select tier, price from subscription_plans order by business_type desc, price");
+    expect(plans.rows.map((r) => [r.tier, Number(r.price)])).toEqual([["Básico", 159], ["Pro", 299], ["Enterprise", 899], ["Comedor", 249], ["Comedor Pro", 449], ["Comedor Institucional", 899]]);
     expect((await fresh.query<{ n: number }>("select count(*)::int n from tenants")).rows[0].n).toBe(0); // sin datos ficticios
     await fresh.exec(readFileSync("supabase/demo.sql", "utf8"));
     expect((await fresh.query<{ n: number }>("select count(*)::int n from tenants")).rows[0].n).toBe(6);

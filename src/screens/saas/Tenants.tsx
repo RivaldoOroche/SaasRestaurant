@@ -23,6 +23,9 @@ const PLAN_TONE: Record<PlanTier, "neutral" | "accent" | "success"> = {
   Básico: "neutral",
   Pro: "accent",
   Enterprise: "success",
+  Comedor: "neutral",
+  "Comedor Pro": "accent",
+  "Comedor Institucional": "success",
 };
 
 export function Tenants() {
