@@ -22,7 +22,7 @@ function useNavEntries() {
   const isTenant = session.role !== "saas";
   // Permisos efectivos del rol: filtra las pantallas del tenant (el SaaS no se filtra).
   const allowed = effectivePermissions(session.role, overrides);
-  const entries = navForRole(session.role).filter(
+  const entries = navForRole(session.role, session.businessType).filter(
     (e) => !e.hidden && (isTenant ? allowed.has(e.key) : true),
   );
   return {

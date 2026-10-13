@@ -6,20 +6,32 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { useAuth } from "@/auth/AuthContext";
 import { cn } from "@/lib/cn";
 import { buildTree, flatten } from "@/lib/branchTree";
 import type { StaffMember, StaffRole } from "@/data/model";
 
-const ROLES: { key: StaffRole; label: string; can: string }[] = [
+const RESTAURANT_ROLES: { key: StaffRole; label: string; can: string }[] = [
   { key: "mesero", label: "Mesero", can: "Toma pedidos, envía a cocina, cobra y ve sus propias ventas." },
   { key: "admin", label: "Gerente", can: "Además abre y cierra caja, edita la carta y el inventario, emite comprobantes y ve reportes." },
   { key: "dueno", label: "Dueño(a)", can: "Todo, incluido el personal, las sucursales, los permisos y el plan." },
 ];
-const roleLabel = (r: StaffRole) => ROLES.find((x) => x.key === r)?.label ?? r;
+const COMEDOR_ROLES: { key: StaffRole; label: string; can: string }[] = [
+  { key: "mesero", label: "Atención", can: "Despacha el menú y el kiosko, recarga saldos y consulta el padrón." },
+  { key: "admin", label: "Administrador(a)", can: "Además publica el menú, edita el padrón y la carta, abre y cierra caja y ve reportes." },
+  { key: "dueno", label: "Dueño(a)", can: "Todo, incluido el personal, las sedes, los permisos y el plan." },
+];
+/** Roles con los nombres del negocio (en un comedor el «mesero» atiende el despacho). */
+function useRoles() {
+  const { session } = useAuth();
+  return session?.businessType === "comedor" ? COMEDOR_ROLES : RESTAURANT_ROLES;
+}
 const field = "w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm";
 const randomPin = () => String(Math.floor(1000 + Math.random() * 9000));
 
 export function Personal() {
+  const roles = useRoles();
+  const roleLabel = (r: StaffRole) => roles.find((x) => x.key === r)?.label ?? r;
   const { data: staff = [], isLoading } = useStaff();
   const { data: branches = [] } = useBranches();
   const { updateStaff } = useStaffActions();
@@ -130,6 +142,7 @@ export function Personal() {
 }
 
 function RolePicker({ value, onChange }: { value: StaffRole; onChange: (r: StaffRole) => void }) {
+  const ROLES = useRoles();
   return (
     <fieldset className="space-y-1.5">
       <legend className="text-xs text-muted mb-1">Rol</legend>

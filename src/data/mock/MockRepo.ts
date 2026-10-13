@@ -1460,8 +1460,12 @@ export class MockRepo implements BackendRepo {
     this.persist();
     return m;
   }
-  async getMovimientos(comensalId?: string | null): Promise<WalletMovement[]> {
-    return this.state.wallet.filter((m) => !comensalId || m.comensalId === comensalId).slice(0, 500).map((m) => ({ ...m }));
+  async getMovimientos(comensalId?: string | null, from?: string | null): Promise<WalletMovement[]> {
+    const since = from ? new Date(`${from}T00:00:00`).toISOString() : null;
+    return this.state.wallet
+      .filter((m) => (!comensalId || m.comensalId === comensalId) && (!since || m.at >= since))
+      .slice(0, since ? 5000 : 500)
+      .map((m) => ({ ...m }));
   }
   async getComedorMenus(from: string, to: string): Promise<ComedorMenuDay[]> {
     return this.state.comedorMenus.filter((m) => m.date >= from && m.date <= to).sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ ...m }));

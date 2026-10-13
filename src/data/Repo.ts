@@ -299,8 +299,8 @@ export interface Repo {
   recargarSaldo(input: RecargaInput): Promise<WalletMovement>;
   /** Corrección o devolución de saldo (solo gerencia). */
   ajustarSaldo(comensalId: string, amount: number, reason: string, actor: string): Promise<WalletMovement>;
-  /** Movimientos del monedero (de un comensal o de todos), más recientes primero. */
-  getMovimientos(comensalId?: string | null): Promise<WalletMovement[]>;
+  /** Movimientos del monedero (de un comensal o de todos), más recientes primero; desde `from` (YYYY-MM-DD) si se indica. */
+  getMovimientos(comensalId?: string | null, from?: string | null): Promise<WalletMovement[]>;
   /** Menús publicados entre dos fechas (YYYY-MM-DD, incluidas). */
   getComedorMenus(from: string, to: string): Promise<ComedorMenuDay[]>;
   saveComedorMenu(day: ComedorMenuDay): Promise<void>;

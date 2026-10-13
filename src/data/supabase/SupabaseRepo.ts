@@ -1302,9 +1302,10 @@ export class SupabaseRepo implements BackendRepo {
     if (error) fail(error);
     return mapWallet(data as WalletJson);
   }
-  async getMovimientos(comensalId?: string | null): Promise<WalletMovement[]> {
-    let q = this.sb.from("comedor_wallet").select("*").order("created_at", { ascending: false }).limit(500);
+  async getMovimientos(comensalId?: string | null, from?: string | null): Promise<WalletMovement[]> {
+    let q = this.sb.from("comedor_wallet").select("*").order("created_at", { ascending: false }).limit(from ? 5000 : 500);
     if (comensalId) q = q.eq("comensal_id", comensalId);
+    if (from) q = q.gte("created_at", new Date(`${from}T00:00:00`).toISOString());
     const [{ data, error }, people] = await Promise.all([q, this.getComensales()]);
     if (error) fail(error);
     const names = new Map(people.map((c) => [c.id, c.name]));

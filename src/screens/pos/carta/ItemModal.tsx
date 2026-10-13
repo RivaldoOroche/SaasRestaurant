@@ -107,6 +107,7 @@ function DataTab({
     gf: item?.gf ?? false,
     meat: item?.meat ?? false,
     available: item?.available ?? true,
+    octogonos: item?.octogonos ?? 0,
   });
   const [err, setErr] = useState<string | null>(null);
 
@@ -204,6 +205,17 @@ function DataTab({
         {flag("gf", "Sin gluten")}
         {flag("meat", "Con carne")}
       </div>
+      <label className="block">
+        <span className="text-xs text-muted">Octógonos del empaque (alto en azúcar, sodio, grasas saturadas, grasas trans)</span>
+        <select value={f.octogonos ?? 0} onChange={(e) => setF({ ...f, octogonos: Number(e.target.value) })} className={field}>
+          {[0, 1, 2, 3, 4].map((n) => (
+            <option key={n} value={n}>
+              {n === 0 ? "Sin octógonos" : `${n} octógono${n > 1 ? "s" : ""}`}
+            </option>
+          ))}
+        </select>
+        {(f.octogonos ?? 0) > 0 && <span className="text-xs text-warning">En comedores de colegios no se vende (Ley 30021).</span>}
+      </label>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={f.available} onChange={(e) => setF({ ...f, available: e.target.checked })} />
         Disponible para vender (desmárcalo si se agotó hoy)

@@ -158,6 +158,19 @@ export function nextSchoolDays(from: Date, n: number): string[] {
   return out;
 }
 
+/** Alérgeno del menú que coincide con las alergias del comensal (o null). */
+export function allergyHit(allergies: string, allergens: string): string | null {
+  const norm = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const a = norm(allergies);
+  if (!a.trim()) return null;
+  return (
+    allergens
+      .split(/[,;/]| y /)
+      .map((x) => x.trim())
+      .find((x) => x && a.includes(norm(x))) ?? null
+  );
+}
+
 /** Saldo bajo: para avisar a la familia. */
 export function saldoBajo(balance: number, umbral: number): boolean {
   return balance < umbral;

@@ -72,6 +72,10 @@ const DICT: Record<string, Record<Lang, string>> = {
   "pwa.notNow": { es: "Ahora no", en: "Not now" },
   // Delivery (tablero)
   "nav.delivery": { es: "Delivery", en: "Delivery" },
+  "nav.despacho": { es: "Despacho", en: "Serving" },
+  "nav.comensales": { es: "Comensales", en: "Diners" },
+  "nav.menudia": { es: "Menú del día", en: "Daily menu" },
+  "nav.comreportes": { es: "Reportes", en: "Reports" },
   "dl.new": { es: "+ Nuevo pedido", en: "+ New order" },
   "dl.config": { es: "⚙ Zonas y repartidores", en: "⚙ Zones & riders" },
   "dl.kpi.active": { es: "Activos", en: "Active" },

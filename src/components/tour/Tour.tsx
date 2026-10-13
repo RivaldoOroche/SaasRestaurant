@@ -38,6 +38,30 @@ const MANAGER_STEP: Step = {
   body: "En Inicio ves las ventas del día, la caja y los insumos por reponer, y una guía de primeros pasos para dejar listo tu restaurante: carta, mesas, personal y SUNAT.",
 };
 const TENANT_STEPS: Step[] = [WELCOME, MANAGER_STEP, ...SERVICE_STEPS];
+
+// Comedor (colegio o empresa).
+const COMEDOR_SERVICE: Step[] = [
+  {
+    icon: "🍱",
+    title: "Despacha en segundos",
+    body: "En Despacho busca al alumno por código, DNI o nombre (o pasa su tarjeta) y toca «Entregar menú». Wayra revisa la reserva, el abono o el saldo y te avisa si tiene alergias.",
+  },
+  {
+    icon: "🍎",
+    title: "Kiosko saludable con saldo",
+    body: "Cambia a Kiosko para vender con el saldo del alumno. Se respetan el tope diario y los bloqueos que puso la familia; en colegios no se venden productos con octógonos.",
+  },
+  {
+    icon: "💰",
+    title: "Recargas y familias",
+    body: "En Comensales recargas saldo (efectivo entra a la caja) o registras el abono del mes. Cada familia tiene un enlace para ver saldo, consumos y reservar el menú.",
+  },
+];
+const COMEDOR_MANAGER: Step = {
+  icon: "🏠",
+  title: "Tu Inicio",
+  body: "En Inicio ves menús entregados, reservas por recoger, ventas del kiosko y la caja, y una guía para dejar listo el comedor: padrón, familias, menú y pagos.",
+};
 const MESERO_STEPS: Step[] = [WELCOME, ...SERVICE_STEPS];
 
 const SAAS_STEPS: Step[] = [
@@ -54,7 +78,17 @@ export function Tour() {
   const [i, setI] = useState(0);
 
   const role = session?.role ?? "";
-  const steps = role === "saas" ? SAAS_STEPS : role === "mesero" ? MESERO_STEPS : TENANT_STEPS;
+  const comedor = session?.businessType === "comedor";
+  const steps =
+    role === "saas"
+      ? SAAS_STEPS
+      : comedor
+        ? role === "mesero"
+          ? [WELCOME, ...COMEDOR_SERVICE]
+          : [WELCOME, COMEDOR_MANAGER, ...COMEDOR_SERVICE]
+        : role === "mesero"
+          ? MESERO_STEPS
+          : TENANT_STEPS;
 
   // Autoarranque en el primer ingreso de cada rol.
   useEffect(() => {

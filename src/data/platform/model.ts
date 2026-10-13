@@ -8,6 +8,10 @@ export interface Tenant {
   slug: string;
   ownerName: string;
   plan: PlanTier;
+  /** Restaurante o comedor (colegio/empresa). */
+  businessType: import("@/lib/comedor").BusinessType;
+  /** Comedor: comensales activos. */
+  comensales?: number;
   mrr: number;
   status: TenantStatus;
   since: string;
@@ -203,6 +207,7 @@ export interface NewTenantInput {
   name: string;
   ownerName: string;
   plan: PlanTier;
+  businessType?: import("@/lib/comedor").BusinessType;
 }
 
 export type ChargeStatus = "pendiente" | "aprobada" | "rechazada" | "cobrada" | "fallida";

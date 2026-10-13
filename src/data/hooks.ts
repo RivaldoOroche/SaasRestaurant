@@ -662,9 +662,9 @@ export function useResponsables() {
   const repo = useRepo();
   return useQuery({ queryKey: ["responsables"], queryFn: () => repo.getResponsables() });
 }
-export function useMovimientos(comensalId: string | null = null) {
+export function useMovimientos(comensalId: string | null = null, from: string | null = null) {
   const repo = useRepo();
-  return useQuery({ queryKey: ["movimientos", comensalId], queryFn: () => repo.getMovimientos(comensalId) });
+  return useQuery({ queryKey: ["movimientos", comensalId, from], queryFn: () => repo.getMovimientos(comensalId, from) });
 }
 export function useComedorMenus(from: string, to: string) {
   const repo = useRepo();

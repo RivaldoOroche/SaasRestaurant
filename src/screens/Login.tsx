@@ -124,7 +124,7 @@ export function Login() {
             </div>
             {!isBackendConfigured && (
               <p className="text-center text-white/40 text-xs mt-5">
-                Demo: 1111 Dueña · 2222 Gerente · 3333/4444 Mesero · 0000 SaaS
+                Demo restaurante: 1111 Dueña · 2222 Gerente · 3333/4444 Mesero · Comedor escolar: 5555 Dueña · 6666 Atención · 0000 SaaS
               </p>
             )}
           </>

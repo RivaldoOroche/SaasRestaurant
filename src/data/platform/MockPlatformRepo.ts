@@ -14,7 +14,7 @@ import type {
   ChargeProposal,
   PlanRequest,
 } from "./model";
-import { MOCK_TENANT_ID } from "@/auth/session";
+import { MOCK_COMEDOR_ID, MOCK_TENANT_ID } from "@/auth/session";
 import { deriveRetentionMetrics, deriveCohorts } from "./retention";
 
 function isoAgo(mins: number): string {
@@ -108,12 +108,13 @@ function currentPeriod(): string {
 }
 
 const SEED_TENANTS: Tenant[] = [
-  { id: MOCK_TENANT_ID, name: "La Higuera", slug: "la-higuera", ownerName: "Mónica R.", plan: "Pro", mrr: PLAN_PRICE.Pro, status: "Activo", since: "Mar 2025", branches: 3, users: 12, isYou: true, link: null, cohort: "2025-03" },
-  { id: uid("t"), name: "Cevichería El Muelle", slug: "cevicheria-el-muelle", ownerName: "Andrés Ríos", plan: "Enterprise", mrr: PLAN_PRICE.Enterprise, status: "Activo", since: "Jun 2024", branches: 11, users: 64, isYou: false, link: null, cohort: "2024-06" },
-  { id: uid("t"), name: "Sushi Nami", slug: "sushi-nami", ownerName: "Keiko Tanaka", plan: "Pro", mrr: PLAN_PRICE.Pro, status: "Activo", since: "Nov 2025", branches: 2, users: 9, isYou: false, link: null, cohort: "2025-11" },
-  { id: uid("t"), name: "Tacos El Farol", slug: "tacos-el-farol", ownerName: "Raúl Méndez", plan: "Básico", mrr: PLAN_PRICE.Básico, status: "Activo", since: "Ene 2025", branches: 1, users: 3, isYou: false, link: null, cohort: "2025-01" },
-  { id: uid("t"), name: "Café Aurora", slug: "cafe-aurora", ownerName: "Paula Vega", plan: "Pro", mrr: 0, status: "Prueba", since: "Feb 2026", branches: 1, users: 4, isYou: false, link: null, cohort: "2026-02" },
-  { id: uid("t"), name: "Brasas del Sur", slug: "brasas-del-sur", ownerName: "Jorge Salas", plan: "Básico", mrr: 0, status: "Suspendido", since: "Set 2025", branches: 1, users: 2, isYou: false, link: null, cohort: "2025-09" },
+  { id: MOCK_COMEDOR_ID, name: "Comedor San Martín", slug: "comedor-san-martin", ownerName: "Rosa Cárdenas", plan: "Comedor Pro", businessType: "comedor", comensales: 20, mrr: PLAN_PRICE["Comedor Pro"], status: "Activo", since: "Mar 2026", branches: 1, users: 2, isYou: false, link: null, cohort: "2026-03" },
+  { id: MOCK_TENANT_ID, name: "La Higuera", slug: "la-higuera", ownerName: "Mónica R.", businessType: "restaurante", plan: "Pro", mrr: PLAN_PRICE.Pro, status: "Activo", since: "Mar 2025", branches: 3, users: 12, isYou: true, link: null, cohort: "2025-03" },
+  { id: uid("t"), name: "Cevichería El Muelle", slug: "cevicheria-el-muelle", ownerName: "Andrés Ríos", businessType: "restaurante", plan: "Enterprise", mrr: PLAN_PRICE.Enterprise, status: "Activo", since: "Jun 2024", branches: 11, users: 64, isYou: false, link: null, cohort: "2024-06" },
+  { id: uid("t"), name: "Sushi Nami", slug: "sushi-nami", ownerName: "Keiko Tanaka", businessType: "restaurante", plan: "Pro", mrr: PLAN_PRICE.Pro, status: "Activo", since: "Nov 2025", branches: 2, users: 9, isYou: false, link: null, cohort: "2025-11" },
+  { id: uid("t"), name: "Tacos El Farol", slug: "tacos-el-farol", ownerName: "Raúl Méndez", businessType: "restaurante", plan: "Básico", mrr: PLAN_PRICE.Básico, status: "Activo", since: "Ene 2025", branches: 1, users: 3, isYou: false, link: null, cohort: "2025-01" },
+  { id: uid("t"), name: "Café Aurora", slug: "cafe-aurora", ownerName: "Paula Vega", businessType: "restaurante", plan: "Pro", mrr: 0, status: "Prueba", since: "Feb 2026", branches: 1, users: 4, isYou: false, link: null, cohort: "2026-02" },
+  { id: uid("t"), name: "Brasas del Sur", slug: "brasas-del-sur", ownerName: "Jorge Salas", businessType: "restaurante", plan: "Básico", mrr: 0, status: "Suspendido", since: "Set 2025", branches: 1, users: 2, isYou: false, link: null, cohort: "2025-09" },
 ];
 
 export class MockPlatformRepo implements PlatformRepo {
@@ -358,6 +359,7 @@ export class MockPlatformRepo implements PlatformRepo {
       slug,
       ownerName: input.ownerName,
       plan: input.plan,
+      businessType: input.businessType ?? "restaurante",
       mrr: 0, // starts on 14-day trial
       status: "Prueba",
       since: "hoy",
@@ -381,6 +383,7 @@ export class MockPlatformRepo implements PlatformRepo {
       slug,
       ownerName: input.ownerName,
       plan: input.plan,
+      businessType: input.businessType ?? "restaurante",
       mrr: 0,
       status: "Prueba",
       since: "hoy",

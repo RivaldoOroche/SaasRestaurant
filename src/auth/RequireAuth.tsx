@@ -10,8 +10,8 @@ export function RequireAuth({ path, children }: { path: string; children: ReactN
 
   if (!ready) return null;
   if (!session) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (!canAccess(session.role, path)) {
-    return <Navigate to={homePathForRole(session.role)} replace />;
+  if (!canAccess(session.role, path, session.businessType)) {
+    return <Navigate to={homePathForRole(session.role, session.businessType)} replace />;
   }
   return <>{children}</>;
 }

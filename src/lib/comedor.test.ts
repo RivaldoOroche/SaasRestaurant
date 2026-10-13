@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { kioskoBlock, menuCheck, parsePadron, puedeReservar, nextSchoolDays, abonoVigente, type ComensalLike } from "./comedor";
+import { allergyHit, kioskoBlock, menuCheck, parsePadron, puedeReservar, nextSchoolDays, abonoVigente, type ComensalLike } from "./comedor";
 
 const base: ComensalLike = {
   name: "Lucía",
@@ -87,5 +87,14 @@ describe("parsePadron", () => {
     expect(rows[0]).toMatchObject({ code: "A001", plan: "abono", tipo: "alumno", guardianPhone: "987654321", allergies: "maní" });
     expect(rows[1]).toMatchObject({ code: "D010", tipo: "docente", plan: "convenio" });
     expect(errors).toEqual(["Fila 4: falta el código o el nombre.", "El código A001 se repite en el padrón."]);
+  });
+});
+
+describe("allergyHit", () => {
+  it("detecta el alérgeno del menú sin importar tildes ni mayúsculas", () => {
+    expect(allergyHit("Maní y nueces", "Lácteos, maní")).toBe("maní");
+    expect(allergyHit("lactosa", "Lácteos, maní")).toBeNull();
+    expect(allergyHit("", "Lácteos")).toBeNull();
+    expect(allergyHit("Lacteos", "lácteos y huevo")).toBe("lácteos");
   });
 });

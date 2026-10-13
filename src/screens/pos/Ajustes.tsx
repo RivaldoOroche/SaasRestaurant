@@ -108,6 +108,9 @@ export function Ajustes() {
 
         <NotificacionesCard />
 
+        {settings.businessType === "comedor" ? (
+          <ComedorCard settings={settings} />
+        ) : (
         <Card>
           <CardBody className="space-y-3">
             <Toggle
@@ -122,12 +125,100 @@ export function Ajustes() {
             />
           </CardBody>
         </Card>
+        )}
 
         <EmisorCard settings={settings} />
         <FacturacionCard settings={settings} />
         <PaymentsCard settings={settings} />
       </div>
     </div>
+  );
+}
+
+/** Reglas del comedor: colegio o empresa, octógonos, reservas, precio y avisos. */
+function ComedorCard({ settings }: { settings: BusinessSettings }) {
+  const { updateSettings } = useTenantActions();
+  const num = (v: string) => (v.trim() === "" ? null : Number(v.replace(",", ".")));
+  return (
+    <Card>
+      <CardBody className="space-y-4">
+        <div>
+          <h3 className="font-semibold">Comedor</h3>
+          <p className="text-muted text-xs">Reglas que se aplican al despachar y en el enlace de las familias.</p>
+        </div>
+        <Field label="Tipo de comedor">
+          <div className="flex gap-2">
+            {(["escolar", "empresa"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => updateSettings.mutate({ comedorMode: m, ...(m === "escolar" ? { bloquearOctogonos: true } : {}) })}
+                aria-pressed={(settings.comedorMode ?? "escolar") === m}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm border",
+                  (settings.comedorMode ?? "escolar") === m ? "bg-accent/20 border-accent text-accent" : "bg-chip-bg border-border",
+                )}
+              >
+                {m === "escolar" ? "Colegio" : "Empresa o institución"}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Toggle
+          label="No vender productos con octógonos (obligatorio en colegios, Ley 30021)"
+          on={settings.bloquearOctogonos ?? true}
+          onChange={(v) => updateSettings.mutate({ bloquearOctogonos: v })}
+        />
+        <Toggle
+          label="Entregar el menú sin reserva si quedan raciones libres"
+          on={settings.permitirSinReserva ?? true}
+          onChange={(v) => updateSettings.mutate({ permitirSinReserva: v })}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Cierre de reservas (mismo día)">
+            <input
+              type="time"
+              defaultValue={settings.cierreReservas ?? "09:30"}
+              onBlur={(e) => e.target.value && updateSettings.mutate({ cierreReservas: e.target.value })}
+              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm"
+            />
+          </Field>
+          <Field label="Precio del menú por defecto (S/)">
+            <input
+              defaultValue={settings.menuPrice ?? 12}
+              inputMode="decimal"
+              onBlur={(e) => {
+                const v = num(e.target.value);
+                if (v != null && v >= 0) updateSettings.mutate({ menuPrice: v });
+              }}
+              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+            />
+          </Field>
+          <Field label="Aviso de saldo bajo (S/)">
+            <input
+              defaultValue={settings.saldoMinimo ?? 10}
+              inputMode="decimal"
+              onBlur={(e) => {
+                const v = num(e.target.value);
+                if (v != null && v >= 0) updateSettings.mutate({ saldoMinimo: v });
+              }}
+              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+            />
+          </Field>
+          <Field label="Tope diario de kiosko para alumnos nuevos (S/)">
+            <input
+              defaultValue={settings.defaultDailyLimit ?? ""}
+              placeholder="Sin tope"
+              inputMode="decimal"
+              onBlur={(e) => {
+                const v = num(e.target.value);
+                if (v == null || v >= 0) updateSettings.mutate({ defaultDailyLimit: v });
+              }}
+              className="w-full rounded-md bg-chip-bg border border-border px-3 py-2 text-sm font-mono"
+            />
+          </Field>
+        </div>
+      </CardBody>
+    </Card>
   );
 }
 

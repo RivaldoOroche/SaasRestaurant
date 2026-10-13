@@ -53,7 +53,8 @@ export default async function handler(req: Request): Promise<Response> {
     if (new Date(link.expires_at).getTime() < Date.now()) return json({ error: "El enlace expiró" }, 400);
 
     const tenantId = link.tenant_id as string;
-    const { data: tenant } = await admin.from("tenants").select("name").eq("id", tenantId).maybeSingle();
+    const { data: tenant } = await admin.from("tenants").select("name, business_type").eq("id", tenantId).maybeSingle();
+    const comedor = tenant?.business_type === "comedor";
 
     // 2) Crear el usuario dueño (confirmado).
     const { data: created, error: uErr } = await admin.auth.admin.createUser({
@@ -86,11 +87,24 @@ export default async function handler(req: Request): Promise<Response> {
     // 4) Asegurar business_settings.
     await admin.from("business_settings").upsert({ tenant_id: tenantId, name: tenant?.name ?? "Mi negocio" });
 
-    // 5) Siembra mínima: mesas + una categoría (idempotente por si se reintenta).
-    const { count: tablesCount } = await admin
-      .from("restaurant_tables")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId);
+    // 5) Siembra mínima (idempotente por si se reintenta). Comedor: las
+    // categorías del kiosko saludable; restaurante: mesas + una categoría.
+    if (comedor) {
+      const { count: catCount } = await admin
+        .from("menu_categories")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId);
+      if (!catCount) {
+        await admin.from("menu_categories").insert([
+          { tenant_id: tenantId, key: "saludables", name: "Saludables", icon: "🍎", subtitle: "Frutas, ensaladas y sándwiches", sort: 1 },
+          { tenant_id: tenantId, key: "bebidas", name: "Bebidas", icon: "🥤", subtitle: "Refrescos naturales y agua", sort: 2 },
+          { tenant_id: tenantId, key: "postres", name: "Postres", icon: "🍮", subtitle: "Dulces caseros", sort: 3 },
+        ]);
+      }
+    }
+    const { count: tablesCount } = comedor
+      ? { count: 1 }
+      : await admin.from("restaurant_tables").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId);
     if (!tablesCount) {
       const zonas = ["Salón", "Salón", "Salón", "Terraza", "Terraza", "Barra"];
       await admin.from("restaurant_tables").insert(

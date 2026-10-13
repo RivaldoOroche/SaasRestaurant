@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { formatMoney } from "@/lib/money";
-import { branchLimitLabel, planInfo } from "@/lib/plans";
+import { branchLimitLabel, comensalLimitLabel, planInfo, plansFor } from "@/lib/plans";
+import type { BusinessType } from "@/lib/comedor";
 import { homePathForRole } from "@/lib/roles";
 import { cn } from "@/lib/cn";
 import { tokenizeCard } from "@/lib/cardToken";
@@ -117,8 +118,8 @@ function TenantDetail({ tenant, onClose }: { tenant: Tenant; onClose: () => void
   }
 
   function enter() {
-    enterTenant(tenant.id, tenant.name);
-    navigate(homePathForRole("dueno"));
+    enterTenant(tenant.id, tenant.name, tenant.businessType);
+    navigate(homePathForRole("dueno", tenant.businessType));
   }
 
   async function cobrarDirecto() {
@@ -353,6 +354,7 @@ function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void 
   const [name, setName] = useState("");
   const [owner, setOwner] = useState("");
   const [plan, setPlan] = useState<PlanTier>("Pro");
+  const [businessType, setBusinessType] = useState<BusinessType>("restaurante");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState(tempPassword());
   const [link, setLink] = useState<string | null>(null);
@@ -383,12 +385,12 @@ function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void 
           return;
         }
         await createTenantWithOwner.mutateAsync({
-          input: { name, ownerName: owner, plan },
+          input: { name, ownerName: owner, plan, businessType },
           credentials: { email, password },
         });
         setAccount({ email, password });
       } else {
-        const res = await createTenant.mutateAsync({ name, ownerName: owner, plan });
+        const res = await createTenant.mutateAsync({ name, ownerName: owner, plan, businessType });
         setLink(res.link);
       }
     } catch (e) {
@@ -425,9 +427,28 @@ function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void 
               />
             </label>
             <div>
+              <p className="text-xs text-muted mb-1">Tipo de negocio</p>
+              <div className="flex gap-2 mb-3">
+                {(["restaurante", "comedor"] as BusinessType[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => {
+                      setBusinessType(t);
+                      setPlan(t === "comedor" ? "Comedor" : "Pro");
+                    }}
+                    aria-pressed={businessType === t}
+                    className={cn(
+                      "flex-1 rounded-md px-2 py-2 text-sm border text-center",
+                      businessType === t ? "bg-accent/20 border-accent text-accent" : "bg-chip-bg border-border",
+                    )}
+                  >
+                    {t === "restaurante" ? "🍽️ Restaurante" : "🍱 Comedor (colegio o empresa)"}
+                  </button>
+                ))}
+              </div>
               <p className="text-xs text-muted mb-1">Plan</p>
               <div className="flex gap-2">
-                {(["Básico", "Pro", "Enterprise"] as PlanTier[]).map((p) => (
+                {plansFor(businessType).map(({ tier: p }) => (
                   <button
                     key={p}
                     onClick={() => setPlan(p)}
@@ -442,7 +463,7 @@ function NewTenantModal({ open, onClose }: { open: boolean; onClose: () => void 
                       {formatMoney(planInfo(p).price)}/mes
                     </span>
                     <span className="block text-[10px] opacity-70">
-                      {branchLimitLabel(planInfo(p))}
+                      {businessType === "comedor" ? comensalLimitLabel(planInfo(p)) : branchLimitLabel(planInfo(p))}
                     </span>
                   </button>
                 ))}

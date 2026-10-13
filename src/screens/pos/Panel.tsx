@@ -22,6 +22,7 @@ import { formatMoney, round2 } from "@/lib/money";
 import { inventoryStatus, fmtQty } from "@/lib/inventory";
 import { cn } from "@/lib/cn";
 import type { Order } from "@/data/model";
+import { ComedorPanel } from "./comedor/ComedorPanel";
 
 /** Total cobrado (los precios ya incluyen IGV). */
 const collected = (o: Order) =>
@@ -36,7 +37,13 @@ interface Step {
   done: boolean;
 }
 
+/** Inicio según el negocio: el restaurante o el comedor tienen su propio tablero. */
 export function Panel() {
+  const { session } = useAuth();
+  return session?.businessType === "comedor" ? <ComedorPanel /> : <RestaurantePanel />;
+}
+
+function RestaurantePanel() {
   const { session } = useAuth();
   const owner = session?.role === "dueno";
   const { data: paid = [] } = usePaidOrders();

@@ -67,7 +67,7 @@ function mapActivity(id: string, tenant: string, actor: string, message: string,
   return { id, tenant, actor, category, level, message, at };
 }
 
-type TenantRow = Row<"tenants"> & { mrr?: number; branches_count?: number };
+type TenantRow = Row<"tenants"> & { mrr?: number; branches_count?: number; comensales_count?: number };
 
 function mapTenant(r: TenantRow): Tenant {
   return {
@@ -76,6 +76,8 @@ function mapTenant(r: TenantRow): Tenant {
     slug: r.slug,
     ownerName: r.owner_name,
     plan: r.plan,
+    businessType: r.business_type ?? "restaurante",
+    comensales: r.comensales_count ?? 0,
     mrr: Number(r.mrr ?? 0),
     status: r.status,
     since: new Date(r.since).toLocaleDateString("es-PE", { month: "short", year: "numeric" }),
@@ -359,7 +361,7 @@ export class SupabasePlatformRepo implements PlatformRepo {
     const slug = slugify(input.name);
     const { data, error } = await this.sb
       .from("tenants")
-      .insert({ name: input.name, slug, owner_name: input.ownerName, plan: input.plan, status: "Prueba" })
+      .insert({ name: input.name, slug, owner_name: input.ownerName, plan: input.plan, business_type: input.businessType ?? "restaurante", status: "Prueba" })
       .select("*")
       .single();
     if (error) throw error;

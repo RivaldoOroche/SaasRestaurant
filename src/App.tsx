@@ -51,6 +51,12 @@ import { useTheme } from "@/store/theme";
 import type { ComponentType } from "react";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Personal } from "@/screens/pos/Personal";
+import { Despacho } from "@/screens/pos/comedor/Despacho";
+import { Comensales } from "@/screens/pos/comedor/Comensales";
+import { MenuDia } from "@/screens/pos/comedor/MenuDia";
+import { PortalFamilia } from "@/screens/public/PortalFamilia";
+
+const ComedorReportes = lazy(() => import("@/screens/pos/comedor/ComedorReportes").then((m) => ({ default: m.ComedorReportes })));
 
 /** Screens implemented so far; the rest fall back to a gated placeholder. */
 const SCREENS: Record<string, ComponentType> = {
@@ -85,6 +91,10 @@ const SCREENS: Record<string, ComponentType> = {
   bitacora: Bitacora,
   configsaas: ConfigSaaS,
   ayuda: Ayuda,
+  despacho: Despacho,
+  comensales: Comensales,
+  menudia: MenuDia,
+  comreportes: ComedorReportes,
 };
 
 /** Which build phase each screen is delivered in (shown on placeholders). */
@@ -119,7 +129,7 @@ function screenRoute(e: NavEntry) {
 function HomeRedirect() {
   const { session, ready } = useAuth();
   if (!ready) return null;
-  return <Navigate to={session ? homePathForRole(session.role) : "/login"} replace />;
+  return <Navigate to={session ? homePathForRole(session.role, session.businessType) : "/login"} replace />;
 }
 
 function Shell() {
@@ -140,6 +150,7 @@ function Shell() {
       <Route path="/legal/:doc" element={<Legal />} />
       <Route path="/estado" element={<Estado />} />
       <Route path="/seguimiento/:token" element={<Seguimiento />} />
+      <Route path="/familia/:token" element={<PortalFamilia />} />
       <Route path="/login" element={<Login />} />
       <Route element={<AppShell />}>
         {TENANT_NAV.map(screenRoute)}
