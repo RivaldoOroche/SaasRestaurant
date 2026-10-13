@@ -19,7 +19,7 @@ type Timestamps = { created_at: string };
 
 export interface Tables {
   tenants: {
-    Row: { id: string; name: string; slug: string; owner_name: string; plan: PlanTier; status: TenantStatus; since: string } & Timestamps;
+    Row: { id: string; name: string; slug: string; owner_name: string; plan: PlanTier; status: TenantStatus; since: string; business_type: "restaurante" | "comedor" } & Timestamps;
   };
   memberships: {
     Row: { id: string; user_id: string; tenant_id: string | null; role: AppRole } & Timestamps;
@@ -101,7 +101,8 @@ export interface Tables {
     Row: { id: string; tenant_id: string; name: string; initials: string; role: AppRole; pin_hash: string | null; pin_verifier: string | null; active: boolean; branch_ids?: string[] } & Timestamps;
   };
   business_settings: {
-    Row: { tenant_id: string; name: string; currency: CurrencyCode; tax_rate: number; tax_regime: string; tip_presets: number[]; online_orders: boolean; auto_tip: boolean; ruc: string | null; address: string | null; yape_number: string | null; plin_number: string | null; card_provider: string; card_public_key: string | null; razon_social: string | null; ubigeo: string | null; billing_provider: string; sunat_mode: string; sol_user: string | null; billing_endpoint: string | null; updated_at: string };
+    Row: { tenant_id: string; name: string; currency: CurrencyCode; tax_rate: number; tax_regime: string; tip_presets: number[]; online_orders: boolean; auto_tip: boolean; ruc: string | null; address: string | null; yape_number: string | null; plin_number: string | null; card_provider: string; card_public_key: string | null; razon_social: string | null; ubigeo: string | null; billing_provider: string; sunat_mode: string; sol_user: string | null; billing_endpoint: string | null; updated_at: string;
+      comedor_mode: "escolar" | "empresa"; bloquear_octogonos: boolean; permitir_sin_reserva: boolean; cierre_reservas: string; menu_price: number; saldo_minimo: number; default_daily_limit: number | null };
   };
   payment_credentials: {
     Row: {
@@ -269,7 +270,35 @@ export interface Tables {
     Row: { id: string; tenant_id: string; key: string; name: string; icon: string; subtitle: string; sort: number };
   };
   menu_items: {
-    Row: { id: string; tenant_id: string; category_id: string; name: string; description: string; price: number; emoji: string; badge: string | null; is_veg: boolean; is_spicy: boolean; is_gf: boolean; is_meat: boolean; available: boolean; sort: number; archived: boolean };
+    Row: { id: string; tenant_id: string; category_id: string; name: string; description: string; price: number; emoji: string; badge: string | null; is_veg: boolean; is_spicy: boolean; is_gf: boolean; is_meat: boolean; available: boolean; sort: number; archived: boolean; octogonos: number };
+  };
+  // Comedor (0046)
+  responsables: {
+    Row: { id: string; tenant_id: string; name: string; phone: string; email: string; portal_token: string; created_at: string };
+  };
+  comensales: {
+    Row: {
+      id: string; tenant_id: string; branch_id: string | null; code: string; name: string;
+      tipo: "alumno" | "docente" | "colaborador" | "otro"; grupo: string; plan: "prepago" | "abono" | "convenio";
+      abono_hasta: string | null; balance: number; daily_limit: number | null; blocked_category_ids: string[];
+      allergies: string; responsable_id: string | null; active: boolean; created_at: string; updated_at: string;
+    };
+  };
+  comedor_wallet: {
+    Row: { id: string; tenant_id: string; comensal_id: string; kind: "recarga" | "consumo" | "ajuste" | "abono"; amount: number; method: string | null; detail: string; actor: string; balance_after: number; created_at: string };
+  };
+  comedor_menus: {
+    Row: { tenant_id: string; date: string; entrada: string; fondo: string; postre: string; bebida: string; price: number; raciones: number; allergens: string; updated_at: string };
+  };
+  comedor_reservas: {
+    Row: { tenant_id: string; comensal_id: string; date: string; by: "familia" | "comedor"; created_at: string };
+  };
+  comedor_consumos: {
+    Row: {
+      id: string; tenant_id: string; branch_id: string | null; comensal_id: string | null; comensal_name: string; grupo: string;
+      kind: "menu" | "kiosko"; items: { menu_item_id?: string; name: string; qty: number; price: number }[]; total: number;
+      pago: string; actor: string; service_date: string; created_at: string;
+    };
   };
   menu_item_branch: {
     Row: { tenant_id: string; branch_id: string; item_id: string; price: number | null; available: boolean | null; updated_at: string };
@@ -368,7 +397,7 @@ export type Database = {
         Relationships: [];
       };
       v_tenants: {
-        Row: Tables["tenants"]["Row"] & { mrr: number; plan_total: number; branches_count: number };
+        Row: Tables["tenants"]["Row"] & { mrr: number; plan_total: number; branches_count: number; comensales_count: number };
         Relationships: [];
       };
     };
@@ -411,6 +440,20 @@ export type Database = {
       public_tenant_info: { Args: { p_slug: string }; Returns: unknown };
       submit_complaint: { Args: { p_slug: string; payload: unknown }; Returns: unknown };
       public_delivery_status: { Args: { p_token: string }; Returns: unknown };
+      comensales_quota: { Args: { p_tenant: string }; Returns: unknown };
+      comedor_recargar: {
+        Args: { p_tenant: string; p_comensal: string; p_amount: number; p_method: string; p_note: string; p_actor: string; p_branch?: string | null; p_abono_hasta?: string | null };
+        Returns: unknown;
+      };
+      comedor_ajustar: { Args: { p_tenant: string; p_comensal: string; p_amount: number; p_reason: string; p_actor: string }; Returns: unknown };
+      comedor_despachar: { Args: { p_tenant: string; p: unknown }; Returns: unknown };
+      comedor_set_reserva: { Args: { p_tenant: string; p_comensal: string; p_date: string; p_on: boolean }; Returns: undefined };
+      public_familia: { Args: { p_token: string }; Returns: unknown };
+      public_familia_reservar: { Args: { p_token: string; p_comensal: string; p_date: string; p_on: boolean }; Returns: undefined };
+      public_familia_ajustes: {
+        Args: { p_token: string; p_comensal: string; p_daily_limit: number | null; p_blocked: string[]; p_allergies: string };
+        Returns: undefined;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

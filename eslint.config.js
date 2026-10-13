@@ -40,6 +40,11 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node } },
   },
   {
+    // Material comercial: scripts de Node que controlan un navegador (Playwright).
+    files: ["docs/**/*.mjs"],
+    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+  },
+  {
     // Edge Functions (Deno) + módulos compartidos del backend.
     files: ["supabase/functions/**/*.ts"],
     languageOptions: {

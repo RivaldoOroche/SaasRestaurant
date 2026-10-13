@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { BackendRepo, BranchInput, TerminalInfo } from "../Repo";
+import type { BackendRepo, BranchInput, ComensalQuota, TerminalInfo } from "../Repo";
 import type {
   Category,
   MenuItem,
@@ -54,6 +54,18 @@ import { assertPinFree, pinVerifier } from "@/lib/pin";
 import { planInfo } from "@/lib/plans";
 import { sameName, slugKey, validateMenuItem } from "@/lib/menu";
 import { applyBranchOverrides } from "../model";
+import type {
+  Comensal,
+  ComensalInput,
+  Responsable,
+  WalletMovement,
+  ComedorMenuDay,
+  ComedorReserva,
+  ComedorConsumo,
+  DespacharInput,
+  RecargaInput,
+} from "../model";
+import type { PadronRow } from "@/lib/comedor";
 
 /** Error legible a partir de un error de PostgREST (mensajes de los triggers en español). */
 function fail(error: { message?: string } | null): never {
@@ -165,6 +177,7 @@ export class SupabaseRepo implements BackendRepo {
       is_gf: input.gf,
       is_meat: input.meat,
       available: input.available,
+      octogonos: Math.max(0, Math.min(4, Math.round(input.octogonos ?? 0))),
     };
     if (input.id) {
       const { error } = await this.sb.from("menu_items").update(row).eq("id", input.id);
@@ -862,7 +875,7 @@ export class SupabaseRepo implements BackendRepo {
   async getSettings(): Promise<BusinessSettings> {
     const [{ data }, { data: t }] = await Promise.all([
       this.sb.from("business_settings").select("*").eq("tenant_id", this.tenantId).maybeSingle(),
-      this.sb.from("tenants").select("slug").eq("id", this.tenantId).maybeSingle(),
+      this.sb.from("tenants").select("slug, business_type").eq("id", this.tenantId).maybeSingle(),
     ]);
     return {
       name: data?.name ?? "",
@@ -885,6 +898,14 @@ export class SupabaseRepo implements BackendRepo {
       sunatMode: (data?.sunat_mode ?? "beta") as BusinessSettings["sunatMode"],
       solUser: data?.sol_user ?? "",
       billingEndpoint: data?.billing_endpoint ?? "",
+      businessType: t?.business_type ?? "restaurante",
+      comedorMode: data?.comedor_mode ?? "escolar",
+      bloquearOctogonos: data?.bloquear_octogonos ?? true,
+      permitirSinReserva: data?.permitir_sin_reserva ?? true,
+      cierreReservas: data?.cierre_reservas ?? "09:30",
+      menuPrice: Number(data?.menu_price ?? 12),
+      saldoMinimo: Number(data?.saldo_minimo ?? 10),
+      defaultDailyLimit: data?.default_daily_limit == null ? null : Number(data.default_daily_limit),
     };
   }
   async updateSettings(patch: Partial<BusinessSettings>): Promise<void> {
@@ -908,6 +929,13 @@ export class SupabaseRepo implements BackendRepo {
     if (patch.sunatMode !== undefined) row.sunat_mode = patch.sunatMode;
     if (patch.solUser !== undefined) row.sol_user = patch.solUser;
     if (patch.billingEndpoint !== undefined) row.billing_endpoint = patch.billingEndpoint;
+    if (patch.comedorMode !== undefined) row.comedor_mode = patch.comedorMode;
+    if (patch.bloquearOctogonos !== undefined) row.bloquear_octogonos = patch.bloquearOctogonos;
+    if (patch.permitirSinReserva !== undefined) row.permitir_sin_reserva = patch.permitirSinReserva;
+    if (patch.cierreReservas !== undefined) row.cierre_reservas = patch.cierreReservas;
+    if (patch.menuPrice !== undefined) row.menu_price = patch.menuPrice;
+    if (patch.saldoMinimo !== undefined) row.saldo_minimo = patch.saldoMinimo;
+    if (patch.defaultDailyLimit !== undefined) row.default_daily_limit = patch.defaultDailyLimit;
     await this.sb.from("business_settings").update(row).eq("tenant_id", this.tenantId);
   }
 
@@ -1172,6 +1200,190 @@ export class SupabaseRepo implements BackendRepo {
     }));
   }
 
+  // ---- Comedor ----
+  async getComensales(): Promise<Comensal[]> {
+    const { data, error } = await this.sb.from("comensales").select("*").order("name");
+    if (error) fail(error);
+    return (data ?? []).map(mapComensal);
+  }
+  async saveComensal(input: ComensalInput): Promise<string> {
+    const code = input.code.trim();
+    const name = input.name.trim();
+    if (!code || !name) throw new Error("El código y el nombre son obligatorios.");
+    const row = {
+      code,
+      name,
+      tipo: input.tipo,
+      grupo: input.grupo,
+      plan: input.plan,
+      abono_hasta: input.abonoHasta,
+      daily_limit: input.dailyLimit,
+      blocked_category_ids: input.blockedCategoryIds,
+      allergies: input.allergies,
+      responsable_id: input.responsableId,
+      active: input.active,
+      branch_id: input.branchId ?? null,
+    };
+    if (input.id) {
+      const { error } = await this.sb.from("comensales").update(row).eq("id", input.id);
+      if (error) fail(dupMessage(error, code));
+      return input.id;
+    }
+    const { data, error } = await this.sb.from("comensales").insert({ ...row, tenant_id: this.tenantId }).select("id").single();
+    if (error) fail(dupMessage(error, code));
+    return data.id;
+  }
+  async importPadron(rows: PadronRow[]): Promise<{ created: number; updated: number }> {
+    const [existing, resps, settings] = await Promise.all([this.getComensales(), this.getResponsables(), this.getSettings()]);
+    const byCode = new Map(existing.map((c) => [c.code.toLowerCase(), c]));
+    let created = 0;
+    let updated = 0;
+    for (const r of rows) {
+      let respId: string | null = null;
+      if (r.guardianName) {
+        const found = resps.find((x) => (r.guardianPhone && x.phone === r.guardianPhone) || x.name.toLowerCase() === r.guardianName.toLowerCase());
+        respId = found?.id ?? (await this.saveResponsable({ name: r.guardianName, phone: r.guardianPhone, email: r.guardianEmail }));
+        if (!found) resps.push({ id: respId, name: r.guardianName, phone: r.guardianPhone, email: r.guardianEmail, portalToken: "" });
+      }
+      const prev = byCode.get(r.code.toLowerCase());
+      await this.saveComensal({
+        id: prev?.id,
+        code: r.code,
+        name: r.name,
+        tipo: r.tipo,
+        grupo: r.grupo,
+        plan: r.plan,
+        abonoHasta: prev?.abonoHasta ?? null,
+        dailyLimit: prev?.dailyLimit ?? (r.tipo === "alumno" ? settings.defaultDailyLimit ?? null : null),
+        blockedCategoryIds: prev?.blockedCategoryIds ?? [],
+        allergies: r.allergies || prev?.allergies || "",
+        responsableId: respId ?? prev?.responsableId ?? null,
+        active: true,
+        branchId: prev?.branchId ?? null,
+      });
+      if (prev) updated++;
+      else created++;
+    }
+    return { created, updated };
+  }
+  async getResponsables(): Promise<Responsable[]> {
+    const { data, error } = await this.sb.from("responsables").select("*").order("name");
+    if (error) fail(error);
+    return (data ?? []).map((r) => ({ id: r.id, name: r.name, phone: r.phone, email: r.email, portalToken: r.portal_token }));
+  }
+  async saveResponsable(input: Omit<Responsable, "id" | "portalToken"> & { id?: string }): Promise<string> {
+    if (!input.name.trim()) throw new Error("Escribe el nombre del responsable.");
+    const row = { name: input.name.trim(), phone: input.phone, email: input.email };
+    if (input.id) {
+      const { error } = await this.sb.from("responsables").update(row).eq("id", input.id);
+      if (error) fail(error);
+      return input.id;
+    }
+    const { data, error } = await this.sb.from("responsables").insert({ ...row, tenant_id: this.tenantId }).select("id").single();
+    if (error) fail(error);
+    return data.id;
+  }
+  async recargarSaldo(input: RecargaInput): Promise<WalletMovement> {
+    const { data, error } = await this.sb.rpc("comedor_recargar", {
+      p_tenant: this.tenantId,
+      p_comensal: input.comensalId,
+      p_amount: input.amount,
+      p_method: input.method,
+      p_note: input.note ?? "",
+      p_actor: input.actor,
+      p_branch: input.branchId,
+      p_abono_hasta: input.abonoHasta ?? null,
+    });
+    if (error) fail(error);
+    return mapWallet(data as WalletJson);
+  }
+  async ajustarSaldo(comensalId: string, amount: number, reason: string, actor: string): Promise<WalletMovement> {
+    const { data, error } = await this.sb.rpc("comedor_ajustar", { p_tenant: this.tenantId, p_comensal: comensalId, p_amount: amount, p_reason: reason, p_actor: actor });
+    if (error) fail(error);
+    return mapWallet(data as WalletJson);
+  }
+  async getMovimientos(comensalId?: string | null): Promise<WalletMovement[]> {
+    let q = this.sb.from("comedor_wallet").select("*").order("created_at", { ascending: false }).limit(500);
+    if (comensalId) q = q.eq("comensal_id", comensalId);
+    const [{ data, error }, people] = await Promise.all([q, this.getComensales()]);
+    if (error) fail(error);
+    const names = new Map(people.map((c) => [c.id, c.name]));
+    return (data ?? []).map((w) => mapWallet({ ...w, comensal_name: names.get(w.comensal_id) ?? "", at: w.created_at }));
+  }
+  async getComedorMenus(from: string, to: string): Promise<ComedorMenuDay[]> {
+    const { data, error } = await this.sb.from("comedor_menus").select("*").gte("date", from).lte("date", to).order("date");
+    if (error) fail(error);
+    return (data ?? []).map((m) => ({
+      date: m.date,
+      entrada: m.entrada,
+      fondo: m.fondo,
+      postre: m.postre,
+      bebida: m.bebida,
+      price: Number(m.price),
+      raciones: m.raciones,
+      allergens: m.allergens,
+    }));
+  }
+  async saveComedorMenu(day: ComedorMenuDay): Promise<void> {
+    if (!day.fondo.trim()) throw new Error("Escribe al menos el plato de fondo.");
+    const { error } = await this.sb.from("comedor_menus").upsert({ ...day, tenant_id: this.tenantId }, { onConflict: "tenant_id,date" });
+    if (error) fail(error);
+  }
+  async removeComedorMenu(date: string): Promise<void> {
+    const { error } = await this.sb.from("comedor_menus").delete().eq("tenant_id", this.tenantId).eq("date", date);
+    if (error) fail(error);
+  }
+  async getReservas(from: string, to: string): Promise<ComedorReserva[]> {
+    const { data, error } = await this.sb.from("comedor_reservas").select("comensal_id, date, by").gte("date", from).lte("date", to);
+    if (error) fail(error);
+    return (data ?? []).map((r) => ({ comensalId: r.comensal_id, date: r.date, by: r.by }));
+  }
+  async setReserva(comensalId: string, date: string, on: boolean): Promise<void> {
+    const { error } = await this.sb.rpc("comedor_set_reserva", { p_tenant: this.tenantId, p_comensal: comensalId, p_date: date, p_on: on });
+    if (error) fail(error);
+  }
+  async getConsumos(from: string, to: string): Promise<ComedorConsumo[]> {
+    const { data, error } = await this.sb
+      .from("comedor_consumos")
+      .select("*")
+      .gte("service_date", from)
+      .lte("service_date", to)
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    if (error) fail(error);
+    return (data ?? []).map((k) => mapConsumo({ ...k, date: k.service_date, at: k.created_at }));
+  }
+  async despachar(input: DespacharInput): Promise<ComedorConsumo & { balance: number | null }> {
+    const { data, error } = await this.sb.rpc("comedor_despachar", {
+      p_tenant: this.tenantId,
+      p: {
+        comensal_id: input.comensalId,
+        kind: input.kind,
+        items: input.items.map((i) => ({ menu_item_id: i.menuItemId, qty: i.qty })),
+        pago: input.pago ?? null,
+        actor: input.actor,
+        branch_id: input.branchId,
+      },
+    });
+    if (error) fail(error);
+    const r = data as ConsumoJson & { balance: number | string | null };
+    return { ...mapConsumo(r), balance: r.balance == null ? null : Number(r.balance) };
+  }
+  async getComensalQuota(): Promise<ComensalQuota> {
+    const { data, error } = await this.sb.rpc("comensales_quota", { p_tenant: this.tenantId });
+    if (error) fail(error);
+    const q = data as { plan: string; used: number; max: number | null; included: number | null; extra_price: number | string | null; extra_blocks: number; monthly_total: number | string };
+    return {
+      plan: q.plan,
+      used: q.used,
+      max: q.max,
+      included: q.included,
+      extraPrice: q.extra_price == null ? null : Number(q.extra_price),
+      extraBlocks: q.extra_blocks ?? 0,
+      monthlyTotal: Number(q.monthly_total ?? planInfo(q.plan).price),
+    };
+  }
+
   async savePushSubscription(data: { endpoint: string; p256dh: string; auth: string }): Promise<void> {
     const { data: u } = await this.sb.auth.getUser();
     const uid = u.user?.id;
@@ -1289,7 +1501,73 @@ function mapItem(r: Row<"menu_items">): MenuItem {
     available: r.available,
     sort: r.sort,
     archived: r.archived ?? false,
+    octogonos: Number(r.octogonos ?? 0),
   };
+}
+
+function mapComensal(r: Row<"comensales">): Comensal {
+  return {
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    tipo: r.tipo,
+    grupo: r.grupo,
+    plan: r.plan,
+    abonoHasta: r.abono_hasta,
+    balance: Number(r.balance),
+    dailyLimit: r.daily_limit == null ? null : Number(r.daily_limit),
+    blockedCategoryIds: r.blocked_category_ids ?? [],
+    allergies: r.allergies,
+    responsableId: r.responsable_id,
+    active: r.active,
+    branchId: r.branch_id,
+  };
+}
+
+type WalletJson = {
+  id: string; comensal_id: string; comensal_name: string; kind: WalletMovement["kind"]; amount: number | string;
+  method: string | null; detail: string; actor: string; balance_after: number | string; at: string;
+};
+function mapWallet(w: WalletJson): WalletMovement {
+  return {
+    id: w.id,
+    comensalId: w.comensal_id,
+    comensalName: w.comensal_name,
+    kind: w.kind,
+    amount: Number(w.amount),
+    method: w.method,
+    detail: w.detail,
+    actor: w.actor,
+    balanceAfter: Number(w.balance_after),
+    at: w.at,
+  };
+}
+
+type ConsumoJson = {
+  id: string; comensal_id: string | null; comensal_name: string; grupo: string; kind: "menu" | "kiosko";
+  items: { menu_item_id?: string; name: string; qty: number; price: number | string }[];
+  total: number | string; pago: string; actor: string; branch_id: string | null; date: string; at: string;
+};
+function mapConsumo(k: ConsumoJson): ComedorConsumo {
+  return {
+    id: k.id,
+    comensalId: k.comensal_id,
+    comensalName: k.comensal_name,
+    grupo: k.grupo,
+    kind: k.kind,
+    items: (k.items ?? []).map((i) => ({ menuItemId: i.menu_item_id ?? null, name: i.name, qty: Number(i.qty), price: Number(i.price) })),
+    total: Number(k.total),
+    pago: k.pago as ComedorConsumo["pago"],
+    actor: k.actor,
+    branchId: k.branch_id,
+    date: k.date,
+    at: k.at,
+  };
+}
+
+/** Código duplicado del padrón: mensaje claro en vez del de la restricción. */
+function dupMessage(error: { message: string; code?: string }, code: string): { message: string } {
+  return error.code === "23505" ? { message: `Ya hay un comensal con el código ${code}.` } : error;
 }
 
 type StaffRow = { id: string; name: string; initials: string; role: string; active: boolean; staff_branches?: { branch_id: string }[] };

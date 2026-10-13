@@ -7,6 +7,8 @@ export interface DevicePairing {
   tenantId: string;
   tenantName: string | null;
   email: string | null;
+  /** Restaurante o comedor (para el menú al entrar con PIN sin internet). */
+  businessType?: import("@/lib/comedor").BusinessType;
 }
 
 const KEY = "wayra-device-pairing";

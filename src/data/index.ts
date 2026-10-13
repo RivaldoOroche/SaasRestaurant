@@ -5,6 +5,7 @@ import { createRepo } from "./sync/PosService";
 import { defaultKV, type KV } from "./sync/kv";
 import { supabase, USE_MOCK } from "@/lib/supabase";
 import { isOnlineNow, useConnection } from "@/store/connection";
+import { MOCK_COMEDOR_ID } from "@/auth/session";
 
 const cache = new Map<string, Repo>();
 
@@ -29,10 +30,12 @@ export function composeRepo(backend: BackendRepo, tenantKey: string, kv: KV = de
 /** Repo del tenant actual (demo en el navegador o Supabase). Uno por tenant. */
 export function getRepo(tenantId: string | null): Repo {
   const mock = USE_MOCK || !supabase || !tenantId;
-  const key = mock ? "demo" : tenantId!;
+  // El demo tiene dos negocios: el restaurante La Higuera y el comedor de un colegio.
+  const comedor = mock && tenantId === MOCK_COMEDOR_ID;
+  const key = mock ? (comedor ? "demo-comedor" : "demo") : tenantId!;
   let repo = cache.get(key);
   if (!repo) {
-    repo = composeRepo(mock ? new MockRepo() : new SupabaseRepo(supabase!, tenantId!), key);
+    repo = composeRepo(mock ? new MockRepo(comedor ? "comedor" : "restaurante") : new SupabaseRepo(supabase!, tenantId!), key);
     cache.set(key, repo);
   }
   return repo;

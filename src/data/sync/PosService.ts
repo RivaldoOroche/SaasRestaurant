@@ -530,9 +530,15 @@ const CACHED = new Set([
   "getCategories", "getMenuItems", "getMenuCatalog", "getExtras", "getPrefs", "getBranches", "getStaff", "getSettings",
   "getCustomers", "getRecipes", "getStaffPins", "getDeliveryZones", "getDrivers", "getRolePermissions", "getSubscription",
   "getReservations", "getWaitlist", "getActivityLog", "getBranchSales", "getBranchReport", "getBranchQuota",
+  // Comedor: el padrón y el menú se leen sin conexión (para buscar a un comensal).
+  "getComensales", "getResponsables", "getComedorMenus", "getReservas", "getComensalQuota",
 ]);
 /** Escrituras administrativas tras las que hay que releer el estado operativo. */
-const REFRESH_AFTER = new Set(["addTable", "updateTable", "removeTable"]);
+const REFRESH_AFTER = new Set([
+  "addTable", "updateTable", "removeTable",
+  // Comedor: el efectivo recibido entra a la caja en el servidor.
+  "recargarSaldo", "despachar",
+]);
 const CATALOG_AFTER = new Set(["saveDeliveryZone", "removeDeliveryZone", "saveDriver", "removeDriver"]);
 
 /** Compone el Repo final: operaciones offline-first + backend. */
@@ -552,8 +558,9 @@ export function createRepo(backend: BackendRepo, opts: PosServiceOptions): Repo 
       if (CACHED.has(prop)) return (...args: unknown[]) => svc.cachedRead(prop, args, () => call(...args) as Promise<unknown>);
       if (REFRESH_AFTER.has(prop))
         return async (...args: unknown[]) => {
-          await call(...args);
+          const out = await call(...args);
           await svc.engine.pull();
+          return out;
         };
       if (CATALOG_AFTER.has(prop))
         return async (...args: unknown[]) => {

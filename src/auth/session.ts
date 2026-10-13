@@ -1,4 +1,5 @@
 import type { Role } from "@/lib/roles";
+import type { BusinessType } from "@/lib/comedor";
 
 export interface ActingStaff {
   id: string;
@@ -17,6 +18,8 @@ export interface Session {
   userEmail: string | null;
   /** True when a platform admin has entered a tenant's POS. */
   impersonating: boolean;
+  /** Restaurante o comedor: define el menú y las pantallas (ausente = restaurante). */
+  businessType?: BusinessType;
 }
 
 /**
@@ -31,9 +34,12 @@ export interface MockUser {
   role: Role;
   tenantId: string;
   tenantName: string;
+  businessType?: BusinessType;
 }
 
 export const MOCK_TENANT_ID = "11111111-1111-1111-1111-111111111111";
+/** Demo del comedor escolar (otro negocio con su propio estado). */
+export const MOCK_COMEDOR_ID = "33333333-3333-3333-3333-333333333333";
 
 export const MOCK_USERS: MockUser[] = [
   { pin: "0000", name: "Tú (SaaS)", initials: "SA", role: "saas", tenantId: "", tenantName: "Wayra POS" },
@@ -41,6 +47,8 @@ export const MOCK_USERS: MockUser[] = [
   { pin: "2222", name: "Iker Solís", initials: "IS", role: "admin", tenantId: MOCK_TENANT_ID, tenantName: "La Higuera" },
   { pin: "3333", name: "Ana Ruiz", initials: "AR", role: "mesero", tenantId: MOCK_TENANT_ID, tenantName: "La Higuera" },
   { pin: "4444", name: "Carlos Vega", initials: "CV", role: "mesero", tenantId: MOCK_TENANT_ID, tenantName: "La Higuera" },
+  { pin: "5555", name: "Rosa Cárdenas", initials: "RC", role: "dueno", tenantId: MOCK_COMEDOR_ID, tenantName: "Comedor San Martín", businessType: "comedor" },
+  { pin: "6666", name: "Beto Huamán", initials: "BH", role: "mesero", tenantId: MOCK_COMEDOR_ID, tenantName: "Comedor San Martín", businessType: "comedor" },
 ];
 
 export function sessionFromMockUser(u: MockUser): Session {
@@ -51,6 +59,7 @@ export function sessionFromMockUser(u: MockUser): Session {
     staff: { id: u.pin, name: u.name, initials: u.initials, role: u.role },
     userEmail: null,
     impersonating: false,
+    businessType: u.businessType ?? "restaurante",
   };
 }
 

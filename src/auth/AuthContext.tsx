@@ -10,7 +10,7 @@ export interface AuthValue {
   /** Real Supabase owner login (email + password). */
   loginWithPassword: (email: string, password: string) => Promise<string | null>;
   /** Platform admin enters a tenant's POS (audited impersonation). */
-  enterTenant: (tenantId: string, tenantName: string) => void;
+  enterTenant: (tenantId: string, tenantName: string, businessType?: import("@/lib/comedor").BusinessType) => void;
   /** Return from impersonation to the platform console. */
   exitTenant: () => void;
   /** Bloquea: vuelve al teclado de PIN (el equipo sigue vinculado). */

@@ -1,4 +1,4 @@
-import type { BackendRepo, BranchInput, TerminalInfo } from "../Repo";
+import type { BackendRepo, BranchInput, ComensalQuota, TerminalInfo } from "../Repo";
 import type {
   Order,
   KitchenTicket,
@@ -29,7 +29,29 @@ import type {
   DeliveryOrder,
   DeliveryTracking,
   BranchQuota,
+  Comensal,
+  ComensalInput,
+  Responsable,
+  WalletMovement,
+  ComedorMenuDay,
+  ComedorReserva,
+  ComedorConsumo,
+  DespacharInput,
+  RecargaInput,
+  PortalFamilia,
 } from "../model";
+import {
+  COMEDOR_BRANCHES,
+  COMEDOR_CATEGORIES,
+  COMEDOR_ITEMS,
+  COMEDOR_SETTINGS,
+  comedorInventory,
+  comedorStock,
+  seedComedor,
+} from "./seedComedor";
+import { itemsTotal, kioskoBlock, localDate, menuCheck, puedeReservar, type BusinessType, type PadronRow } from "@/lib/comedor";
+import { extraComensalBlocks } from "@/lib/plans";
+import { round2 } from "@/lib/money";
 import { deliveryTotals, isAggregator } from "@/lib/delivery";
 import { applyOp, OpError, type ReduceCtx } from "../pos/reduce";
 import type { OpResult, PosOp, PosSnapshot } from "../pos/ops";
@@ -91,6 +113,14 @@ interface MockState {
   /** Turnos de caja (abiertos y el historial de cerrados). */
   cash: CashSession[];
   plan: string;
+  // Comedor
+  comensales: Comensal[];
+  responsables: Responsable[];
+  /** Monedero: movimientos (los más recientes primero). */
+  wallet: WalletMovement[];
+  comedorMenus: ComedorMenuDay[];
+  reservas: ComedorReserva[];
+  consumos: ComedorConsumo[];
   /** Operaciones ya aplicadas (idempotencia, como pos_ops). */
   applied: Record<string, OpResult>;
   aliases: [string, string][];
@@ -105,7 +135,12 @@ function initialsOf(name: string): string {
     .join("");
 }
 
-function seedStaff(): MockStaff[] {
+function seedStaff(profile: BusinessType = "restaurante"): MockStaff[] {
+  if (profile === "comedor")
+    return [
+      { id: uid("st"), name: "Rosa Cárdenas", initials: "RC", role: "dueno", active: true, pin: "5555" },
+      { id: uid("st"), name: "Beto Huamán", initials: "BH", role: "mesero", active: true, pin: "6666" },
+    ];
   return [
     { id: uid("st"), name: "Mónica R.", initials: "MR", role: "dueno", active: true, pin: "1111" },
     { id: uid("st"), name: "Iker Solís", initials: "IS", role: "admin", active: true, pin: "2222" },
@@ -115,6 +150,8 @@ function seedStaff(): MockStaff[] {
 }
 
 const KEY = "nubepos-mock-v5";
+/** Demo del comedor: otro negocio, guardado aparte. */
+const KEY_COMEDOR = "nubepos-mock-comedor-v1";
 
 function uid(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -133,7 +170,8 @@ function demoArtifacts(cpe: Comprobante): void {
   cpe.cdr = btoa(`CDR demo | ${cpe.folio} | ACEPTADO POR SUNAT (beta) | ${cpe.issuedAt}`);
 }
 
-function freshState(): MockState {
+function freshState(profile: BusinessType = "restaurante"): MockState {
+  if (profile === "comedor") return freshComedorState();
   return {
     tables: seedTables(),
     orders: [],
@@ -159,22 +197,62 @@ function freshState(): MockState {
     cash: [],
     applied: {},
     aliases: [],
+    comensales: [],
+    responsables: [],
+    wallet: [],
+    comedorMenus: [],
+    reservas: [],
+    consumos: [],
   };
 }
 
-function loadState(): MockState {
+/** Comedor del Colegio San Martín (demo): kiosko saludable, padrón y familias. */
+function freshComedorState(): MockState {
+  return {
+    tables: [],
+    orders: [],
+    tickets: [],
+    customers: [],
+    inventory: comedorInventory(),
+    stock: comedorStock(),
+    movements: [],
+    log: [],
+    settings: { ...COMEDOR_SETTINGS },
+    changes: [],
+    categories: COMEDOR_CATEGORIES.map((c) => ({ ...c })),
+    menuItems: COMEDOR_ITEMS.map((i) => ({ ...i, archived: false })),
+    extras: [],
+    prefs: [],
+    menuBranch: [],
+    comprobantes: [],
+    branches: COMEDOR_BRANCHES.map((b) => ({ ...b })),
+    staff: seedStaff("comedor"),
+    recipes: {},
+    deliveryZones: [],
+    drivers: [],
+    deliveries: [],
+    deliverySeq: 1,
+    plan: "Comedor Pro",
+    cash: [],
+    applied: {},
+    aliases: [],
+    ...seedComedor(),
+  };
+}
+
+function loadState(key = KEY, profile: BusinessType = "restaurante"): MockState {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key);
     // Merge: un estado guardado por una versión anterior recibe los campos nuevos.
-    if (raw) return { ...freshState(), ...(JSON.parse(raw) as Partial<MockState>) };
+    if (raw) return { ...freshState(profile), ...(JSON.parse(raw) as Partial<MockState>) };
   } catch {
     /* ignore */
   }
   // Se guarda de inmediato: si no, los datos de ejemplo (ids, tokens de
   // seguimiento) serían distintos en cada carga y los enlaces no funcionarían.
-  const fresh = freshState();
+  const fresh = freshState(profile);
   try {
-    localStorage.setItem(KEY, JSON.stringify(fresh));
+    localStorage.setItem(key, JSON.stringify(fresh));
   } catch {
     /* ignore */
   }
@@ -248,13 +326,20 @@ function seedDelivery(): Pick<MockState, "deliveryZones" | "drivers" | "deliveri
  */
 export class MockRepo implements BackendRepo {
   readonly remote = false;
-  private state: MockState = loadState();
+  private readonly key: string;
+  private state: MockState;
+
+  /** `comedor`: demo del comedor escolar (otro negocio, guardado aparte). */
+  constructor(private readonly profile: BusinessType = "restaurante") {
+    this.key = profile === "comedor" ? KEY_COMEDOR : KEY;
+    this.state = loadState(this.key, profile);
+  }
   private listeners = new Set<() => void>();
   private complaints?: Complaint[]; // demo: en memoria
 
   private persist() {
     try {
-      localStorage.setItem(KEY, JSON.stringify(this.state));
+      localStorage.setItem(this.key, JSON.stringify(this.state));
     } catch {
       /* ignore */
     }
@@ -270,8 +355,8 @@ export class MockRepo implements BackendRepo {
   onRemoteChange(cb: () => void): () => void {
     this.listeners.add(cb);
     const onStorage = (e: StorageEvent) => {
-      if (e.key !== KEY) return;
-      this.state = loadState();
+      if (e.key !== this.key) return;
+      this.state = loadState(this.key, this.profile);
       cb();
     };
     if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
@@ -1238,6 +1323,325 @@ export class MockRepo implements BackendRepo {
   }
   async removeDriver(id: string) {
     this.state.drivers = this.state.drivers.filter((d) => d.id !== id);
+    this.persist();
+  }
+
+  // ---- Comedor ----
+  private comensal(id: string): Comensal {
+    const c = this.state.comensales.find((x) => x.id === id);
+    if (!c) throw new Error("Comensal no encontrado.");
+    return c;
+  }
+  private rules() {
+    const st = this.state.settings;
+    return {
+      bloquearOctogonos: st.bloquearOctogonos ?? true,
+      permitirSinReserva: st.permitirSinReserva ?? true,
+      cierreReservas: st.cierreReservas ?? "09:30",
+    };
+  }
+  /** Efectivo recibido: entra a la caja abierta (como app.comedor_cash_in). */
+  private cashIn(branchId: string | null, amount: number, reason: string, actor: string) {
+    const open = this.state.cash.find((c) => c.status === "abierta" && (!branchId || c.branchId === branchId))
+      ?? this.state.cash.find((c) => c.status === "abierta");
+    if (!open) throw new Error("Abre la caja para recibir efectivo.");
+    open.movements.push({ id: uid("cm"), kind: "ingreso", amount, reason, actor, at: new Date().toISOString() });
+  }
+  private walletMove(c: Comensal, kind: WalletMovement["kind"], amount: number, method: string | null, detail: string, actor: string): WalletMovement {
+    if (kind !== "abono") c.balance = round2(c.balance + amount);
+    const m: WalletMovement = {
+      id: uid("wm"), comensalId: c.id, comensalName: c.name, kind, amount, method, detail, actor,
+      balanceAfter: c.balance, at: new Date().toISOString(),
+    };
+    this.state.wallet.unshift(m);
+    this.state.wallet = this.state.wallet.slice(0, 2000);
+    return m;
+  }
+  private assertComensalQuota(exceptId?: string) {
+    const p = planInfo(this.state.plan);
+    const used = this.state.comensales.filter((c) => c.active && c.id !== exceptId).length;
+    if (p.maxComensales != null && used >= p.maxComensales)
+      throw new Error(`Tu plan ${p.tier} permite hasta ${p.maxComensales} comensales activos. Desactiva a quienes ya no comen aquí o mejora tu plan.`);
+  }
+
+  async getComensales(): Promise<Comensal[]> {
+    return this.state.comensales.map((c) => ({ ...c, blockedCategoryIds: [...c.blockedCategoryIds] }));
+  }
+  async saveComensal(input: ComensalInput): Promise<string> {
+    const code = input.code.trim();
+    const name = input.name.trim();
+    if (!code || !name) throw new Error("El código y el nombre son obligatorios.");
+    if (this.state.comensales.some((c) => c.code.toLowerCase() === code.toLowerCase() && c.id !== input.id))
+      throw new Error(`Ya hay un comensal con el código ${code}.`);
+    const existing = input.id ? this.comensal(input.id) : null;
+    if (input.active && (!existing || !existing.active)) this.assertComensalQuota(existing?.id);
+    if (existing) {
+      Object.assign(existing, { ...input, code, name, id: existing.id, balance: existing.balance });
+      this.persist();
+      return existing.id;
+    }
+    const id = uid("cm");
+    this.state.comensales.push({ ...input, code, name, id, balance: 0 });
+    this.persist();
+    return id;
+  }
+  async importPadron(rows: PadronRow[]): Promise<{ created: number; updated: number }> {
+    let created = 0;
+    let updated = 0;
+    for (const r of rows) {
+      let respId: string | null = null;
+      if (r.guardianName) {
+        const resp = this.state.responsables.find(
+          (x) => (r.guardianPhone && x.phone === r.guardianPhone) || x.name.toLowerCase() === r.guardianName.toLowerCase(),
+        );
+        respId = resp?.id ?? (await this.saveResponsable({ name: r.guardianName, phone: r.guardianPhone, email: r.guardianEmail }));
+      }
+      const prev = this.state.comensales.find((c) => c.code.toLowerCase() === r.code.toLowerCase());
+      await this.saveComensal({
+        id: prev?.id,
+        code: r.code,
+        name: r.name,
+        tipo: r.tipo,
+        grupo: r.grupo,
+        plan: r.plan,
+        abonoHasta: prev?.abonoHasta ?? null,
+        dailyLimit: prev?.dailyLimit ?? (r.tipo === "alumno" ? this.state.settings.defaultDailyLimit ?? null : null),
+        blockedCategoryIds: prev?.blockedCategoryIds ?? [],
+        allergies: r.allergies || prev?.allergies || "",
+        responsableId: respId ?? prev?.responsableId ?? null,
+        active: true,
+        branchId: prev?.branchId ?? this.state.branches.find((b) => !b.parentId)?.id ?? null,
+      });
+      if (prev) updated++;
+      else created++;
+    }
+    return { created, updated };
+  }
+  async getResponsables(): Promise<Responsable[]> {
+    return this.state.responsables.map((r) => ({ ...r }));
+  }
+  async saveResponsable(input: Omit<Responsable, "id" | "portalToken"> & { id?: string }): Promise<string> {
+    if (!input.name.trim()) throw new Error("Escribe el nombre del responsable.");
+    const prev = input.id ? this.state.responsables.find((r) => r.id === input.id) : undefined;
+    if (prev) {
+      Object.assign(prev, { name: input.name.trim(), phone: input.phone, email: input.email });
+      this.persist();
+      return prev.id;
+    }
+    const id = uid("rp");
+    const token = Array.from(crypto.getRandomValues(new Uint8Array(18)), (b) => b.toString(16).padStart(2, "0")).join("");
+    this.state.responsables.push({ id, name: input.name.trim(), phone: input.phone, email: input.email, portalToken: token });
+    this.persist();
+    return id;
+  }
+  async recargarSaldo(input: RecargaInput): Promise<WalletMovement> {
+    if (!(input.amount > 0)) throw new Error("El monto debe ser mayor a cero.");
+    const c = this.comensal(input.comensalId);
+    const abono = input.abonoHasta ?? null;
+    if (input.method === "efectivo") this.cashIn(input.branchId ?? c.branchId ?? null, input.amount, `${abono ? "Abono" : "Recarga"} · ${c.name}`, input.actor);
+    let m: WalletMovement;
+    if (abono) {
+      c.plan = "abono";
+      c.abonoHasta = c.abonoHasta && c.abonoHasta > abono ? c.abonoHasta : abono;
+      m = this.walletMove(c, "abono", input.amount, input.method, input.note || `Abono hasta ${abono}`, input.actor);
+    } else {
+      m = this.walletMove(c, "recarga", input.amount, input.method, input.note || "Recarga", input.actor);
+    }
+    this.pushLog(input.actor, `${abono ? "Abono" : "Recarga"} de S/ ${input.amount.toFixed(2)} para ${c.name} (${input.method})`);
+    this.persist();
+    return m;
+  }
+  async ajustarSaldo(comensalId: string, amount: number, reason: string, actor: string): Promise<WalletMovement> {
+    if (!reason.trim()) throw new Error("Indica el motivo del ajuste.");
+    const c = this.comensal(comensalId);
+    if (c.balance + amount < 0) throw new Error(`El ajuste dejaría el saldo en negativo (tiene S/ ${c.balance.toFixed(2)}).`);
+    const m = this.walletMove(c, "ajuste", amount, null, reason.trim(), actor);
+    this.pushLog(actor, `Ajuste de saldo de ${c.name}: ${amount > 0 ? "+" : ""}${amount.toFixed(2)} (${reason.trim()})`);
+    this.persist();
+    return m;
+  }
+  async getMovimientos(comensalId?: string | null): Promise<WalletMovement[]> {
+    return this.state.wallet.filter((m) => !comensalId || m.comensalId === comensalId).slice(0, 500).map((m) => ({ ...m }));
+  }
+  async getComedorMenus(from: string, to: string): Promise<ComedorMenuDay[]> {
+    return this.state.comedorMenus.filter((m) => m.date >= from && m.date <= to).sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ ...m }));
+  }
+  async saveComedorMenu(day: ComedorMenuDay): Promise<void> {
+    if (!day.fondo.trim()) throw new Error("Escribe al menos el plato de fondo.");
+    if (!(day.price >= 0) || !(day.raciones >= 0)) throw new Error("Revisa el precio y las raciones.");
+    const i = this.state.comedorMenus.findIndex((m) => m.date === day.date);
+    if (i >= 0) this.state.comedorMenus[i] = { ...day };
+    else this.state.comedorMenus.push({ ...day });
+    this.persist();
+  }
+  async removeComedorMenu(date: string): Promise<void> {
+    this.state.comedorMenus = this.state.comedorMenus.filter((m) => m.date !== date);
+    this.persist();
+  }
+  async getReservas(from: string, to: string): Promise<ComedorReserva[]> {
+    return this.state.reservas.filter((r) => r.date >= from && r.date <= to).map((r) => ({ ...r }));
+  }
+  async setReserva(comensalId: string, date: string, on: boolean, by: ComedorReserva["by"] = "comedor"): Promise<void> {
+    this.comensal(comensalId);
+    const has = this.state.reservas.some((r) => r.comensalId === comensalId && r.date === date);
+    if (on && !has) this.state.reservas.push({ comensalId, date, by });
+    if (!on) this.state.reservas = this.state.reservas.filter((r) => !(r.comensalId === comensalId && r.date === date));
+    this.persist();
+  }
+  async getConsumos(from: string, to: string): Promise<ComedorConsumo[]> {
+    return this.state.consumos.filter((c) => c.date >= from && c.date <= to).map((c) => ({ ...c, items: c.items.map((i) => ({ ...i })) }));
+  }
+  async despachar(input: DespacharInput): Promise<ComedorConsumo & { balance: number | null }> {
+    const today = localDate();
+    const rules = this.rules();
+    const c = input.comensalId ? this.comensal(input.comensalId) : null;
+    let items: ComedorConsumo["items"];
+    let total: number;
+    let pago: ComedorConsumo["pago"];
+    let cargo = 0;
+    if (input.kind === "kiosko") {
+      // Precios, categoría y octógonos salen de la carta (como en la base).
+      const lines = input.items.map((l) => {
+        const it = this.state.menuItems.find((m) => m.id === l.menuItemId && !m.archived);
+        if (!it) throw new Error("Un producto ya no está en la carta. Actualiza la pantalla.");
+        const price = this.state.menuBranch.find((o) => o.itemId === it.id && o.branchId === input.branchId)?.price ?? it.price;
+        return { menuItemId: it.id, name: it.name, qty: Math.max(1, Math.round(l.qty)), price, categoryId: it.categoryId, octogonos: it.octogonos ?? 0 };
+      });
+      if (rules.bloquearOctogonos) {
+        const oct = lines.find((l) => l.octogonos > 0);
+        if (oct) throw new Error(`«${oct.name}» tiene octógonos y no se vende en el colegio.`);
+      }
+      items = lines.map(({ menuItemId, name, qty, price }) => ({ menuItemId, name, qty, price }));
+      total = itemsTotal(items);
+      if (c) {
+        const spent = this.state.consumos.filter((k) => k.comensalId === c.id && k.date === today && k.kind === "kiosko").reduce((s, k) => s + k.total, 0);
+        const catName = (id: string) => this.state.categories.find((x) => x.id === id)?.name ?? "esa categoría";
+        const err = kioskoBlock(c, lines, spent, rules, catName);
+        if (err) throw new Error(err);
+        pago = "saldo";
+        cargo = total;
+      } else pago = input.pago ?? "efectivo";
+    } else {
+      const menu = this.state.comedorMenus.find((m) => m.date === today) ?? null;
+      const todays = this.state.consumos.filter((k) => k.date === today && k.kind === "menu");
+      const served = new Set(todays.map((k) => k.comensalId));
+      const pendientes = this.state.reservas.filter((r) => r.date === today && !served.has(r.comensalId)).length;
+      if (!menu) throw new Error("Hoy no hay menú publicado.");
+      items = [{ name: "Menú del día", qty: 1, price: menu.price }];
+      if (c) {
+        const chk = menuCheck(c, menu, {
+          yaServido: served.has(c.id),
+          reservado: this.state.reservas.some((r) => r.comensalId === c.id && r.date === today),
+          servidos: todays.length,
+          reservasPendientes: pendientes,
+        }, rules);
+        if (!chk.ok) throw new Error(chk.motivo);
+        pago = chk.pago!;
+        cargo = chk.cargo!;
+        total = pago === "saldo" ? menu.price : 0;
+      } else {
+        if (menu.raciones - todays.length - pendientes <= 0) throw new Error("No quedan raciones libres: las que quedan están reservadas.");
+        pago = input.pago ?? "efectivo";
+        total = menu.price;
+      }
+    }
+    if (!c && pago === "efectivo") this.cashIn(input.branchId, total, "Venta al paso · comedor", input.actor);
+    if (c && cargo > 0)
+      this.walletMove(c, "consumo", -cargo, "saldo", input.kind === "menu" ? "Menú del día" : items.map((i) => `${i.qty}× ${i.name}`).join(", "), input.actor);
+    const row: ComedorConsumo = {
+      id: uid("cs"),
+      comensalId: c?.id ?? null,
+      comensalName: c?.name ?? "Venta al paso",
+      grupo: c?.grupo ?? "",
+      kind: input.kind,
+      items,
+      total,
+      pago,
+      actor: input.actor,
+      branchId: input.branchId ?? c?.branchId ?? null,
+      date: today,
+      at: new Date().toISOString(),
+    };
+    this.state.consumos.unshift(row);
+    this.state.consumos = this.state.consumos.slice(0, 5000);
+    this.persist();
+    return { ...row, balance: c ? c.balance : null };
+  }
+  async getComensalQuota(): Promise<ComensalQuota> {
+    const p = planInfo(this.state.plan);
+    const used = this.state.comensales.filter((c) => c.active).length;
+    return {
+      plan: p.tier,
+      used,
+      max: p.maxComensales ?? null,
+      included: p.includedComensales ?? null,
+      extraPrice: p.extraComensalesPrice ?? null,
+      extraBlocks: extraComensalBlocks(p, used),
+      monthlyTotal: monthlyTotal(p, this.activeChildren(), used),
+    };
+  }
+
+  // ---- Portal de familias (público, por enlace) ----
+  private familia(token: string) {
+    if (token.length < 24) return null;
+    return this.state.responsables.find((r) => r.portalToken === token) ?? null;
+  }
+  getPortalFamilia(token: string): PortalFamilia | null {
+    const r = this.familia(token);
+    if (!r) return null;
+    const today = localDate();
+    const st = this.state.settings;
+    return {
+      tenantName: st.name,
+      responsable: r.name,
+      yapeNumber: st.yapeNumber ?? null,
+      plinNumber: st.plinNumber ?? null,
+      cierreReservas: st.cierreReservas ?? "09:30",
+      saldoMinimo: st.saldoMinimo ?? 10,
+      categories: [...this.state.categories].sort((a, b) => a.sort - b.sort).map((c) => ({ id: c.id, name: c.name })),
+      menus: this.state.comedorMenus.filter((m) => m.date >= today).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 10),
+      comensales: this.state.comensales
+        .filter((c) => c.responsableId === r.id && c.active)
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          grupo: c.grupo,
+          plan: c.plan,
+          abonoHasta: c.abonoHasta,
+          balance: c.balance,
+          dailyLimit: c.dailyLimit,
+          blockedCategoryIds: [...c.blockedCategoryIds],
+          allergies: c.allergies,
+          reservas: this.state.reservas.filter((x) => x.comensalId === c.id && x.date >= today).map((x) => x.date).sort(),
+          consumos: this.state.consumos
+            .filter((k) => k.comensalId === c.id)
+            .slice(0, 20)
+            .map((k) => ({ date: k.date, at: k.at, detail: k.items.map((i) => `${i.qty}× ${i.name}`).join(", "), total: k.total, pago: k.pago })),
+          recargas: this.state.wallet
+            .filter((w) => w.comensalId === c.id && w.kind !== "consumo")
+            .slice(0, 10)
+            .map((w) => ({ at: w.at, amount: w.amount, method: w.method, detail: w.detail })),
+        })),
+    };
+  }
+  async portalReservar(token: string, comensalId: string, date: string, on: boolean): Promise<void> {
+    const r = this.familia(token);
+    const c = this.state.comensales.find((x) => x.id === comensalId && x.responsableId === r?.id && x.active);
+    if (!r || !c) throw new Error("Enlace no válido.");
+    const cierre = this.state.settings.cierreReservas ?? "09:30";
+    if (!puedeReservar(date, new Date(), cierre)) throw new Error(`Las reservas de ese día ya cerraron (${cierre}).`);
+    if (on && !this.state.comedorMenus.some((m) => m.date === date)) throw new Error("Aún no hay menú publicado para ese día.");
+    await this.setReserva(c.id, date, on, "familia");
+  }
+  async portalAjustes(token: string, comensalId: string, patch: { dailyLimit: number | null; blockedCategoryIds: string[]; allergies: string }): Promise<void> {
+    const r = this.familia(token);
+    const c = this.state.comensales.find((x) => x.id === comensalId && x.responsableId === r?.id && x.active);
+    if (!r || !c) throw new Error("Enlace no válido.");
+    if (patch.dailyLimit !== null && (patch.dailyLimit < 0 || patch.dailyLimit > 1000)) throw new Error("El tope diario debe estar entre S/ 0 y S/ 1 000.");
+    c.dailyLimit = patch.dailyLimit;
+    c.blockedCategoryIds = patch.blockedCategoryIds.filter((id) => this.state.categories.some((x) => x.id === id));
+    c.allergies = patch.allergies.slice(0, 300);
     this.persist();
   }
 

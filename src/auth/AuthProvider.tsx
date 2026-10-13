@@ -88,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         staff: { id: who.id, name: who.name, initials: who.initials, role: who.role, branchIds: who.branchIds ?? [] },
         userEmail: p.email,
         impersonating: false,
+        businessType: p.businessType ?? "restaurante",
       });
       return null;
     },
@@ -110,14 +111,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const role = membership.role as AppRole;
       let tenantName: string | null = null;
+      let businessType: Session["businessType"] = "restaurante";
       if (membership.tenant_id) {
-        const { data: t } = await supabase.from("tenants").select("name").eq("id", membership.tenant_id).maybeSingle();
+        const { data: t } = await supabase.from("tenants").select("name, business_type").eq("id", membership.tenant_id).maybeSingle();
         tenantName = t?.name ?? null;
+        businessType = t?.business_type ?? "restaurante";
       }
-      update({ role, tenantId: membership.tenant_id, tenantName, staff: null, userEmail: email, impersonating: false });
-      // Dueño/gerente: el equipo queda vinculado al restaurante para ingresar con PIN.
+      update({ role, tenantId: membership.tenant_id, tenantName, staff: null, userEmail: email, impersonating: false, businessType });
+      // Dueño/gerente: el equipo queda vinculado al negocio para ingresar con PIN.
       if (membership.tenant_id && (role === "dueno" || role === "admin")) {
-        const pr = { tenantId: membership.tenant_id, tenantName, email };
+        const pr = { tenantId: membership.tenant_id, tenantName, email, businessType };
         setPairing(pr);
         setPairingState(pr);
         void getRepo(membership.tenant_id).getStaffPins().catch(() => undefined); // queda en caché para usar sin red
@@ -172,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const enterTenant = useCallback<AuthValue["enterTenant"]>(
-    (tenantId, tenantName) => {
+    (tenantId, tenantName, businessType = "restaurante") => {
       setSession((prev) => {
         if (!prev || prev.role !== "saas") return prev;
         const next: Session = {
@@ -181,6 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           tenantId,
           tenantName,
           impersonating: true,
+          businessType,
         };
         saveSession(next);
         return next;
@@ -198,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenantId: null,
         tenantName: "Wayra POS",
         impersonating: false,
+        businessType: undefined,
       };
       saveSession(next);
       return next;

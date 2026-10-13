@@ -650,3 +650,58 @@ export function useDeliveryActions() {
     removeDriver: useMutation({ mutationFn: (id: string) => repo.removeDriver(id), onSuccess: refresh }),
   };
 }
+
+// ---- Comedor ----
+const COMEDOR_KEYS = ["comensales", "movimientos", "consumos", "reservas", "comedorMenus", "comensalQuota", "responsables", "cash"];
+
+export function useComensales() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["comensales"], queryFn: () => repo.getComensales() });
+}
+export function useResponsables() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["responsables"], queryFn: () => repo.getResponsables() });
+}
+export function useMovimientos(comensalId: string | null = null) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["movimientos", comensalId], queryFn: () => repo.getMovimientos(comensalId) });
+}
+export function useComedorMenus(from: string, to: string) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["comedorMenus", from, to], queryFn: () => repo.getComedorMenus(from, to) });
+}
+export function useReservas(from: string, to: string) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["reservas", from, to], queryFn: () => repo.getReservas(from, to) });
+}
+export function useConsumos(from: string, to: string) {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["consumos", from, to], queryFn: () => repo.getConsumos(from, to) });
+}
+export function useComensalQuota() {
+  const repo = useRepo();
+  return useQuery({ queryKey: ["comensalQuota"], queryFn: () => repo.getComensalQuota() });
+}
+export function useComedorActions() {
+  const repo = useRepo();
+  const qc = useQueryClient();
+  const inv = () => COMEDOR_KEYS.forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  type P<K extends keyof typeof repo> = typeof repo[K] extends (...a: infer A) => unknown ? A : never;
+  return {
+    saveComensal: useMutation({ mutationFn: (i: P<"saveComensal">[0]) => repo.saveComensal(i), onSuccess: inv }),
+    importPadron: useMutation({ mutationFn: (rows: P<"importPadron">[0]) => repo.importPadron(rows), onSuccess: inv }),
+    saveResponsable: useMutation({ mutationFn: (i: P<"saveResponsable">[0]) => repo.saveResponsable(i), onSuccess: inv }),
+    recargar: useMutation({ mutationFn: (i: P<"recargarSaldo">[0]) => repo.recargarSaldo(i), onSuccess: inv }),
+    ajustar: useMutation({
+      mutationFn: (i: { comensalId: string; amount: number; reason: string; actor: string }) => repo.ajustarSaldo(i.comensalId, i.amount, i.reason, i.actor),
+      onSuccess: inv,
+    }),
+    saveMenu: useMutation({ mutationFn: (d: P<"saveComedorMenu">[0]) => repo.saveComedorMenu(d), onSuccess: inv }),
+    removeMenu: useMutation({ mutationFn: (date: string) => repo.removeComedorMenu(date), onSuccess: inv }),
+    setReserva: useMutation({
+      mutationFn: (i: { comensalId: string; date: string; on: boolean }) => repo.setReserva(i.comensalId, i.date, i.on),
+      onSuccess: inv,
+    }),
+    despachar: useMutation({ mutationFn: (i: P<"despachar">[0]) => repo.despachar(i), onSuccess: inv }),
+  };
+}

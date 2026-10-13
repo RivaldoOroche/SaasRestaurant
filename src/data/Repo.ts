@@ -43,7 +43,28 @@ import type {
   DeliveryOrder,
   DeliveryStatus,
   NewDeliveryInput,
+  Comensal,
+  ComensalInput,
+  Responsable,
+  WalletMovement,
+  ComedorMenuDay,
+  ComedorReserva,
+  ComedorConsumo,
+  DespacharInput,
+  RecargaInput,
 } from "./model";
+import type { PadronRow } from "@/lib/comedor";
+
+/** Uso de la cuota de comensales del plan (comedores). */
+export interface ComensalQuota {
+  plan: string;
+  used: number;
+  max: number | null;
+  included: number | null;
+  extraPrice: number | null;
+  extraBlocks: number;
+  monthlyTotal: number;
+}
 import type { PosBackend, SyncStatus } from "./sync/engine";
 
 /** Datos para crear/editar una sucursal (nodo del árbol). */
@@ -263,6 +284,34 @@ export interface Repo {
     to: DeliveryStatus,
     opts?: { driverId?: string | null; cancelReason?: string },
   ): Promise<void>;
+
+  // Comedor (colegios y empresas)
+  /** Padrón completo (activos e inactivos) con su saldo. */
+  getComensales(): Promise<Comensal[]>;
+  /** Crea o actualiza un comensal (sin tocar el saldo). Devuelve el id. */
+  saveComensal(input: ComensalInput): Promise<string>;
+  /** Importa un padrón pegado desde Excel: crea o actualiza por código. */
+  importPadron(rows: PadronRow[]): Promise<{ created: number; updated: number }>;
+  getResponsables(): Promise<Responsable[]>;
+  /** Crea o actualiza un responsable (el enlace del portal se genera solo). Devuelve el id. */
+  saveResponsable(input: Omit<Responsable, "id" | "portalToken"> & { id?: string }): Promise<string>;
+  /** Recarga de saldo o pago de abono (efectivo: exige caja abierta y entra a ella). */
+  recargarSaldo(input: RecargaInput): Promise<WalletMovement>;
+  /** Corrección o devolución de saldo (solo gerencia). */
+  ajustarSaldo(comensalId: string, amount: number, reason: string, actor: string): Promise<WalletMovement>;
+  /** Movimientos del monedero (de un comensal o de todos), más recientes primero. */
+  getMovimientos(comensalId?: string | null): Promise<WalletMovement[]>;
+  /** Menús publicados entre dos fechas (YYYY-MM-DD, incluidas). */
+  getComedorMenus(from: string, to: string): Promise<ComedorMenuDay[]>;
+  saveComedorMenu(day: ComedorMenuDay): Promise<void>;
+  removeComedorMenu(date: string): Promise<void>;
+  getReservas(from: string, to: string): Promise<ComedorReserva[]>;
+  setReserva(comensalId: string, date: string, on: boolean): Promise<void>;
+  /** Consumos (menú y kiosko) entre dos fechas, más recientes primero. */
+  getConsumos(from: string, to: string): Promise<ComedorConsumo[]>;
+  /** Entrega el menú o vende en el kiosko aplicando las reglas del comedor. */
+  despachar(input: DespacharInput): Promise<ComedorConsumo & { balance: number | null }>;
+  getComensalQuota(): Promise<ComensalQuota>;
 
   // Notificaciones push (Web Push)
   /** Guarda la suscripción push del navegador del usuario actual. */
