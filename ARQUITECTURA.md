@@ -87,6 +87,34 @@ y `tenants.mrr` (derivado).
   sucursal, ventas por fecha, comandas abiertas, cola SUNAT, delta de sincronización.
 - Ventas por sucursal agregadas en SQL (`branch_sales`).
 
+## 4 bis. Tipos de negocio: restaurante y comedor
+
+Cada tenant tiene `business_type` (`restaurante` | `comedor`), fijado al crear la
+cuenta. El tipo decide el menú (`types` en `src/lib/roles.ts`), los planes que puede
+contratar (`subscription_plans.business_type`, verificado por `tenants_plan_guard`) y
+el inicio de cada rol. Caja, carta, inventario, personal, sucursales y SUNAT son
+comunes a los dos.
+
+Comedor (migración `0046_comedores.sql`):
+
+- `comensales` (padrón: código, grado/área, plan `prepago`/`abono`/`convenio`, saldo,
+  tope diario, categorías bloqueadas, alergias) y `responsables` (con `portal_token`).
+- `comedor_wallet` es el libro del monedero. El saldo solo cambia por RPC
+  (`comedor_recargar`, `comedor_ajustar`, `comedor_despachar`): un trigger rechaza
+  cualquier otra escritura y el saldo nunca queda negativo. Las recargas en efectivo
+  entran a la caja abierta.
+- `comedor_menus` (menú del día con raciones), `comedor_reservas` y
+  `comedor_consumos` (una ración de menú por comensal y día, índice único).
+- `comedor_despachar` aplica en el servidor las mismas reglas que `src/lib/comedor.ts`:
+  precios de la carta, octógonos (Ley 30021), categorías bloqueadas, tope diario,
+  saldo, abono vigente, convenio, reserva o raciones libres.
+- Portal de familias: `public_familia`, `public_familia_reservar` y
+  `public_familia_ajustes` (anon, por token), con cierre de reservas en hora de Lima.
+- Cuota de comensales activos por plan (`comensales_quota`); el Institucional cobra
+  bloques de 100 sobre los 2 000 incluidos (`plan_monthly_total`).
+- El despacho necesita conexión (las RPC validan saldo en el servidor); el padrón se
+  puede consultar sin internet desde la caché.
+
 ## 5. Pruebas
 
 | Qué | Dónde |
@@ -96,6 +124,7 @@ y `tenants.mrr` (derivado).
 | Operaciones atómicas e idempotentes | `supabase/tests/pos_ops.db.test.ts` |
 | Motor offline contra SQL real | `supabase/tests/sync.db.test.ts` |
 | Offline de punta a punta (demo) | `src/data/sync/engine.test.ts`, `e2e/offline.spec.ts` |
+| Comedor: monedero, despacho, reservas, portal | `supabase/tests/comedor.db.test.ts`, `src/lib/comedor.test.ts`, `e2e/comedor.spec.ts` |
 
 `npm run db:bundle` regenera `supabase/instalar.sql` (todas las migraciones en un
 script único y reejecutable, con registro en `public.wayra_migraciones` y detección

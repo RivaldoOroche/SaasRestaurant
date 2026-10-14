@@ -18,7 +18,8 @@ npm run dev
 ```
 
 Sin `.env`, la app corre en **modo demo**: login por PIN contra usuarios mock
-(1111 Dueña · 2222 Gerente · 3333/4444 Mesero · 0000 SaaS), sin backend. Todo
+(restaurante: 1111 Dueña · 2222 Gerente · 3333/4444 Mesero; comedor «Colegio
+San Martín»: 5555 Administración · 6666 Cajero; 0000 SaaS), sin backend. Todo
 (SUNAT, tarjeta, onboarding) se simula para trabajar la UI.
 
 | comando | qué hace |

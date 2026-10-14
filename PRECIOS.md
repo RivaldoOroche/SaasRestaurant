@@ -1,4 +1,4 @@
-# Wayra POS — Precios vs. costos reales y competencia (septiembre 2026)
+# Wayra POS — Precios vs. costos reales y competencia (actualizado octubre 2026)
 
 Modelo reproducible: `python3 scripts/pricing/modelo.py`. Todos los supuestos están al
 inicio del archivo; cámbialos y vuelve a correrlo.
@@ -154,6 +154,50 @@ constitución), que en el modelo está repartida mes a mes.
    Así aparece en la landing (sección «Facturación electrónica» y preguntas frecuentes),
    en Ajustes, en Plan y en los Términos.
 
+## 9. Comedores (colegios y empresas)
+
+Wayra tiene dos tipos de negocio. El **comedor** atiende a comensales registrados
+(alumnos, docentes, colaboradores) que pagan con **saldo prepago**, **abono mensual** o
+**convenio** (lo paga el colegio o la empresa); las familias lo siguen con un enlace
+privado. Inspiración: OrderEAT (Uruguay, más de 600 colegios en Latinoamérica según la
+prensa), que digitaliza cantinas escolares con billetera de padres y pedidos anticipados.
+
+Por qué el precio es distinto al de un restaurante: el costo para Wayra lo pone el
+**número de comensales** (padrón que importar, familias que consultan, recargas y cierre
+de mes), no el número de locales. Por eso se cobra por comensales activos.
+
+| Plan | Precio con IGV | Comensales activos | Sedes | Pago anual (10 meses = año escolar) |
+| --- | --- | --- | --- | --- |
+| **Comedor** | **S/ 249** | hasta 300 | 1 | S/ 2 490 |
+| **Comedor Pro** | **S/ 449** | hasta 1 000 | hasta 3 | S/ 4 490 |
+| **Comedor Institucional** | **S/ 899** | 2 000 incluidos + S/ 35 por cada 100 adicionales | ilimitadas | S/ 8 990 |
+
+Qué incluye (todos los planes): despacho del menú y del kiosko, monedero prepago,
+abonos y convenios, menú del día con raciones y reservas, kiosko saludable (bloqueo de
+productos con octógonos, Ley 30021), topes diarios y bloqueos por categoría, alergias,
+portal de familias, padrón desde Excel, caja, inventario, reportes con aprovechamiento de
+raciones y liquidación de convenios, y comprobantes SUNAT (Wayra no cobra por
+comprobante). **Sin comisión por recarga**: el dinero llega directo al Yape, Plin o
+cuenta del comedor.
+
+Economía por cliente (`python3 scripts/pricing/comedor.py`; hora de soporte S/ 23.59 con
+cargas y bono de horario):
+
+| Plan | Comensales típicos | Neto sin IGV | Soporte al mes | Contribución | Margen | S/ por comensal | % de las ventas del comedor |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Comedor | 250 | S/ 211 | 3 h (S/ 71) | S/ 112 | 53 % | S/ 1.00 | 0.33 % |
+| Comedor Pro | 800 | S/ 381 | 6 h (S/ 142) | S/ 186 | 49 % | S/ 0.56 | 0.19 % |
+| Comedor Institucional | 2 600 | S/ 940 | 16 h (S/ 378) | S/ 430 | 46 % | S/ 0.43 | 0.14 % |
+
+- Un comedor deja más contribución que un restaurante Básico (≈ S/ 88): cada comedor
+  nuevo acerca el punto de equilibrio más rápido, aunque pide más horas de soporte.
+- Para el cliente es poco: un comedor escolar de 250 alumnos vende ≈ S/ 75 000 al mes
+  (S/ 15 por alumno y día); el plan es el 0.33 % de eso. Una comisión de 3 % sobre las
+  recargas (modelo común en billeteras escolares) le costaría ≈ S/ 2 250.
+- El pago anual de 10 meses coincide con el año escolar (marzo a diciembre).
+- Supuestos a validar con los primeros 5 comedores: horas de soporte reales y cuántas
+  familias usan el portal.
+
 ## Fuentes
 
 - Sueldos de soporte: https://pe.computrabajo.com/salarios/analista-de-soporte ·
@@ -169,6 +213,10 @@ constitución), que en el modelo está repartida mes a mes.
 - Culqi: https://adratechsystems.com/recursos/izipay-vs-niubiz-vs-culqi-comparativa-peru
 - Tipo de cambio: https://tucambista.pe/tipo-de-cambio-hoy
 - SUNAT, certificado digital: https://cpe.sunat.gob.pe/certificado-digital · Nubefact: https://www.nubefact.com/precios
+- Comedores escolares (OrderEAT): https://www.forbesargentina.com/negocios/la-billetera-colegios-llego-100-escuelas-argentina-cerro-una-ronda-us-2-millones-n98118 ·
+  https://ecosistemastartup.com/ordereat-levanta-us2m-para-digitalizar-cantinas-escolares-en-latam/ ·
+  https://expansion.mx/tecnologia/2026/10/01/cafeterias-escolares-venden-mas-y-desperdician-menos-con-app
+- Quioscos y comedores escolares en Perú (Ley 30021, octógonos): https://www.defensoria.gob.pe/productos-que-se-venden-en-quioscos-de-i-e-deben-mostrar-en-sus-empaques-los-octogonos-de-advertencia/
 - Competencia: https://www.panca.pe/blog/cuanto-cuesta-sistema-pos-restaurante-peru/ ·
   https://madi-rest.com/blog/fudo-precio-2026 · https://www.comparasoftware.pe/restaurant-pe ·
   https://niopos.com/blog/cuanto-cuesta-facturacion-electronica-peru-2026

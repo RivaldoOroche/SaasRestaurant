@@ -41,11 +41,12 @@ const TERMINOS: LegalDoc = {
   id: "terminos",
   title: "Términos y Condiciones del Servicio",
   // 2026-10: planes por local (Básico 1 local; Pro y Enterprise con locales incluidos y cobro por local adicional); Wayra no cobra por comprobante; el OSE, si se usa, lo paga el restaurante.
-  version: "2026-10",
-  updated: UPDATED,
+  // 2026-10.2: tipo de negocio comedor (colegios y empresas), sus planes por comensales activos y el monedero de los comensales.
+  version: "2026-10.2",
+  updated: "2026-10-14",
   acceptance: true,
   summary:
-    "Contrato entre Wayra POS y el restaurante que usa el sistema: qué incluye, cuánto cuesta, cómo se renueva y cancela, qué hace cada parte y qué pasa con los datos al terminar.",
+    "Contrato entre Wayra POS y el restaurante o comedor que usa el sistema: qué incluye, cuánto cuesta, cómo se renueva y cancela, qué hace cada parte y qué pasa con los datos al terminar.",
   sections: [
     {
       h: "1. Partes y aceptación",
@@ -60,13 +61,15 @@ const TERMINOS: LegalDoc = {
       p: [
         "Wayra POS es un sistema en la nube para restaurantes: toma de pedidos, mesas, cocina, caja, delivery, carta digital, inventario, recetas, reportes, programa de clientes y emisión de comprobantes electrónicos a través del proveedor de facturación que el Cliente elija.",
         "El servicio funciona desde el navegador en computadoras, tablets y celulares. Si se cae el internet, el sistema sigue registrando pedidos y cobros en el equipo y los sincroniza al volver la conexión; algunas funciones que dependen de terceros (cobro con tarjeta en línea, envío a SUNAT, pantalla de cocina en otro equipo) se completan al reconectar.",
-        "Todas las funciones están disponibles en todos los planes. Los planes se diferencian por la cantidad de locales incluidos y el nivel de soporte.",
+        "Wayra atiende dos tipos de negocio, que el Cliente elige al crear su cuenta: restaurante y comedor. El comedor (de un colegio, una empresa o una institución, o de quien lo opera por concesión) atiende a comensales registrados con saldo prepago, abono mensual o convenio, menú del día con reservas, kiosko con bloqueo de productos con octógonos y un portal para las familias o responsables. En estos términos, «restaurante» incluye también al comedor salvo que se indique lo contrario.",
+        "Todas las funciones de su tipo de negocio están disponibles en todos los planes. Los planes de restaurante se diferencian por la cantidad de locales incluidos y el nivel de soporte; los de comedor, por la cantidad de comensales activos, de sedes y el nivel de soporte.",
       ],
     },
     {
       h: "3. Planes, precios y pago",
       p: [
         "Los precios publicados son precios finales en soles e incluyen IGV. El plan Básico es para un local. El Pro incluye 2 locales (la sede principal y 1 sucursal) y permite hasta 5; cada local adicional se cobra a S/ 119 al mes. El Enterprise incluye 6 locales, sin tope, y cada local adicional se cobra a S/ 99 al mes. El sistema avisa ese costo antes de crear la sucursal, y desactivarla deja de cobrarla desde el siguiente periodo.",
+        "Los planes de comedor se cobran por comensales activos (los que pueden consumir; los inactivos no cuentan): el plan Comedor permite hasta 300 y 1 sede; el Comedor Pro, hasta 1 000 y 3 sedes; el Comedor Institucional incluye 2 000, sin tope de sedes, y cada bloque de hasta 100 comensales adicionales se cobra a S/ 35 al mes. El sistema avisa al llegar al límite del plan y no cobra extras sin que el Cliente lo vea antes. Wayra no cobra comisión por las recargas de saldo.",
         "El pago es mensual o anual, por adelantado. El pago anual equivale a 10 meses. Wayra emite el comprobante electrónico correspondiente por cada pago.",
         "Wayra no cobra por comprobante emitido en ningún plan. La emisión directa a SUNAT no tiene costo por comprobante. Si el Cliente emite mediante un OSE o PSE (por elección o porque SUNAT se lo exige), lo contrata y paga directamente a ese proveedor según su tarifa; Wayra no agrega cargos.",
         "Wayra puede cambiar sus precios avisando al Cliente por correo con al menos 30 días calendario de anticipación. El nuevo precio se aplica desde el siguiente periodo; si el Cliente no está de acuerdo, puede cancelar antes sin penalidad. Los periodos ya pagados no cambian de precio.",
@@ -110,6 +113,15 @@ const TERMINOS: LegalDoc = {
       ],
     },
     {
+      h: "7 bis. Comedores: monedero, menores de edad y alimentación saludable",
+      p: [
+        "El saldo de los comensales es dinero que las familias, los trabajadores o la institución entregan al comedor, no a Wayra. Wayra no recibe, custodia ni transfiere ese dinero: solo lleva el registro de recargas y consumos que el Cliente ingresa. El Cliente es responsable de recibir las recargas, de devolver los saldos que correspondan (por ejemplo, al retirarse un alumno o al terminar el año) y de informar a las familias sus reglas de recarga, abono y devolución.",
+        "Cuando los comensales son menores de edad, el Cliente (el colegio o el concesionario) es el responsable del tratamiento de sus datos y debe contar con el consentimiento de sus padres o tutores cuando la ley lo exija; Wayra actúa como encargado, conforme al Acuerdo de Encargo. Los datos de alergias o restricciones alimentarias se registran solo para proteger la salud del comensal y se muestran únicamente al personal del comedor y a su responsable.",
+        "El enlace del portal de familias es personal: da acceso sin contraseña a los datos de los comensales asociados. El Cliente debe enviarlo solo al responsable registrado y avisar a Wayra para cambiarlo si se comparte por error.",
+        "El bloqueo de productos con octógonos, los topes de gasto y los avisos de alergias son herramientas de apoyo. El Cliente sigue siendo responsable de cumplir la Ley 30021 de Promoción de la Alimentación Saludable y sus normas, de marcar correctamente sus productos y de verificar las alergias al servir.",
+      ],
+    },
+    {
       h: "8. Propiedad de la información y salida",
       p: [
         "Los datos del negocio (ventas, carta, clientes, inventario, comprobantes) pertenecen al Cliente. Wayra no los vende ni los usa para fines propios distintos de prestar y mejorar el servicio con información agregada y anónima.",
@@ -150,8 +162,9 @@ const TERMINOS: LegalDoc = {
 const PRIVACIDAD: LegalDoc = {
   id: "privacidad",
   title: "Política de Privacidad",
-  version: "2026-09",
-  updated: UPDATED,
+  // 2026-10: datos de alumnos en comedores escolares (sección 8).
+  version: "2026-10",
+  updated: "2026-10-14",
   acceptance: true,
   summary:
     "Qué datos trata Wayra de los dueños y el personal de los restaurantes, para qué, con quién los comparte, cuánto tiempo los guarda y cómo ejercer tus derechos.",
@@ -210,7 +223,10 @@ const PRIVACIDAD: LegalDoc = {
     },
     {
       h: "8. Menores de edad",
-      p: ["El servicio está dirigido a negocios. No recopilamos a sabiendas datos de menores de 14 años."],
+      p: [
+        "El servicio está dirigido a negocios. Wayra no recopila por su cuenta datos de menores de edad.",
+        "Los comedores escolares que usan Wayra registran datos de sus alumnos (nombre, grado, saldo, consumos, reservas, alergias y datos de contacto de sus padres o tutores). Lo hacen como responsables del tratamiento, con el consentimiento de los padres o tutores cuando la ley lo exige; Wayra solo trata esos datos por encargo del comedor, para prestarle el servicio, y no los usa para publicidad ni perfiles.",
+      ],
     },
     {
       h: "9. Cambios en esta política",
@@ -222,8 +238,9 @@ const PRIVACIDAD: LegalDoc = {
 const ENCARGO: LegalDoc = {
   id: "encargo",
   title: "Acuerdo de Encargo de Tratamiento de Datos Personales",
-  version: "2026-09",
-  updated: UPDATED,
+  // 2026-10: datos de los comensales de comedores (incluidos menores de edad y alergias).
+  version: "2026-10",
+  updated: "2026-10-14",
   acceptance: true,
   summary:
     "El restaurante es responsable de los datos de sus comensales y trabajadores; Wayra solo los trata por su cuenta y según sus instrucciones. Este acuerdo fija esas reglas, como exige el Reglamento de la Ley 29733.",
@@ -231,15 +248,15 @@ const ENCARGO: LegalDoc = {
     {
       h: "1. Roles",
       p: [
-        "El Cliente (restaurante) es el titular del banco de datos y responsable del tratamiento de los datos personales de sus comensales, clientes de lealtad, destinatarios de delivery, consumidores que presentan reclamos y trabajadores que registre en el sistema.",
+        "El Cliente (restaurante) es el titular del banco de datos y responsable del tratamiento de los datos personales de sus comensales, clientes de lealtad, destinatarios de delivery, consumidores que presentan reclamos y trabajadores que registre en el sistema. Si el Cliente opera un comedor, también lo es de los datos de sus comensales (alumnos, docentes, colaboradores) y de sus padres, tutores o responsables.",
         `${E.razonSocial} actúa como encargado de tratamiento: trata esos datos únicamente para prestar el servicio Wayra POS y siguiendo las instrucciones del Cliente, que se expresan en la configuración y el uso del sistema.`,
       ],
     },
     {
       h: "2. Datos y finalidades",
       p: [
-        "Datos: nombre, teléfono, correo, dirección y referencia de entrega, historial de consumo y puntos, documento de identidad y contenido de reclamos, datos del comprador en facturas, y nombre y rol del personal.",
-        "Finalidades: tomar y entregar pedidos, emitir comprobantes, gestionar el programa de clientes, atender el Libro de Reclamaciones y operar el negocio. Wayra no usará estos datos para fines propios, no los venderá ni los cederá.",
+        "Datos: nombre, teléfono, correo, dirección y referencia de entrega, historial de consumo y puntos, documento de identidad y contenido de reclamos, datos del comprador en facturas, y nombre y rol del personal. En comedores: código, nombre, grado o área, saldo, recargas, consumos, reservas, topes y bloqueos de compra, alergias o restricciones alimentarias del comensal, y nombre, celular y correo de su responsable.",
+        "Finalidades: tomar y entregar pedidos, emitir comprobantes, gestionar el programa de clientes, atender el Libro de Reclamaciones y operar el negocio; en comedores, además, llevar el monedero, entregar el menú y el kiosko con los controles que fijan las familias o la institución, y mostrar a cada responsable la información de sus comensales. Wayra no usará estos datos para fines propios, no los venderá ni los cederá.",
       ],
     },
     {
